@@ -1,0 +1,29 @@
+# ================================================
+# FILE E CARTELLE DA NON CARICARE SU GITHUB
+# ================================================
+
+# Dipendenze Node.js (si reinstallano con npm install)
+node_modules/
+
+# File compilati TypeScript
+dist/
+
+# File con dati sensibili (password, chiavi API)
+.env
+
+# File di log
+*.log
+logs/
+
+# Cache e file temporanei
+.cache
+*.tmp
+.DS_Store
+
+# File di configurazione IDE
+.vscode/
+.idea/
+
+# File di database locale (se mai lo usi)
+*.sqlite
+*.db

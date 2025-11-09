@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    // Versione di JavaScript da generare dopo la compilazione
+    "target": "ES2020",
+
+    // Sistema di moduli da usare (commonjs è standard per Node.js)
+    "module": "commonjs",
+
+    // Dove mettere i file compilati
+    "outDir": "./dist",
+
+    // Dove si trova il codice sorgente TypeScript
+    "rootDir": "./src",
+
+    // Controlli di tipo più severi (aiutano a prevenire errori)
+    "strict": true,
+
+    // Permette di importare moduli in stile ES6
+    "esModuleInterop": true,
+
+    // Salta il controllo dei file di libreria (compila più veloce)
+    "skipLibCheck": true,
+
+    // Abilita supporto per decoratori (usati da TypeORM)
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
+    // Risoluzione moduli in stile Node.js
+    "moduleResolution": "node",
+
+    // Include i tipi per Node.js
+    "types": ["node"]
+  },
+  // Quali file includere nella compilazione
+  "include": ["src/**/*"],
+
+  // Quali file escludere
+  "exclude": ["node_modules", "dist"]
+}
