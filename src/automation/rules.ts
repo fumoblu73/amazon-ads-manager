@@ -1,191 +1,383 @@
 // ================================================
-// REGOLE DI AUTOMAZIONE
+// REGOLE DI AUTOMAZIONE - ORCHESTRAZIONE
 // ================================================
-// Qui definiamo le regole che automatizzano le operazioni
-// sulle campagne Amazon Ads
+// Coordina l'esecuzione delle 5 funzioni di automazione
+// per tutte le campagne, rispettando:
+// - Periodo di warmup (7 giorni)
+// - Frequenze di esecuzione
+// - Ordine di esecuzione (Funz.1 → Funz.3)
 
 import { amazonApiService } from '../services/amazonApi';
+import { isInWarmupPeriod } from '../utils/timeframe';
+import { automationScheduler } from './scheduler';
 
-// Interfaccia per definire una regola di automazione
-interface AutomationRule {
-  name: string;           // Nome della regola
-  description: string;    // Descrizione di cosa fa
-  enabled: boolean;       // Se è attiva o no
-  execute: () => Promise<void>;  // Funzione che esegue la regola
-}
+// Import delle 5 funzioni
+import { executeFunc1, shouldExecuteFunc1 } from './functions/func1';
+import { executeFunc2, shouldExecuteFunc2 } from './functions/func2';
+import { executeFunc3, shouldExecuteFunc3 } from './functions/func3';
+import { executeFunc4, shouldExecuteFunc4 } from './functions/func4';
+import { executeFunc5, shouldExecuteFunc5, CampaignMapping } from './functions/func5';
 
-// ================================================
-// DEFINIZIONE DELLE REGOLE
-// ================================================
-
-// REGOLA 1: Abbassa bid delle keyword con ACoS alto
-const reduceBidHighAcosRule: AutomationRule = {
-  name: 'Riduci bid ACoS alto',
-  description: 'Riduce del 10% il bid delle keyword con ACoS > 40%',
-  enabled: true,
-
-  async execute() {
-    console.log(`\n📋 Esecuzione regola: ${this.name}`);
-
-    try {
-      // 1. Recupera tutte le keyword
-      const keywords = await amazonApiService.getKeywords();
-      console.log(`   Analisi di ${keywords.length} keywords...`);
-
-      // 2. Per ogni keyword, controlla le metriche
-      // NOTA: In un'app reale dovresti recuperare i report delle performance
-      // Qui è un esempio semplificato
-
-      let modifiedCount = 0;
-
-      for (const keyword of keywords) {
-        // Simula il calcolo dell'ACoS (in realtà lo prendi dal report)
-        // ACoS = (Spesa Pubblicitaria / Vendite) * 100
-
-        // ESEMPIO: se la keyword ha ACoS > 40%
-        // In realtà qui dovresti fare:
-        // const performance = await getKeywordPerformance(keyword.keywordId);
-        // const acos = (performance.cost / performance.sales) * 100;
-
-        // Per ora, logica di esempio:
-        const shouldReduce = false; // Cambia in base ai tuoi dati reali
-
-        if (shouldReduce) {
-          // Calcola il nuovo bid (riduzione del 10%)
-          const currentBid = keyword.bid;
-          const newBid = currentBid * 0.9;
-
-          console.log(`   🔽 Riduco bid keyword ${keyword.keywordId}: ${currentBid} → ${newBid}`);
-
-          // Aggiorna il bid
-          await amazonApiService.updateKeywordBid(keyword.keywordId, newBid);
-          modifiedCount++;
-        }
-      }
-
-      console.log(`   ✅ Regola completata. Modificate ${modifiedCount} keywords`);
-    } catch (error) {
-      console.error(`   ❌ Errore esecuzione regola:`, error);
-    }
-  }
-};
-
-// REGOLA 2: Metti in pausa keyword con performance pessime
-const pauseLowPerformanceKeywordsRule: AutomationRule = {
-  name: 'Pausa keyword scarse',
-  description: 'Mette in pausa keyword con CTR < 0.3% e almeno 100 impressions',
-  enabled: true,
-
-  async execute() {
-    console.log(`\n📋 Esecuzione regola: ${this.name}`);
-
-    try {
-      const keywords = await amazonApiService.getKeywords();
-      console.log(`   Analisi di ${keywords.length} keywords...`);
-
-      let pausedCount = 0;
-
-      for (const keyword of keywords) {
-        // ESEMPIO: logica per determinare se pausare
-        // In realtà dovresti controllare:
-        // - CTR (Click Through Rate) = (clicks / impressions) * 100
-        // - Numero di impressions
-
-        // const performance = await getKeywordPerformance(keyword.keywordId);
-        // const ctr = (performance.clicks / performance.impressions) * 100;
-        // const shouldPause = ctr < 0.3 && performance.impressions >= 100;
-
-        const shouldPause = false; // Cambia in base ai tuoi dati reali
-
-        if (shouldPause && keyword.state === 'enabled') {
-          console.log(`   ⏸️  Metto in pausa keyword ${keyword.keywordId}`);
-
-          await amazonApiService.updateKeywordState(keyword.keywordId, 'paused');
-          pausedCount++;
-        }
-      }
-
-      console.log(`   ✅ Regola completata. Pausate ${pausedCount} keywords`);
-    } catch (error) {
-      console.error(`   ❌ Errore esecuzione regola:`, error);
-    }
-  }
-};
-
-// REGOLA 3: Aumenta bid delle keyword performanti
-const increaseBidHighPerformanceRule: AutomationRule = {
-  name: 'Aumenta bid top keywords',
-  description: 'Aumenta del 15% il bid delle keyword con ACoS < 20% e almeno 5 conversioni',
-  enabled: true,
-
-  async execute() {
-    console.log(`\n📋 Esecuzione regola: ${this.name}`);
-
-    try {
-      const keywords = await amazonApiService.getKeywords();
-      console.log(`   Analisi di ${keywords.length} keywords...`);
-
-      let modifiedCount = 0;
-
-      for (const keyword of keywords) {
-        // ESEMPIO: logica per aumentare bid
-        // const performance = await getKeywordPerformance(keyword.keywordId);
-        // const acos = (performance.cost / performance.sales) * 100;
-        // const shouldIncrease = acos < 20 && performance.conversions >= 5;
-
-        const shouldIncrease = false; // Cambia in base ai tuoi dati reali
-
-        if (shouldIncrease) {
-          const currentBid = keyword.bid;
-          const newBid = currentBid * 1.15; // Aumento del 15%
-
-          console.log(`   🔼 Aumento bid keyword ${keyword.keywordId}: ${currentBid} → ${newBid}`);
-
-          await amazonApiService.updateKeywordBid(keyword.keywordId, newBid);
-          modifiedCount++;
-        }
-      }
-
-      console.log(`   ✅ Regola completata. Modificate ${modifiedCount} keywords`);
-    } catch (error) {
-      console.error(`   ❌ Errore esecuzione regola:`, error);
-    }
-  }
-};
-
-// ================================================
-// ARRAY DI TUTTE LE REGOLE
-// ================================================
-const allRules: AutomationRule[] = [
-  reduceBidHighAcosRule,
-  pauseLowPerformanceKeywordsRule,
-  increaseBidHighPerformanceRule
-  // Aggiungi altre regole qui...
-];
-
-// ================================================
-// FUNZIONE PRINCIPALE CHE ESEGUE TUTTE LE REGOLE
-// ================================================
+/**
+ * FUNZIONE PRINCIPALE
+ * Esegue tutte le automazioni per tutte le campagne
+ */
 export async function runAutomationRules(): Promise<void> {
   console.log('🎯 Inizio esecuzione regole di automazione\n');
 
-  // Filtra solo le regole abilitate
-  const enabledRules = allRules.filter(rule => rule.enabled);
+  try {
+    // ================================================
+    // 1. RECUPERA TUTTE LE CAMPAGNE
+    // ================================================
+    const campaigns = await amazonApiService.getCampaigns();
+    console.log(`📊 Trovate ${campaigns.length} campagne totali`);
 
-  console.log(`📊 Regole abilitate: ${enabledRules.length}/${allRules.length}`);
+    // Filtra solo campagne enabled
+    const activeCampaigns = campaigns.filter((c: any) => c.state === 'enabled');
+    console.log(`✅ Campagne attive: ${activeCampaigns.length}\n`);
 
-  // Esegui ogni regola in sequenza
-  for (const rule of enabledRules) {
-    try {
-      await rule.execute();
-    } catch (error) {
-      console.error(`❌ Errore nella regola "${rule.name}":`, error);
-      // Continua con le altre regole anche se una fallisce
+    if (activeCampaigns.length === 0) {
+      console.log('⚠️  Nessuna campagna attiva. Nulla da fare.');
+      return;
+    }
+
+    // ================================================
+    // 2. RAGGRUPPA CAMPAGNE PER LIBRO (ASIN)
+    // ================================================
+    // Assumiamo che ogni campagna abbia un campo bookId o asin
+    // Per semplificare, processiamo ogni campagna individualmente
+    // In un'app reale, dovresti raggruppare per libro per la Funzione 5
+
+    const stats = {
+      campaignsProcessed: 0,
+      campaignsInWarmup: 0,
+      func1Executed: 0,
+      func2Executed: 0,
+      func3Executed: 0,
+      func4Executed: 0,
+      func5Executed: 0,
+      errors: 0
+    };
+
+    // ================================================
+    // 3. PROCESSA OGNI CAMPAGNA
+    // ================================================
+    for (const campaign of activeCampaigns) {
+      try {
+        await processCampaign(campaign, stats);
+      } catch (error) {
+        stats.errors++;
+        console.error(`❌ Errore elaborazione campagna ${campaign.name}:`, error);
+      }
+    }
+
+    // ================================================
+    // 4. RIEPILOGO FINALE
+    // ================================================
+    console.log('\n' + '='.repeat(60));
+    console.log('📊 RIEPILOGO ESECUZIONE AUTOMAZIONI');
+    console.log('='.repeat(60));
+    console.log(`Campagne processate: ${stats.campaignsProcessed}`);
+    console.log(`Campagne in warmup (saltate): ${stats.campaignsInWarmup}`);
+    console.log(`\nFunzioni eseguite:`);
+    console.log(`  - Funzione 1 (Progressive Bidding): ${stats.func1Executed}`);
+    console.log(`  - Funzione 2 (Placement Optimization): ${stats.func2Executed}`);
+    console.log(`  - Funzione 3 (Targeting Optimization): ${stats.func3Executed}`);
+    console.log(`  - Funzione 4 (Auto Ad Optimization): ${stats.func4Executed}`);
+    console.log(`  - Funzione 5 (Campaign Feeding): ${stats.func5Executed}`);
+    console.log(`\nErrori: ${stats.errors}`);
+    console.log('='.repeat(60));
+
+    console.log('\n🎯 Tutte le regole sono state eseguite\n');
+
+  } catch (error) {
+    console.error('❌ Errore fatale durante esecuzione automazioni:', error);
+    throw error;
+  }
+}
+
+/**
+ * Processa una singola campagna
+ */
+async function processCampaign(campaign: any, stats: any): Promise<void> {
+  stats.campaignsProcessed++;
+
+  const campaignId = campaign.campaignId;
+  const campaignName = campaign.name;
+  const campaignType = determineCampaignType(campaign);
+  const createdAt = new Date(campaign.startDate || campaign.creationDate || Date.now());
+
+  console.log(`\n${'─'.repeat(60)}`);
+  console.log(`📢 Campagna: ${campaignName}`);
+  console.log(`   Tipo: ${campaignType} | ID: ${campaignId}`);
+  console.log(`${'─'.repeat(60)}`);
+
+  // ================================================
+  // CONTROLLO PERIODO DI WARMUP
+  // ================================================
+  if (isInWarmupPeriod(createdAt)) {
+    console.log(`⏳ Campagna in periodo di warmup (< 7 giorni). Salto automazioni.`);
+    stats.campaignsInWarmup++;
+    return;
+  }
+
+  // ================================================
+  // RECUPERA CONFIGURAZIONE E DATI DEL LIBRO
+  // ================================================
+  // NOTA: In un'app reale, dovresti recuperare da database:
+  // - AutomationConfig per questa campagna
+  // - Book associato per calcolare FAST ACoS
+  // Per ora usiamo dati mock
+
+  const mockBook = {
+    price: 15,
+    printingCost: 3,
+    royaltyPercentage: 60
+  };
+
+  const mockConfig = {
+    func1_enabled: true,
+    func1_bidIncrease: 0.02,
+    func1_frequency: 3,
+    func1_impressions: 20,
+    func1_clicks: 0,
+
+    func2_enabled: true,
+    func2_frequency: 7,
+    func2_timeframeWeeks: 4,
+
+    func3_enabled: true,
+    func3_frequency: 3,
+    func3_timeframeA: 2000,
+    func3_timeframeB: 3000,
+    func3_timeframeC: 5000,
+    func3_clicksPause: 10,
+    func3_clicks65days: 30,
+
+    func4_enabled: true,
+    func4_frequency: 7,
+    func4_timeframeA: 1000,
+    func4_timeframeB: 3000,
+    func4_timeframeC: 5000,
+    func4_clicksNegative: 10,
+    func4_spendNegative: 10,
+
+    func5_enabled: true,
+    func5_frequency: 7,
+    func5_minOrders: 1,
+    func5_bidBroad: 0.30,
+    func5_bidExact: 0.50,
+    func5_bidPhrase: 0.40,
+    func5_bidExpanded: 0.30
+  };
+
+  const mockPlacements = {
+    topOfSearch: 0,
+    restOfSearch: 10,
+    productPages: 5
+  };
+
+  // Mock impressions totali ultimi 30 giorni (per calcolo timeframe dinamico)
+  const mockTotalImpressions = 50000;
+
+  // Mock ad group ID (necessario per alcune funzioni)
+  const mockAdGroupId = campaign.adGroupId || 'mock-adgroup-id';
+
+  // ================================================
+  // ESEGUE LE FUNZIONI APPLICABILI
+  // ================================================
+
+  // FUNZIONE 1: Progressive Bidding Increase
+  if (shouldExecuteFunc1(campaignType) && mockConfig.func1_enabled) {
+    const shouldRun = automationScheduler.shouldExecuteFunction(
+      `func1_${campaignId}`,
+      mockConfig.func1_frequency,
+      createdAt
+    );
+
+    if (shouldRun) {
+      try {
+        await executeFunc1(campaignId, campaignType as any, campaignName, {
+          bidIncrease: mockConfig.func1_bidIncrease,
+          frequency: mockConfig.func1_frequency,
+          maxImpressions: mockConfig.func1_impressions,
+          maxClicks: mockConfig.func1_clicks
+        });
+        automationScheduler.markFunctionExecuted(`func1_${campaignId}`);
+        stats.func1Executed++;
+      } catch (error) {
+        console.error(`❌ Errore Funzione 1:`, error);
+      }
     }
   }
 
-  console.log('\n🎯 Tutte le regole sono state eseguite');
+  // FUNZIONE 3: Targeting Optimization (DOPO Funzione 1)
+  // NOTA: Deve avere stessa frequency di Funzione 1
+  if (shouldExecuteFunc3(campaignType) && mockConfig.func3_enabled) {
+    const shouldRun = automationScheduler.shouldExecuteFunction(
+      `func3_${campaignId}`,
+      mockConfig.func3_frequency,
+      createdAt
+    );
+
+    if (shouldRun) {
+      try {
+        await executeFunc3(
+          campaignId,
+          campaignType as any,
+          campaignName,
+          mockBook,
+          mockTotalImpressions,
+          {
+            frequency: mockConfig.func3_frequency,
+            timeframeA: mockConfig.func3_timeframeA,
+            timeframeB: mockConfig.func3_timeframeB,
+            timeframeC: mockConfig.func3_timeframeC,
+            clicksPause: mockConfig.func3_clicksPause,
+            clicks65days: mockConfig.func3_clicks65days
+          }
+        );
+        automationScheduler.markFunctionExecuted(`func3_${campaignId}`);
+        stats.func3Executed++;
+      } catch (error) {
+        console.error(`❌ Errore Funzione 3:`, error);
+      }
+    }
+  }
+
+  // FUNZIONE 2: Placement Optimization
+  if (shouldExecuteFunc2(campaignType) && mockConfig.func2_enabled) {
+    const shouldRun = automationScheduler.shouldExecuteFunction(
+      `func2_${campaignId}`,
+      mockConfig.func2_frequency,
+      createdAt
+    );
+
+    if (shouldRun) {
+      try {
+        await executeFunc2(
+          campaignId,
+          campaignName,
+          mockBook,
+          mockPlacements,
+          {
+            frequency: mockConfig.func2_frequency,
+            placementTimeframeWeeks: mockConfig.func2_timeframeWeeks
+          }
+        );
+        automationScheduler.markFunctionExecuted(`func2_${campaignId}`);
+        stats.func2Executed++;
+      } catch (error) {
+        console.error(`❌ Errore Funzione 2:`, error);
+      }
+    }
+  }
+
+  // FUNZIONE 4: Auto Ad Optimization (SOLO campagna 5)
+  if (shouldExecuteFunc4(campaignType) && mockConfig.func4_enabled) {
+    const shouldRun = automationScheduler.shouldExecuteFunction(
+      `func4_${campaignId}`,
+      mockConfig.func4_frequency,
+      createdAt
+    );
+
+    if (shouldRun) {
+      try {
+        await executeFunc4(
+          campaignId,
+          campaignName,
+          mockAdGroupId,
+          mockBook,
+          mockTotalImpressions,
+          {
+            frequency: mockConfig.func4_frequency,
+            timeframeA: mockConfig.func4_timeframeA,
+            timeframeB: mockConfig.func4_timeframeB,
+            timeframeC: mockConfig.func4_timeframeC,
+            clicksNegative: mockConfig.func4_clicksNegative,
+            spendNegative: mockConfig.func4_spendNegative
+          }
+        );
+        automationScheduler.markFunctionExecuted(`func4_${campaignId}`);
+        stats.func4Executed++;
+      } catch (error) {
+        console.error(`❌ Errore Funzione 4:`, error);
+      }
+    }
+  }
+
+  // FUNZIONE 5: Campaign Feeding
+  if (shouldExecuteFunc5(campaignType) && mockConfig.func5_enabled) {
+    const shouldRun = automationScheduler.shouldExecuteFunction(
+      `func5_${campaignId}`,
+      mockConfig.func5_frequency,
+      createdAt
+    );
+
+    if (shouldRun) {
+      try {
+        // Mock campaign mapping (in realtà dovresti recuperare tutte le campagne dello stesso libro)
+        const mockCampaignMapping: CampaignMapping = {
+          campaign1Id: 'mock-campaign-1',
+          campaign1AdGroupId: 'mock-adgroup-1',
+          campaign2Id: 'mock-campaign-2',
+          campaign2AdGroupId: 'mock-adgroup-2',
+          campaign3Id: 'mock-campaign-3',
+          campaign3AdGroupId: 'mock-adgroup-3',
+          campaign4Id: 'mock-campaign-4',
+          campaign4AdGroupId: 'mock-adgroup-4',
+          campaign5Id: campaignId,
+          campaign5AdGroupId: mockAdGroupId
+        };
+
+        await executeFunc5(
+          campaignId,
+          campaignType as any,
+          mockCampaignMapping,
+          {
+            frequency: mockConfig.func5_frequency,
+            minOrders: mockConfig.func5_minOrders,
+            bidBroad: mockConfig.func5_bidBroad,
+            bidExact: mockConfig.func5_bidExact,
+            bidPhrase: mockConfig.func5_bidPhrase,
+            bidExpanded: mockConfig.func5_bidExpanded
+          }
+        );
+        automationScheduler.markFunctionExecuted(`func5_${campaignId}`);
+        stats.func5Executed++;
+      } catch (error) {
+        console.error(`❌ Errore Funzione 5:`, error);
+      }
+    }
+  }
 }
 
-// Esporta anche l'array delle regole per gestirle da API
-export { allRules };
+/**
+ * Determina il tipo di campagna (1-5) in base al nome o ad altri criteri
+ * In un'app reale, questo dovrebbe essere memorizzato nel database
+ */
+function determineCampaignType(campaign: any): 1 | 2 | 3 | 4 | 5 {
+  const name = campaign.name.toLowerCase();
+
+  // Euristica per determinare il tipo in base al nome
+  if (name.includes('auto') || name.includes('automatic')) {
+    return 5; // AD Automatica
+  } else if (name.includes('super') && name.includes('keyword')) {
+    return 3; // Keyword Super
+  } else if (name.includes('super') && name.includes('product')) {
+    return 4; // Product Super
+  } else if (name.includes('product')) {
+    return 2; // Product Targeting
+  } else {
+    return 1; // Keyword Targeting (default)
+  }
+}
+
+// Esporta anche le funzioni individuali per uso diretto (opzionale)
+export {
+  executeFunc1,
+  executeFunc2,
+  executeFunc3,
+  executeFunc4,
+  executeFunc5
+};
