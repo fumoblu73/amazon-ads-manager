@@ -222,6 +222,362 @@ class AmazonApiService {
       throw error;
     }
   }
+
+  // ================================================
+  // METODI PER PLACEMENT BIDDING (Funzione 2)
+  // ================================================
+
+  /**
+   * Aggiorna i placement bid adjustments di una campagna
+   * I placement sono: Top of Search, Rest of Search, Product Pages
+   */
+  async updateCampaignPlacements(
+    campaignId: string,
+    placements: {
+      topOfSearch?: number;
+      restOfSearch?: number;
+      productPages?: number;
+    }
+  ): Promise<any> {
+    try {
+      console.log(`🔧 Aggiorno placements campagna ${campaignId}...`);
+
+      const bidding = {
+        placementBidding: []
+      } as any;
+
+      if (placements.topOfSearch !== undefined) {
+        bidding.placementBidding.push({
+          placement: 'PLACEMENT_TOP',
+          percentage: placements.topOfSearch
+        });
+      }
+
+      if (placements.restOfSearch !== undefined) {
+        bidding.placementBidding.push({
+          placement: 'PLACEMENT_PRODUCT_PAGE',
+          percentage: placements.restOfSearch
+        });
+      }
+
+      if (placements.productPages !== undefined) {
+        bidding.placementBidding.push({
+          placement: 'PLACEMENT_REST_OF_SEARCH',
+          percentage: placements.productPages
+        });
+      }
+
+      const response = await this.client.put(`/v2/sp/campaigns/${campaignId}`, {
+        bidding
+      });
+
+      console.log(`✅ Placements aggiornati`);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ Errore aggiornamento placements campagna ${campaignId}:`, error);
+      throw error;
+    }
+  }
+
+  // ================================================
+  // METODI PER TARGET (Product Targeting)
+  // ================================================
+
+  /**
+   * Recupera tutti i target (prodotti) di una campagna
+   */
+  async getTargets(campaignId?: string): Promise<any[]> {
+    try {
+      console.log('📥 Recupero targets...');
+
+      const params = campaignId ? { campaignIdFilter: campaignId } : {};
+      const response = await this.client.get('/v2/sp/targets', { params });
+
+      console.log(`✅ Trovati ${response.data.length} targets`);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Errore recupero targets:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Aggiorna il bid di un target
+   */
+  async updateTargetBid(targetId: string, newBid: number): Promise<any> {
+    try {
+      console.log(`🔧 Aggiorno bid target ${targetId} a ${newBid}...`);
+
+      const response = await this.client.put(`/v2/sp/targets/${targetId}`, {
+        bid: newBid
+      });
+
+      console.log(`✅ Bid target aggiornato`);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ Errore aggiornamento bid target ${targetId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mette in pausa o attiva un target
+   */
+  async updateTargetState(targetId: string, state: 'enabled' | 'paused'): Promise<any> {
+    try {
+      console.log(`🔧 Imposto target ${targetId} a ${state}...`);
+
+      const response = await this.client.put(`/v2/sp/targets/${targetId}`, {
+        state: state
+      });
+
+      console.log(`✅ Stato target aggiornato`);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ Errore aggiornamento stato target ${targetId}:`, error);
+      throw error;
+    }
+  }
+
+  // ================================================
+  // METODI PER AUTO ADS (Funzione 4)
+  // ================================================
+
+  /**
+   * Recupera i targeting groups di una campagna automatica
+   * Groups: complements, loose match, close match, substitutes
+   */
+  async getAutoTargetingGroups(campaignId: string): Promise<any[]> {
+    try {
+      console.log(`📥 Recupero auto targeting groups per campagna ${campaignId}...`);
+
+      const response = await this.client.get('/v2/sp/targets', {
+        params: {
+          campaignIdFilter: campaignId,
+          expressionType: 'AUTO'
+        }
+      });
+
+      console.log(`✅ Trovati ${response.data.length} auto targeting groups`);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ Errore recupero auto targeting groups:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Aggiunge una negative keyword
+   */
+  async addNegativeKeyword(
+    campaignId: string,
+    adGroupId: string,
+    keyword: string,
+    matchType: 'negativeExact' | 'negativePhrase'
+  ): Promise<any> {
+    try {
+      console.log(`➖ Aggiungo negative keyword "${keyword}" (${matchType})...`);
+
+      const response = await this.client.post('/v2/sp/negativeKeywords', [{
+        campaignId,
+        adGroupId,
+        keywordText: keyword,
+        matchType,
+        state: 'enabled'
+      }]);
+
+      console.log(`✅ Negative keyword aggiunta`);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ Errore aggiunta negative keyword:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Aggiunge un negative target (ASIN)
+   */
+  async addNegativeTarget(
+    campaignId: string,
+    adGroupId: string,
+    asin: string
+  ): Promise<any> {
+    try {
+      console.log(`➖ Aggiungo negative target ASIN ${asin}...`);
+
+      const response = await this.client.post('/v2/sp/negativeTargets', [{
+        campaignId,
+        adGroupId,
+        expression: [{
+          type: 'asinSameAs',
+          value: asin
+        }],
+        expressionType: 'manual',
+        state: 'enabled'
+      }]);
+
+      console.log(`✅ Negative target aggiunto`);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ Errore aggiunta negative target:`, error);
+      throw error;
+    }
+  }
+
+  // ================================================
+  // METODI PER SEARCH TERMS (Funzione 5 - Campaign Feeding)
+  // ================================================
+
+  /**
+   * Richiede un report dei search terms
+   */
+  async requestSearchTermsReport(
+    startDate: string,
+    endDate: string,
+    campaignIdFilter?: string
+  ): Promise<string> {
+    try {
+      console.log(`📊 Richiesta report search terms ${startDate} - ${endDate}...`);
+
+      const body: any = {
+        reportDate: startDate,
+        metrics: [
+          'campaignId',
+          'adGroupId',
+          'keywordId',
+          'targetId',
+          'searchTerm',
+          'impressions',
+          'clicks',
+          'cost',
+          'sales',
+          'orders'
+        ]
+      };
+
+      if (campaignIdFilter) {
+        body.campaignIdFilter = campaignIdFilter;
+      }
+
+      const response = await this.client.post('/v2/sp/targets/report', body);
+
+      const reportId = response.data.reportId;
+      console.log(`✅ Report search terms richiesto. ID: ${reportId}`);
+
+      return reportId;
+    } catch (error) {
+      console.error('❌ Errore richiesta report search terms:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Aggiunge keyword a una campagna
+   */
+  async addKeywords(
+    campaignId: string,
+    adGroupId: string,
+    keywords: Array<{
+      keywordText: string;
+      matchType: 'broad' | 'phrase' | 'exact';
+      bid: number;
+    }>
+  ): Promise<any> {
+    try {
+      console.log(`➕ Aggiungo ${keywords.length} keywords alla campagna ${campaignId}...`);
+
+      const keywordsData = keywords.map(kw => ({
+        campaignId,
+        adGroupId,
+        keywordText: kw.keywordText,
+        matchType: kw.matchType,
+        bid: kw.bid,
+        state: 'enabled'
+      }));
+
+      const response = await this.client.post('/v2/sp/keywords', keywordsData);
+
+      console.log(`✅ Keywords aggiunte`);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ Errore aggiunta keywords:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Aggiunge target (ASIN) a una campagna
+   */
+  async addTargets(
+    campaignId: string,
+    adGroupId: string,
+    targets: Array<{
+      asin: string;
+      bid: number;
+      expressionType: 'manual' | 'auto';
+    }>
+  ): Promise<any> {
+    try {
+      console.log(`➕ Aggiungo ${targets.length} targets alla campagna ${campaignId}...`);
+
+      const targetsData = targets.map(target => ({
+        campaignId,
+        adGroupId,
+        expression: [{
+          type: 'asinSameAs',
+          value: target.asin
+        }],
+        expressionType: target.expressionType,
+        bid: target.bid,
+        state: 'enabled'
+      }));
+
+      const response = await this.client.post('/v2/sp/targets', targetsData);
+
+      console.log(`✅ Targets aggiunti`);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ Errore aggiunta targets:`, error);
+      throw error;
+    }
+  }
+
+  // ================================================
+  // METODI PER RECUPERARE METRICHE DA REPORT
+  // ================================================
+
+  /**
+   * Recupera le performance di keyword/target da un report
+   * Aspetta che il report sia pronto e lo scarica
+   */
+  async waitAndDownloadReport(reportId: string, maxAttempts: number = 10): Promise<any> {
+    try {
+      console.log(`⏳ Attendo completamento report ${reportId}...`);
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const status = await this.getReportStatus(reportId);
+
+        if (status.status === 'SUCCESS') {
+          console.log(`✅ Report pronto, scarico...`);
+          const reportData = await axios.get(status.location);
+          return reportData.data;
+        }
+
+        if (status.status === 'FAILURE') {
+          throw new Error(`Report fallito: ${status.statusDetails || 'Unknown error'}`);
+        }
+
+        // Aspetta 5 secondi prima di riprovare
+        console.log(`   Tentativo ${attempt}/${maxAttempts}: status=${status.status}`);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+
+      throw new Error(`Report non pronto dopo ${maxAttempts} tentativi`);
+    } catch (error) {
+      console.error(`❌ Errore attesa/download report:`, error);
+      throw error;
+    }
+  }
 }
 
 // Esporta un'istanza unica del servizio (Singleton pattern)

@@ -1,15 +1,63 @@
-# Amazon Ads Manager
+# 🚀 Amazon Ads Manager
 
-Applicazione per gestire e automatizzare le campagne pubblicitarie Amazon Ads.
+Sistema completo di automazione per campagne pubblicitarie Amazon Advertising, con 5 funzioni di ottimizzazione basate sul metodo **FAST ACoS**.
 
-## 🎯 Funzionalità
+## 🎯 Funzionalità Principali
 
-- **Gestione Campagne**: Visualizza e gestisci le tue campagne Amazon Ads
-- **Gestione Keywords**: Modifica bid, pausa/attiva keyword
-- **Automazioni**: Regole automatiche per ottimizzare le performance
-  - Riduzione bid per keyword con ACoS alto
-  - Pausa keyword con basse performance
-  - Aumento bid per keyword performanti
+### 📊 5 Funzioni di Automazione
+
+**Funzione 1: Progressive Bidding Increase**
+- Aumenta progressivamente il bid di keyword/prodotti con poche impressions
+- Frequenza: Ogni 3 giorni
+- Applicabile a: Campagne 1, 2, 3, 4
+
+**Funzione 2: Placement Optimization**
+- Ottimizza i placement bid (Top of Search, Rest, Product Pages) in base a FAST ACoS
+- Frequenza: Ogni 7 giorni
+- Applicabile a: Tutte le campagne (1-5)
+
+**Funzione 3: Targeting Optimization**
+- Ottimizza bid e pausa keyword/prodotti con performance pessime
+- Timeframe dinamico basato su traffico
+- Frequenza: Ogni 3 giorni (dopo Funzione 1)
+- Applicabile a: Campagne 1, 2, 3, 4
+
+**Funzione 4: Auto Ad Optimization**
+- Ottimizza targeting groups e gestisce negative keywords/products
+- Specifico per campagne automatiche
+- Frequenza: Ogni 7 giorni
+- Applicabile a: Solo Campagna 5 (Auto Ads)
+
+**Funzione 5: Campaign Feeding**
+- Alimenta automaticamente le campagne con search terms performanti
+- Auto-feeding intelligente tra campagne
+- Frequenza: Ogni 7 giorni
+- Applicabile a: Tutte le campagne (1-5)
+
+### 🎚️ Sistema FAST ACoS
+
+- Calcolo automatico del breakeven (FAST ACoS = Royalty / Prezzo×1.22)
+- 5 fasce di performance con adjustment specifici
+- Ottimizzazione basata su profittabilità reale
+
+### ⚙️ Background Worker
+
+- Nessun timeout HTTP su hosting free (Render.com)
+- Esecuzione asincrona in background
+- Monitoring in tempo reale con endpoint `/status`
+- Trigger via cron-job.org
+
+### 🔄 Timeframe Dinamico
+
+- Adattamento automatico basato su volume di traffico
+- Ottimizzazione statistica dei dati
+- 4 livelli: 15, 20, 25, 30 giorni
+
+### 🛡️ Sicurezza
+
+- Periodo di warmup (7 giorni) prima dell'attivazione
+- Token sicuri per trigger automazioni
+- Autenticazione admin per trigger manuali
 
 ## 📁 Struttura Progetto
 
@@ -89,48 +137,60 @@ npm start
 
 ## 📡 API Endpoints
 
-### Health Check
+### Public Endpoints
 
-```
+```bash
+# Health Check
 GET /health
-```
 
-Verifica che il server sia attivo.
-
-### Home
-
-```
+# Info API
 GET /
+
+# Status Automazioni
+GET /api/automation/status
 ```
 
-Informazioni sull'API e lista endpoints disponibili.
+### Protected Endpoints
 
-## 🤖 Automazioni
+```bash
+# Trigger Automazioni (da Cron-Job.org)
+POST /api/automation/trigger?secret=YOUR_AUTOMATION_SECRET
 
-Le automazioni sono disabilitate di default. Per attivarle:
+# Trigger Manuale (Admin)
+POST /api/automation/trigger-manual
+Headers: Authorization: Bearer YOUR_ADMIN_TOKEN
+```
 
-1. Imposta nel file `.env`:
-   ```
-   ENABLE_AUTOMATIONS=true
-   ```
+## 🤖 Sistema di Automazione
 
-2. Configura l'intervallo di esecuzione (in minuti):
-   ```
-   AUTOMATION_INTERVAL_MINUTES=60
-   ```
+### Architettura
 
-### Regole Disponibili
+1. **Cron-Job.org** → Chiama endpoint `/trigger` ogni giorno
+2. **Background Worker** → Esegue automazioni in modo asincrono
+3. **Scheduler** → Coordina esecuzione delle 5 funzioni
+4. **Rules Engine** → Applica logiche di ottimizzazione
+5. **Amazon API** → Modifica campagne in tempo reale
 
-1. **Riduci bid ACoS alto**
-   - Riduce del 10% il bid delle keyword con ACoS > 40%
+### Calendario Esecuzioni (Default)
 
-2. **Pausa keyword scarse**
-   - Mette in pausa keyword con CTR < 0.3% e almeno 100 impressions
+| Giorno | Funzioni Eseguite |
+|--------|-------------------|
+| 0 | Campagna creata |
+| 1-6 | Periodo warmup (nessuna automazione) |
+| 7 | Funz.1→3 + Funz.2 + Funz.4 + Funz.5 |
+| 10 | Funz.1→3 |
+| 13 | Funz.1→3 |
+| 14 | Funz.2 + Funz.4 + Funz.5 |
+| 16 | Funz.1→3 |
+| ... | Continua... |
 
-3. **Aumenta bid top keywords**
-   - Aumenta del 15% il bid delle keyword con ACoS < 20% e almeno 5 conversioni
+### Ordine Esecuzione Critico
 
-Le regole possono essere personalizzate in `src/automation/rules.ts`
+**IMPORTANTE:** Funzione 1 e 3 devono essere eseguite in sequenza:
+1. Prima: Funzione 1 (aumenta bid per low-impressions)
+2. Poi: Funzione 3 (ottimizza/pausa in base performance)
+
+Questo perché la Funz.1 dà visibilità, e la Funz.3 ottimizza i risultati.
 
 ## 🗄️ Database
 
