@@ -2,6 +2,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 import automationRoutes from './routes/automation';
 import { initializeDatabase } from './config/database';
+import { automationScheduler } from './automation/scheduler';
 
 dotenv.config();
 
@@ -32,18 +33,22 @@ app.get('/health', (req, res) => {
 
 app.use('/api/automation', automationRoutes);
 
-// Inizializza database e poi avvia server
+// Inizializza database, scheduler e poi avvia server
 const startServer = async () => {
   try {
     // Connetti al database
     await initializeDatabase();
+
+    // Avvia scheduler interno
+    automationScheduler.start();
 
     // Avvia server
     app.listen(PORT, '0.0.0.0', () => {
       console.log('='.repeat(50));
       console.log(`🚀 Server avviato sulla porta ${PORT}`);
       console.log('='.repeat(50));
-      console.log('⏰ Automazioni gestite da trigger esterno');
+      console.log('⏰ Scheduler automazioni interno attivo');
+      console.log('📋 Usa /api/automation/status per vedere lo stato');
     });
   } catch (error) {
     console.error('❌ Errore avvio server:', error);

@@ -158,4 +158,115 @@ router.post('/trigger-manual', async (req: Request, res: Response) => {
   automationQueue.emit('run');
 });
 
+// ================================================
+// ENDPOINT: GET SCHEDULER CONFIG
+// ================================================
+// Restituisce la configurazione corrente dello scheduler
+router.get('/config', (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_TOKEN || 'admin-token'}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const config = automationScheduler.getConfig();
+
+  res.json({
+    success: true,
+    config: {
+      ...config,
+      scheduleExplanation: {
+        func1and3: 'Lunedì/Mercoledì/Venerdì alle 10:30 ora italiana (09:30 UTC)',
+        func2and4and5: 'Lunedì alle 11:30 ora italiana (10:30 UTC)'
+      }
+    }
+  });
+});
+
+// ================================================
+// ENDPOINT: UPDATE SCHEDULER CONFIG
+// ================================================
+// Aggiorna la configurazione dello scheduler
+// Body: { func1and3_schedule?, func1and3_enabled?, func2and4and5_schedule?, func2and4and5_enabled? }
+router.post('/config', (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_TOKEN || 'admin-token'}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { func1and3_schedule, func1and3_enabled, func2and4and5_schedule, func2and4and5_enabled } = req.body;
+
+  // Validazione cron expression (opzionale ma consigliato)
+  const cronRegex = /^(\*|([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])|\*\/([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])) (\*|([0-9]|1[0-9]|2[0-3])|\*\/([0-9]|1[0-9]|2[0-3])) (\*|([1-9]|1[0-9]|2[0-9]|3[0-1])|\*\/([1-9]|1[0-9]|2[0-9]|3[0-1])) (\*|([1-9]|1[0-2])|\*\/([1-9]|1[0-2])) (\*|([0-6])|\*\/([0-6]))$/;
+
+  if (func1and3_schedule !== undefined && !cronRegex.test(func1and3_schedule)) {
+    return res.status(400).json({
+      error: 'Invalid cron expression for func1and3_schedule',
+      hint: 'Format: minute hour day month day-of-week (e.g., "30 9 * * 1,3,5")'
+    });
+  }
+
+  if (func2and4and5_schedule !== undefined && !cronRegex.test(func2and4and5_schedule)) {
+    return res.status(400).json({
+      error: 'Invalid cron expression for func2and4and5_schedule',
+      hint: 'Format: minute hour day month day-of-week (e.g., "30 10 * * 1")'
+    });
+  }
+
+  // Aggiorna configurazione
+  try {
+    const updateData: any = {};
+    if (func1and3_schedule !== undefined) updateData.func1and3_schedule = func1and3_schedule;
+    if (func1and3_enabled !== undefined) updateData.func1and3_enabled = func1and3_enabled;
+    if (func2and4and5_schedule !== undefined) updateData.func2and4and5_schedule = func2and4and5_schedule;
+    if (func2and4and5_enabled !== undefined) updateData.func2and4and5_enabled = func2and4and5_enabled;
+
+    automationScheduler.updateConfig(updateData);
+
+    const newConfig = automationScheduler.getConfig();
+
+    res.json({
+      success: true,
+      message: 'Scheduler configuration updated successfully',
+      config: newConfig
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to update configuration',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// ================================================
+// ENDPOINT: RESTART SCHEDULER
+// ================================================
+// Ferma e riavvia lo scheduler (utile dopo modifiche)
+router.post('/scheduler/restart', (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_TOKEN || 'admin-token'}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    automationScheduler.stop();
+    automationScheduler.start();
+
+    res.json({
+      success: true,
+      message: 'Scheduler restarted successfully',
+      status: automationScheduler.getStatus()
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to restart scheduler',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;
