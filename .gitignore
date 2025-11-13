@@ -23,6 +23,7 @@ logs/
 # File di configurazione IDE
 .vscode/
 .idea/
+.claude/
 
 # File di database locale (se mai lo usi)
 *.sqlite
