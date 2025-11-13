@@ -157,73 +157,50 @@ await amazonRateLimiter.execute(
 
 ### 3. TESTING & DEBUG
 
-#### 🧪 **Test Script** (`src/test/testAutomations.ts`)
-**Script completo per testare automazioni senza modificare dati reali**
+#### 🧪 **Testing delle Automazioni**
 
-**Comandi npm**:
+**NOTA**: Le funzioni di automazione (func1-5) richiedono parametri specifici delle campagne Amazon che vengono recuperati automaticamente dall'API Amazon durante l'esecuzione schedulata o manuale.
+
+**Come testare**:
+1. **Trigger manuale via API**: Usa `/api/automation/trigger-manual` per eseguire tutte le automazioni
+2. **Monitoraggio logs**: Controlla i file in `logs/` o i log di Render.com
+3. **Endpoint status**: Verifica stato con `/api/automation/status`
+4. **Logs API**: Consulta storico esecuzioni con `/api/logs/recent`
+
+**Esempio test manuale**:
 ```bash
-npm test              # Test tutte le funzioni (dry-run)
-npm run test:func1    # Test solo func1
-npm run test:func2    # Test solo func2
-npm run test:func3    # Test solo func3
-npm run test:func4    # Test solo func4
-npm run test:func5    # Test solo func5
-npm run test:live     # Test LIVE (modifica dati reali!)
+# Trigger esecuzione
+curl -X POST https://amazon-ads-manager.onrender.com/api/automation/trigger-manual \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
+
+# Verifica stato
+curl https://amazon-ads-manager.onrender.com/api/automation/status
+
+# Consulta logs
+curl https://amazon-ads-manager.onrender.com/api/logs/recent?limit=20
 ```
 
-**Features**:
-- **Dry-run mode** di default (nessuna modifica)
-- **Logging colorato** con emoji
-- **Metriche**: durata esecuzione, success/error count
-- **Report dettagliato** per ogni test
+#### 🎮 **Trigger Manuale**
+**Esecuzione manuale di tutte le automazioni**
 
-**Output example**:
-```
-===========================================================
-TEST AUTOMAZIONI AMAZON ADS MANAGER
-===========================================================
-
-ℹ Avvio test: Progressive Bidding...
-⚠ Modalità DRY RUN attiva
-✓ Test completato: Progressive Bidding (2341ms)
-
-===========================================================
-RIEPILOGO TEST
-===========================================================
-
-Test totali: 5
-Successi: 4
-Errori: 1
-Durata totale: 12450ms (12.45s)
-
-✓ Progressive Bidding - 2341ms
-✓ Placement Optimization - 3102ms
-✗ Targeting Optimization - 1523ms
-  Errore: Campaign not found
-```
-
-#### 🎮 **Trigger Manuali** (Nuovi endpoint)
-**Esecuzione manuale di singole funzioni per debug**
-
-**Endpoints**:
-- **POST** `/api/automation/trigger/func1` - Progressive Bidding
-- **POST** `/api/automation/trigger/func2` - Placement Optimization
-- **POST** `/api/automation/trigger/func3` - Targeting Optimization
-- **POST** `/api/automation/trigger/func4` - Auto Ad Optimization
-- **POST** `/api/automation/trigger/func5` - Campaign Feeding
+**Endpoint**:
+- **POST** `/api/automation/trigger-manual` - Esegue tutte le 5 funzioni in sequenza
 
 **Auth**: Bearer token (ADMIN_TOKEN)
 
 **Features**:
 - Esecuzione in **background** (non blocca HTTP response)
+- Esegue tutte le automazioni (func1-5) sulle campagne configurate
 - Logging dettagliato di start/end/duration
 - Gestione errori per ogni funzione
 
 **Esempio curl**:
 ```bash
-curl -X POST https://amazon-ads-manager.onrender.com/api/automation/trigger/func1 \
+curl -X POST https://amazon-ads-manager.onrender.com/api/automation/trigger-manual \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
 ```
+
+**NOTA**: Non è possibile eseguire singole funzioni tramite API perché richiedono parametri specifici delle campagne Amazon (recuperati automaticamente dall'API Amazon durante l'esecuzione).
 
 ---
 
@@ -336,16 +313,15 @@ curl "https://amazon-ads-manager.onrender.com/api/logs?ruleName=func1&status=suc
 curl "https://amazon-ads-manager.onrender.com/api/logs/stats/summary?dateFrom=2025-11-01&dateTo=2025-11-13"
 ```
 
-### 5. Trigger Manuali
+### 5. Trigger Manuale
 
 ```bash
-# Esegui solo func1
-curl -X POST https://amazon-ads-manager.onrender.com/api/automation/trigger/func1 \
+# Esegui tutte le automazioni
+curl -X POST https://amazon-ads-manager.onrender.com/api/automation/trigger-manual \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
 
-# Esegui solo func5
-curl -X POST https://amazon-ads-manager.onrender.com/api/automation/trigger/func5 \
-  -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
+# Verifica stato esecuzione
+curl https://amazon-ads-manager.onrender.com/api/automation/status
 ```
 
 ### 6. Logging (nel codice)

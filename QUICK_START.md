@@ -30,13 +30,15 @@ npm start            # Avvia server in produzione
 
 ### Testing
 ```bash
-npm test             # Test tutte le funzioni (dry-run)
-npm run test:func1   # Test solo Progressive Bidding
-npm run test:func2   # Test solo Placement Optimization
-npm run test:func3   # Test solo Targeting Optimization
-npm run test:func4   # Test solo Auto Ad Optimization
-npm run test:func5   # Test solo Campaign Feeding
-npm run test:live    # Test LIVE (modifica dati reali!)
+# Testare le automazioni tramite trigger manuale API
+curl -X POST https://amazon-ads-manager.onrender.com/api/automation/trigger-manual \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
+
+# Verificare stato esecuzione
+curl https://amazon-ads-manager.onrender.com/api/automation/status
+
+# Consultare logs
+curl https://amazon-ads-manager.onrender.com/api/logs/recent?limit=20
 ```
 
 ## 📡 API Endpoints
@@ -68,12 +70,7 @@ PUT    /api/campaigns/:id        # Aggiorna campagna
 DELETE /api/campaigns/:id        # Elimina campagna
 
 # Automazioni
-POST /api/automation/trigger-manual     # Trigger tutte le funzioni
-POST /api/automation/trigger/func1      # Trigger solo func1
-POST /api/automation/trigger/func2      # Trigger solo func2
-POST /api/automation/trigger/func3      # Trigger solo func3
-POST /api/automation/trigger/func4      # Trigger solo func4
-POST /api/automation/trigger/func5      # Trigger solo func5
+POST /api/automation/trigger-manual     # Trigger tutte le funzioni (func1-5)
 GET  /api/automation/config             # Configurazione scheduler
 POST /api/automation/config             # Aggiorna scheduler
 POST /api/automation/scheduler/restart  # Restart scheduler
@@ -135,13 +132,12 @@ curl "https://amazon-ads-manager.onrender.com/api/logs/stats/summary?dateFrom=20
 
 ### 4. Trigger manuale automazione
 ```bash
-# Esegui solo Progressive Bidding
-curl -X POST https://amazon-ads-manager.onrender.com/api/automation/trigger/func1 \
-  -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
-
-# Esegui tutte le funzioni
+# Esegui tutte le automazioni (func1-5)
 curl -X POST https://amazon-ads-manager.onrender.com/api/automation/trigger-manual \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
+
+# Verifica stato esecuzione
+curl https://amazon-ads-manager.onrender.com/api/automation/status
 ```
 
 ### 5. Modificare scheduler
@@ -170,11 +166,11 @@ curl https://amazon-ads-manager.onrender.com/api/automation/status
 
 ### Test locali
 ```bash
-# Testa singola funzione senza modificare dati
-npm run test:func1
-
 # Vedi log dettagliati
 LOG_LEVEL=debug npm run dev
+
+# Consulta logs via API
+curl https://amazon-ads-manager.onrender.com/api/logs/recent?limit=50
 ```
 
 ### Logs
