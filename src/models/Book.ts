@@ -20,22 +20,22 @@ export class Book {
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   price: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  @Column({ type: 'decimal', precision: 10, scale: 2, name: 'printing_cost' })
   printingCost: number;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 60 })
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 60, name: 'royalty_percentage' })
   royaltyPercentage: number;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2 })
+  @Column({ type: 'decimal', precision: 5, scale: 2, name: 'fast_acos' })
   fastAcos: number;
 
   @Column({ type: 'varchar', length: 10 })
   marketplace: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
   // Hook per calcolare automaticamente FAST ACoS prima di salvare
