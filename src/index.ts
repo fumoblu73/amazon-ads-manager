@@ -1,6 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import automationRoutes from './routes/automation';
+import { initializeDatabase } from './config/database';
 
 dotenv.config();
 
@@ -31,12 +32,26 @@ app.get('/health', (req, res) => {
 
 app.use('/api/automation', automationRoutes);
 
-app.listen(PORT, () => {
-  console.log('='.repeat(50));
-  console.log(`🚀 Server avviato sulla porta ${PORT}`);
-  console.log('='.repeat(50));
-  console.log('⏰ Automazioni gestite da trigger esterno');
-});
+// Inizializza database e poi avvia server
+const startServer = async () => {
+  try {
+    // Connetti al database
+    await initializeDatabase();
+
+    // Avvia server
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log('='.repeat(50));
+      console.log(`🚀 Server avviato sulla porta ${PORT}`);
+      console.log('='.repeat(50));
+      console.log('⏰ Automazioni gestite da trigger esterno');
+    });
+  } catch (error) {
+    console.error('❌ Errore avvio server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();
 
 process.on('unhandledRejection', (error) => {
   console.error('❌ Errore non gestito:', error);
