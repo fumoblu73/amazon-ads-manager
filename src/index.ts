@@ -1,6 +1,9 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import automationRoutes from './routes/automation';
+import booksRoutes from './routes/books';
+import campaignsRoutes from './routes/campaigns';
+import logsRoutes from './routes/logs';
 import { initializeDatabase } from './config/database';
 import { automationScheduler } from './automation/scheduler';
 
@@ -18,7 +21,10 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/health',
       automation_trigger: '/api/automation/trigger?secret=YOUR_SECRET (POST)',
-      automation_status: '/api/automation/status'
+      automation_status: '/api/automation/status',
+      books: '/api/books',
+      campaigns: '/api/campaigns',
+      logs: '/api/logs'
     }
   });
 });
@@ -32,6 +38,9 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/api/automation', automationRoutes);
+app.use('/api/books', booksRoutes);
+app.use('/api/campaigns', campaignsRoutes);
+app.use('/api/logs', logsRoutes);
 
 // Inizializza database, scheduler e poi avvia server
 const startServer = async () => {

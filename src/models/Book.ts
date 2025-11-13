@@ -4,17 +4,47 @@
 // Rappresenta un libro nel database
 // Contiene i dati necessari per calcolare il FAST ACoS
 
-export interface Book {
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, BeforeInsert, BeforeUpdate } from 'typeorm';
+
+@Entity('books')
+export class Book {
+  @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ type: 'varchar', length: 10, unique: true })
   asin: string;
+
+  @Column({ type: 'varchar', length: 255 })
   title: string;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2 })
   price: number;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2 })
   printingCost: number;
-  royaltyPercentage: number; // Default 60%
-  fastAcos: number; // Calcolato automaticamente
-  marketplace: string; // ES, IT, US, UK, etc.
+
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 60 })
+  royaltyPercentage: number;
+
+  @Column({ type: 'decimal', precision: 5, scale: 2 })
+  fastAcos: number;
+
+  @Column({ type: 'varchar', length: 10 })
+  marketplace: string;
+
+  @CreateDateColumn()
   createdAt: Date;
+
+  @UpdateDateColumn()
   updatedAt: Date;
+
+  // Hook per calcolare automaticamente FAST ACoS prima di salvare
+  @BeforeInsert()
+  @BeforeUpdate()
+  calculateFastAcos() {
+    const royalty = (this.royaltyPercentage / 100 * this.price) - this.printingCost;
+    this.fastAcos = Math.round((royalty / (this.price * 1.22)) * 10000) / 100;
+  }
 }
 
 // Interfaccia per creare un nuovo libro
