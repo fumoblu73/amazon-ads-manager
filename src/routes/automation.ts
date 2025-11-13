@@ -1,6 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { automationScheduler } from '../automation/scheduler';
 import { EventEmitter } from 'events';
+import { func1ProgressiveBidding } from '../automation/functions/func1';
+import { func2PlacementOptimization } from '../automation/functions/func2';
+import { func3TargetingOptimization } from '../automation/functions/func3';
+import { func4AutoAdOptimization } from '../automation/functions/func4';
+import { func5CampaignFeeding } from '../automation/functions/func5';
 
 const router = Router();
 
@@ -266,6 +271,124 @@ router.post('/scheduler/restart', (req: Request, res: Response) => {
       error: 'Failed to restart scheduler',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
+  }
+});
+
+// ================================================
+// ENDPOINT: TRIGGER SINGOLE FUNZIONI
+// ================================================
+
+/**
+ * Helper per eseguire singola funzione in background
+ */
+async function executeSingleFunction(
+  funcName: string,
+  funcToRun: () => Promise<void>
+): Promise<{ success: boolean; error?: string; duration?: number }> {
+  const startTime = Date.now();
+
+  try {
+    console.log(`🚀 Esecuzione manuale: ${funcName}`);
+    await funcToRun();
+    const duration = Date.now() - startTime;
+    console.log(`✅ ${funcName} completata in ${duration}ms`);
+
+    return { success: true, duration };
+  } catch (error: any) {
+    const duration = Date.now() - startTime;
+    console.error(`❌ ${funcName} fallita:`, error);
+
+    return {
+      success: false,
+      error: error.message,
+      duration
+    };
+  }
+}
+
+// Middleware autenticazione per trigger manuali
+const requireAdminAuth = (req: Request, res: Response, next: Function) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || authHeader !== `Bearer ${process.env.ADMIN_TOKEN || 'admin-token'}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  next();
+};
+
+// POST /api/automation/trigger/func1 - Progressive Bidding
+router.post('/trigger/func1', requireAdminAuth, async (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    message: 'Function 1 (Progressive Bidding) started in background',
+    timestamp: new Date().toISOString()
+  });
+
+  const result = await executeSingleFunction('func1 - Progressive Bidding', func1ProgressiveBidding);
+
+  if (!result.success) {
+    console.error('Function 1 failed:', result.error);
+  }
+});
+
+// POST /api/automation/trigger/func2 - Placement Optimization
+router.post('/trigger/func2', requireAdminAuth, async (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    message: 'Function 2 (Placement Optimization) started in background',
+    timestamp: new Date().toISOString()
+  });
+
+  const result = await executeSingleFunction('func2 - Placement Optimization', func2PlacementOptimization);
+
+  if (!result.success) {
+    console.error('Function 2 failed:', result.error);
+  }
+});
+
+// POST /api/automation/trigger/func3 - Targeting Optimization
+router.post('/trigger/func3', requireAdminAuth, async (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    message: 'Function 3 (Targeting Optimization) started in background',
+    timestamp: new Date().toISOString()
+  });
+
+  const result = await executeSingleFunction('func3 - Targeting Optimization', func3TargetingOptimization);
+
+  if (!result.success) {
+    console.error('Function 3 failed:', result.error);
+  }
+});
+
+// POST /api/automation/trigger/func4 - Auto Ad Optimization
+router.post('/trigger/func4', requireAdminAuth, async (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    message: 'Function 4 (Auto Ad Optimization) started in background',
+    timestamp: new Date().toISOString()
+  });
+
+  const result = await executeSingleFunction('func4 - Auto Ad Optimization', func4AutoAdOptimization);
+
+  if (!result.success) {
+    console.error('Function 4 failed:', result.error);
+  }
+});
+
+// POST /api/automation/trigger/func5 - Campaign Feeding
+router.post('/trigger/func5', requireAdminAuth, async (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    message: 'Function 5 (Campaign Feeding) started in background',
+    timestamp: new Date().toISOString()
+  });
+
+  const result = await executeSingleFunction('func5 - Campaign Feeding', func5CampaignFeeding);
+
+  if (!result.success) {
+    console.error('Function 5 failed:', result.error);
   }
 });
 
