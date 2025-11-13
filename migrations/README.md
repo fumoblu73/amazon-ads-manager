@@ -35,6 +35,13 @@ https://app.supabase.com
 -- Poi clicca "Run" o premi Ctrl+Enter
 ```
 
+#### Migration 004: Fix Missing Columns (IMPORTANTE!)
+```sql
+-- Copia e incolla il contenuto di 004_fix_missing_columns.sql
+-- Poi clicca "Run" o premi Ctrl+Enter
+-- Questa migration assicura che tutte le colonne snake_case esistano
+```
+
 ### 5. Verifica le tabelle
 ```sql
 -- Verifica che le tabelle esistano

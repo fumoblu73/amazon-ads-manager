@@ -69,38 +69,64 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // ================================================
-// GET /api/logs/:id - Dettagli log singolo
+// GET /api/logs/recent - Ultimi 50 log (DEVE ESSERE PRIMA DI /:id)
 // ================================================
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/recent', async (req: Request, res: Response) => {
   try {
-    const logRepository = AppDataSource.getRepository(AutomationLog);
-    const log = await logRepository.findOne({
-      where: { id: req.params.id }
-    });
+    const limit = parseInt(req.query.limit as string) || 50;
 
-    if (!log) {
-      return res.status(404).json({
-        success: false,
-        error: 'Log non trovato'
-      });
-    }
+    const logRepository = AppDataSource.getRepository(AutomationLog);
+    const logs = await logRepository.find({
+      order: { createdAt: 'DESC' },
+      take: limit
+    });
 
     res.json({
       success: true,
-      data: log
+      count: logs.length,
+      data: logs
     });
   } catch (error: any) {
-    console.error('❌ Errore GET /api/logs/:id:', error);
+    console.error('❌ Errore GET /api/logs/recent:', error);
     res.status(500).json({
       success: false,
-      error: 'Errore nel recupero del log',
+      error: 'Errore nel recupero dei log recenti',
       details: error.message
     });
   }
 });
 
 // ================================================
-// GET /api/logs/stats/summary - Statistiche aggregate
+// GET /api/logs/errors - Solo log con errori (DEVE ESSERE PRIMA DI /:id)
+// ================================================
+router.get('/errors', async (req: Request, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 100;
+
+    const logRepository = AppDataSource.getRepository(AutomationLog);
+    const logs = await logRepository.find({
+      where: { status: 'failed' },
+      order: { createdAt: 'DESC' },
+      take: limit
+    });
+
+    res.json({
+      success: true,
+      count: logs.length,
+      data: logs
+    });
+  } catch (error: any) {
+    console.error('❌ Errore GET /api/logs/errors:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Errore nel recupero dei log di errore',
+      details: error.message
+    });
+  }
+});
+
+// ================================================
+// GET /api/logs/stats/summary - Statistiche aggregate (DEVE ESSERE PRIMA DI /:id)
 // ================================================
 router.get('/stats/summary', async (req: Request, res: Response) => {
   try {
@@ -164,7 +190,7 @@ router.get('/stats/summary', async (req: Request, res: Response) => {
 });
 
 // ================================================
-// GET /api/logs/actions/distinct - Lista tutte le action uniche
+// GET /api/logs/actions/distinct - Lista tutte le action uniche (DEVE ESSERE PRIMA DI /:id)
 // ================================================
 router.get('/actions/distinct', async (req: Request, res: Response) => {
   try {
@@ -190,7 +216,7 @@ router.get('/actions/distinct', async (req: Request, res: Response) => {
 });
 
 // ================================================
-// GET /api/logs/rules/distinct - Lista tutti i ruleName unici
+// GET /api/logs/rules/distinct - Lista tutti i ruleName unici (DEVE ESSERE PRIMA DI /:id)
 // ================================================
 router.get('/rules/distinct', async (req: Request, res: Response) => {
   try {
@@ -216,57 +242,31 @@ router.get('/rules/distinct', async (req: Request, res: Response) => {
 });
 
 // ================================================
-// GET /api/logs/recent - Ultimi 50 log
+// GET /api/logs/:id - Dettagli log singolo (DEVE ESSERE ALLA FINE)
 // ================================================
-router.get('/recent', async (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const limit = parseInt(req.query.limit as string) || 50;
-
     const logRepository = AppDataSource.getRepository(AutomationLog);
-    const logs = await logRepository.find({
-      order: { createdAt: 'DESC' },
-      take: limit
+    const log = await logRepository.findOne({
+      where: { id: req.params.id }
     });
+
+    if (!log) {
+      return res.status(404).json({
+        success: false,
+        error: 'Log non trovato'
+      });
+    }
 
     res.json({
       success: true,
-      count: logs.length,
-      data: logs
+      data: log
     });
   } catch (error: any) {
-    console.error('❌ Errore GET /api/logs/recent:', error);
+    console.error('❌ Errore GET /api/logs/:id:', error);
     res.status(500).json({
       success: false,
-      error: 'Errore nel recupero dei log recenti',
-      details: error.message
-    });
-  }
-});
-
-// ================================================
-// GET /api/logs/errors - Solo log con errori
-// ================================================
-router.get('/errors', async (req: Request, res: Response) => {
-  try {
-    const limit = parseInt(req.query.limit as string) || 100;
-
-    const logRepository = AppDataSource.getRepository(AutomationLog);
-    const logs = await logRepository.find({
-      where: { status: 'failed' },
-      order: { createdAt: 'DESC' },
-      take: limit
-    });
-
-    res.json({
-      success: true,
-      count: logs.length,
-      data: logs
-    });
-  } catch (error: any) {
-    console.error('❌ Errore GET /api/logs/errors:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Errore nel recupero dei log di errore',
+      error: 'Errore nel recupero del log',
       details: error.message
     });
   }
