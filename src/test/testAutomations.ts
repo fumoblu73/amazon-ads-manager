@@ -5,11 +5,11 @@
 
 import dotenv from 'dotenv';
 import { initializeDatabase } from '../config/database';
-import { func1ProgressiveBidding } from '../automation/functions/func1';
-import { func2PlacementOptimization } from '../automation/functions/func2';
-import { func3TargetingOptimization } from '../automation/functions/func3';
-import { func4AutoAdOptimization } from '../automation/functions/func4';
-import { func5CampaignFeeding } from '../automation/functions/func5';
+import { executeFunc1 } from '../automation/functions/func1';
+import { executeFunc2 } from '../automation/functions/func2';
+import { executeFunc3 } from '../automation/functions/func3';
+import { executeFunc4 } from '../automation/functions/func4';
+import { executeFunc5 } from '../automation/functions/func5';
 
 dotenv.config();
 
@@ -97,7 +97,7 @@ async function runAllTests(dryRun: boolean = true): Promise<TestResult[]> {
   testLogger.section('Test 1: Progressive Bidding (Funzione 1)');
   results.push(await testAutomationFunction(
     'Progressive Bidding',
-    () => func1ProgressiveBidding(),
+    () => executeFunc1({ thresholdImpressions: 20, bidIncrement: 0.02, frequencyDays: 3 }),
     dryRun
   ));
 
@@ -105,7 +105,7 @@ async function runAllTests(dryRun: boolean = true): Promise<TestResult[]> {
   testLogger.section('Test 2: Placement Optimization (Funzione 2)');
   results.push(await testAutomationFunction(
     'Placement Optimization',
-    () => func2PlacementOptimization(),
+    () => executeFunc2({ frequencyDays: 7 }),
     dryRun
   ));
 
@@ -113,7 +113,7 @@ async function runAllTests(dryRun: boolean = true): Promise<TestResult[]> {
   testLogger.section('Test 3: Targeting Optimization (Funzione 3)');
   results.push(await testAutomationFunction(
     'Targeting Optimization',
-    () => func3TargetingOptimization(),
+    () => executeFunc3({ frequencyDays: 3 }),
     dryRun
   ));
 
@@ -121,7 +121,7 @@ async function runAllTests(dryRun: boolean = true): Promise<TestResult[]> {
   testLogger.section('Test 4: Auto Ad Optimization (Funzione 4)');
   results.push(await testAutomationFunction(
     'Auto Ad Optimization',
-    () => func4AutoAdOptimization(),
+    () => executeFunc4({ frequencyDays: 7 }),
     dryRun
   ));
 
@@ -129,7 +129,7 @@ async function runAllTests(dryRun: boolean = true): Promise<TestResult[]> {
   testLogger.section('Test 5: Campaign Feeding (Funzione 5)');
   results.push(await testAutomationFunction(
     'Campaign Feeding',
-    () => func5CampaignFeeding(),
+    () => executeFunc5({ frequencyDays: 7 }),
     dryRun
   ));
 
@@ -146,19 +146,19 @@ async function testSingleFunction(funcNumber: number, dryRun: boolean = true): P
 
   switch (funcNumber) {
     case 1:
-      result = await testAutomationFunction('Progressive Bidding', () => func1ProgressiveBidding(), dryRun);
+      result = await testAutomationFunction('Progressive Bidding', () => executeFunc1({ thresholdImpressions: 20, bidIncrement: 0.02, frequencyDays: 3 }), dryRun);
       break;
     case 2:
-      result = await testAutomationFunction('Placement Optimization', () => func2PlacementOptimization(), dryRun);
+      result = await testAutomationFunction('Placement Optimization', () => executeFunc2({ frequencyDays: 7 }), dryRun);
       break;
     case 3:
-      result = await testAutomationFunction('Targeting Optimization', () => func3TargetingOptimization(), dryRun);
+      result = await testAutomationFunction('Targeting Optimization', () => executeFunc3({ frequencyDays: 3 }), dryRun);
       break;
     case 4:
-      result = await testAutomationFunction('Auto Ad Optimization', () => func4AutoAdOptimization(), dryRun);
+      result = await testAutomationFunction('Auto Ad Optimization', () => executeFunc4({ frequencyDays: 7 }), dryRun);
       break;
     case 5:
-      result = await testAutomationFunction('Campaign Feeding', () => func5CampaignFeeding(), dryRun);
+      result = await testAutomationFunction('Campaign Feeding', () => executeFunc5({ frequencyDays: 7 }), dryRun);
       break;
     default:
       testLogger.error(`Funzione ${funcNumber} non esiste. Usa 1-5.`);
