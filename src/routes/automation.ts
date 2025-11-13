@@ -1,11 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { automationScheduler } from '../automation/scheduler';
 import { EventEmitter } from 'events';
-import { func1ProgressiveBidding } from '../automation/functions/func1';
-import { func2PlacementOptimization } from '../automation/functions/func2';
-import { func3TargetingOptimization } from '../automation/functions/func3';
-import { func4AutoAdOptimization } from '../automation/functions/func4';
-import { func5CampaignFeeding } from '../automation/functions/func5';
+import { executeFunc1 } from '../automation/functions/func1';
+import { executeFunc2 } from '../automation/functions/func2';
+import { executeFunc3 } from '../automation/functions/func3';
+import { executeFunc4 } from '../automation/functions/func4';
+import { executeFunc5 } from '../automation/functions/func5';
 
 const router = Router();
 
@@ -325,7 +325,11 @@ router.post('/trigger/func1', requireAdminAuth, async (req: Request, res: Respon
     timestamp: new Date().toISOString()
   });
 
-  const result = await executeSingleFunction('func1 - Progressive Bidding', func1ProgressiveBidding);
+  const result = await executeSingleFunction('func1 - Progressive Bidding', () => executeFunc1({
+    thresholdImpressions: 20,
+    bidIncrement: 0.02,
+    frequencyDays: 3
+  }));
 
   if (!result.success) {
     console.error('Function 1 failed:', result.error);
@@ -340,7 +344,9 @@ router.post('/trigger/func2', requireAdminAuth, async (req: Request, res: Respon
     timestamp: new Date().toISOString()
   });
 
-  const result = await executeSingleFunction('func2 - Placement Optimization', func2PlacementOptimization);
+  const result = await executeSingleFunction('func2 - Placement Optimization', () => executeFunc2({
+    frequencyDays: 7
+  }));
 
   if (!result.success) {
     console.error('Function 2 failed:', result.error);
@@ -355,7 +361,9 @@ router.post('/trigger/func3', requireAdminAuth, async (req: Request, res: Respon
     timestamp: new Date().toISOString()
   });
 
-  const result = await executeSingleFunction('func3 - Targeting Optimization', func3TargetingOptimization);
+  const result = await executeSingleFunction('func3 - Targeting Optimization', () => executeFunc3({
+    frequencyDays: 3
+  }));
 
   if (!result.success) {
     console.error('Function 3 failed:', result.error);
@@ -370,7 +378,9 @@ router.post('/trigger/func4', requireAdminAuth, async (req: Request, res: Respon
     timestamp: new Date().toISOString()
   });
 
-  const result = await executeSingleFunction('func4 - Auto Ad Optimization', func4AutoAdOptimization);
+  const result = await executeSingleFunction('func4 - Auto Ad Optimization', () => executeFunc4({
+    frequencyDays: 7
+  }));
 
   if (!result.success) {
     console.error('Function 4 failed:', result.error);
@@ -385,7 +395,9 @@ router.post('/trigger/func5', requireAdminAuth, async (req: Request, res: Respon
     timestamp: new Date().toISOString()
   });
 
-  const result = await executeSingleFunction('func5 - Campaign Feeding', func5CampaignFeeding);
+  const result = await executeSingleFunction('func5 - Campaign Feeding', () => executeFunc5({
+    frequencyDays: 7
+  }));
 
   if (!result.success) {
     console.error('Function 5 failed:', result.error);
