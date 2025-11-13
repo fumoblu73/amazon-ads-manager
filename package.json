@@ -6,14 +6,7 @@
   "scripts": {
     "dev": "ts-node-dev --respawn src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js",
-    "test": "ts-node src/test/testAutomations.ts all",
-    "test:func1": "ts-node src/test/testAutomations.ts func1",
-    "test:func2": "ts-node src/test/testAutomations.ts func2",
-    "test:func3": "ts-node src/test/testAutomations.ts func3",
-    "test:func4": "ts-node src/test/testAutomations.ts func4",
-    "test:func5": "ts-node src/test/testAutomations.ts func5",
-    "test:live": "ts-node src/test/testAutomations.ts all --live"
+    "start": "node dist/index.js"
   },
   "keywords": ["amazon", "ads", "advertising", "automation"],
   "author": "",
