@@ -1,32 +1,83 @@
 // ================================================
 // SCHEDULER PER AUTOMAZIONI
 // ================================================
-// Gestisce l'esecuzione coordinata delle 5 funzioni di automazione
-// rispettando le frequenze e l'ordine di esecuzione definiti
+// Sistema di scheduling interno basato su node-cron
+// Gestisce l'esecuzione automatica delle 5 funzioni di automazione
+// con orari specifici configurabili
 
 import cron from 'node-cron';
 import { runAutomationRules } from './rules';
+
+// Interfaccia per configurazione scheduling
+interface ScheduleConfig {
+  // Funzioni 1+3: Lunedì/Mercoledì/Venerdì alle 10:30 IT (09:30 UTC)
+  func1and3_schedule: string;
+  func1and3_enabled: boolean;
+
+  // Funzioni 2+4+5: Lunedì alle 11:30 IT (10:30 UTC)
+  func2and4and5_schedule: string;
+  func2and4and5_enabled: boolean;
+}
 
 // Classe che gestisce lo scheduler delle automazioni
 class AutomationScheduler {
   private tasks: cron.ScheduledTask[] = [];
   private isRunning: boolean = false;
-  private lastExecutionTimes: Map<string, Date> = new Map(); // Traccia ultima esecuzione per funzione
+  private lastExecutionTimes: Map<string, Date> = new Map();
 
+  // Configurazione di default
+  private config: ScheduleConfig = {
+    // Lunedì/Mercoledì/Venerdì alle 09:30 UTC (10:30 ora italiana)
+    func1and3_schedule: '30 9 * * 1,3,5',
+    func1and3_enabled: true,
+
+    // Lunedì alle 10:30 UTC (11:30 ora italiana)
+    func2and4and5_schedule: '30 10 * * 1',
+    func2and4and5_enabled: true
+  };
+
+  /**
+   * Avvia lo scheduler interno con cron jobs
+   */
   start() {
     if (this.isRunning) {
       console.log('⚠️  Scheduler già avviato');
       return;
     }
 
-    console.log('🤖 Avvio scheduler automazioni...');
-    console.log('⚠️  NOTA: Su Render Free, usa cron-job.org invece dello scheduler interno');
-    console.log('   Le automazioni vengono triggerate da chiamate HTTP esterne');
+    console.log('🤖 Avvio scheduler automazioni interno...');
+    console.log('📅 Configurazione orari:');
+    console.log(`   - Funzioni 1+3: ${this.config.func1and3_schedule} (Lun/Mer/Ven 10:30 IT)`);
+    console.log(`   - Funzioni 2+4+5: ${this.config.func2and4and5_schedule} (Lunedì 11:30 IT)`);
 
-    // Su Render, NON avviamo lo scheduler interno
-    // Le automazioni vengono triggerate da cron-job.org tramite endpoint /api/automation/trigger
+    // Cron job per Funzioni 1+3
+    if (this.config.func1and3_enabled) {
+      const task1and3 = cron.schedule(this.config.func1and3_schedule, async () => {
+        console.log('⏰ Trigger automatico: Funzioni 1+3');
+        await this.runFunctions([1, 3]);
+      }, {
+        timezone: 'UTC'
+      });
+
+      this.tasks.push(task1and3);
+      console.log('✅ Cron job Funzioni 1+3 attivato');
+    }
+
+    // Cron job per Funzioni 2+4+5
+    if (this.config.func2and4and5_enabled) {
+      const task2and4and5 = cron.schedule(this.config.func2and4and5_schedule, async () => {
+        console.log('⏰ Trigger automatico: Funzioni 2+4+5');
+        await this.runFunctions([2, 4, 5]);
+      }, {
+        timezone: 'UTC'
+      });
+
+      this.tasks.push(task2and4and5);
+      console.log('✅ Cron job Funzioni 2+4+5 attivato');
+    }
+
     this.isRunning = true;
-    console.log('✅ Scheduler configurato (trigger esterno via HTTP)');
+    console.log('✅ Scheduler interno avviato con successo');
   }
 
   stop() {
@@ -43,21 +94,41 @@ class AutomationScheduler {
   }
 
   /**
-   * Esegue le automazioni
-   * Questa è la funzione principale chiamata dal background worker
+   * Esegue funzioni specifiche
+   * @param functionNumbers - Array di numeri funzione da eseguire (es: [1, 3])
    */
-  async runNow() {
-    console.log('🚀 Esecuzione automazioni...');
-
+  private async runFunctions(functionNumbers: number[]) {
+    console.log(`🚀 Esecuzione funzioni: ${functionNumbers.join(', ')}`);
     const startTime = Date.now();
 
     try {
-      // Esegue tutte le regole di automazione
-      // Le regole in rules.ts si occupano di:
-      // 1. Recuperare tutte le campagne
-      // 2. Determinare quali funzioni eseguire
-      // 3. Rispettare il periodo di warmup (7 giorni)
-      // 4. Coordinare l'esecuzione Funz.1 → Funz.3 (stessa frequency)
+      // TODO: Implementare logica per eseguire solo funzioni specificate
+      // Per ora esegue tutte le regole (da modificare in rules.ts)
+      await runAutomationRules();
+
+      // Marca funzioni come eseguite
+      functionNumbers.forEach(num => {
+        this.markFunctionExecuted(`func${num}`);
+      });
+
+      const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(2);
+      console.log(`✅ Funzioni ${functionNumbers.join(', ')} completate in ${duration} minuti`);
+
+    } catch (error) {
+      const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(2);
+      console.error(`❌ Errore esecuzione funzioni dopo ${duration} minuti:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Esegue tutte le automazioni (chiamato da trigger manuale)
+   */
+  async runNow() {
+    console.log('🚀 Esecuzione manuale di tutte le automazioni...');
+    const startTime = Date.now();
+
+    try {
       await runAutomationRules();
 
       const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(2);
@@ -68,6 +139,37 @@ class AutomationScheduler {
       console.error(`❌ Errore esecuzione dopo ${duration} minuti:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Aggiorna la configurazione dello scheduler
+   * Permette di modificare orari e abilitazione senza riavviare il server
+   */
+  updateConfig(newConfig: Partial<ScheduleConfig>) {
+    console.log('🔧 Aggiornamento configurazione scheduler...');
+
+    // Se lo scheduler è attivo, fermalo prima di aggiornare
+    const wasRunning = this.isRunning;
+    if (wasRunning) {
+      this.stop();
+    }
+
+    // Aggiorna configurazione
+    this.config = { ...this.config, ...newConfig };
+
+    // Riavvia se era attivo
+    if (wasRunning) {
+      this.start();
+    }
+
+    console.log('✅ Configurazione aggiornata');
+  }
+
+  /**
+   * Restituisce la configurazione corrente
+   */
+  getConfig(): ScheduleConfig {
+    return { ...this.config };
   }
 
   /**
@@ -134,8 +236,13 @@ class AutomationScheduler {
     return {
       isRunning: this.isRunning,
       activeTasks: this.tasks.length,
-      triggerMethod: 'external', // Triggerate da cron-job.org
-      lastExecutionTimes: Object.fromEntries(this.lastExecutionTimes)
+      triggerMethod: 'internal', // Scheduler interno con node-cron
+      config: this.config,
+      lastExecutionTimes: Object.fromEntries(this.lastExecutionTimes),
+      nextScheduledRuns: {
+        func1and3: this.config.func1and3_schedule + ' (Lun/Mer/Ven 10:30 IT)',
+        func2and4and5: this.config.func2and4and5_schedule + ' (Lunedì 11:30 IT)'
+      }
     };
   }
 
