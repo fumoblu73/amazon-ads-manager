@@ -35,11 +35,12 @@ src/
 
 ### Monitoraggio Token Usage
 - ✅ **SEMPRE** monitorare l'utilizzo dei token durante la sessione
-- ✅ **AVVISARE L'UTENTE** quando si raggiunge il 70-80% del limite di token
+- ✅ **AVVISARE L'UTENTE** quando si raggiunge il 65-75% del limite di token
 - ✅ **NON ATTENDERE** che la chat si saturi completamente
+- ⚠️ **MAI** superare l'80% senza aver creato l'handoff
 
 ### Preparazione Handoff a Nuova Chat
-Quando la chat si avvicina al limite di token (circa 140.000-160.000 token usati):
+Quando la chat si avvicina al limite di token (circa 130.000-150.000 token usati):
 
 1. **Avvisare l'utente immediatamente:**
    ```
@@ -211,21 +212,40 @@ Quando la chat si avvicina al limite di token (circa 140.000-160.000 token usati
 ### Esempio Pratico di Handoff
 
 **Quando creare l'handoff:**
-- Token usage > 140.000 (70%)
-- Token usage > 160.000 (80%) - URGENTE
+- Token usage > 130.000 (65%) - Inizia preparazione, avvisa utente
+- Token usage > 150.000 (75%) - URGENTE, crea handoff immediatamente
+- Token usage > 160.000 (80%) - CRITICO, rischio saturazione durante handoff
 
 **Cosa NON fare:**
 - ❌ Attendere che i token finiscano completamente
+- ❌ Superare 160.000 token (80%) senza handoff creato
+- ❌ Andare oltre 180.000 token (90%) - rischio saturazione garantita
 - ❌ Interrompere nel mezzo di un task critico senza documentarlo
 - ❌ Creare handoff generico senza dettagli tecnici
 - ❌ Dimenticare di committare l'handoff file
 
 **Cosa fare:**
-- ✅ Avvisare l'utente in anticipo
+- ✅ Avvisare l'utente in anticipo (a 65% = 130k tokens)
 - ✅ Completare task corrente se possibile (o documentare stato parziale)
 - ✅ Creare handoff dettagliato con TUTTO il contesto
 - ✅ Committare e pushare l'handoff
 - ✅ Dare istruzioni chiare all'utente per continuare
+
+### Strategia Progressiva per Token Management
+
+| Token Usage | Percentuale | Azione Richiesta |
+|------------|-------------|------------------|
+| < 130.000 | < 65% | ✅ Operazioni normali, nessuna preoccupazione |
+| 130.000-150.000 | 65-75% | ⚠️ Avvisa utente, pianifica handoff, completa task corrente |
+| 150.000-160.000 | 75-80% | 🚨 URGENTE: Crea handoff immediatamente |
+| 160.000-180.000 | 80-90% | ❌ CRITICO: Handoff doveva essere già creato! |
+| > 180.000 | > 90% | 💥 EMERGENZA: Rischio saturazione, solo operazioni minime |
+
+**Note Importanti:**
+- Creazione handoff richiede ~10.000-18.000 token
+- A 150k token hai ancora ~50k disponibili (sicuro)
+- A 180k token hai solo ~20k disponibili (rischioso)
+- La conversazione dell'utente consuma token durante handoff
 
 ---
 
