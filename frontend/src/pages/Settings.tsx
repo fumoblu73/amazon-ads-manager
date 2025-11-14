@@ -44,9 +44,9 @@ export default function Settings() {
   });
 
   return (
-    <div className="h-full bg-gradient-to-br from-gray-50 via-white to-gray-50 p-6 overflow-hidden flex flex-col">
+    <div className="h-full p-8 overflow-hidden flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
         <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors shadow-md">
           Salva Modifiche
@@ -54,9 +54,9 @@ export default function Settings() {
       </div>
 
       {/* Functions Grid - 2x3 layout */}
-      <div className="flex-1 grid grid-cols-2 gap-4 min-h-0">
+      <div className="flex-1 grid grid-cols-2 gap-6 min-h-0">
         {/* Function 1 */}
-        <div className="bg-white rounded-xl shadow-md border border-gray-200 p-4 overflow-auto">
+        <div className="bg-white rounded-xl shadow-md p-5 overflow-auto">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="text-sm font-bold text-gray-900">F1: Progressive Bidding</h2>
@@ -88,7 +88,7 @@ export default function Settings() {
         </div>
 
         {/* Function 2 */}
-        <div className="bg-white rounded-xl shadow-md border border-gray-200 p-4 overflow-auto">
+        <div className="bg-white rounded-xl shadow-md p-5 overflow-auto">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="text-sm font-bold text-gray-900">F2: Placement Optimization</h2>
@@ -112,7 +112,7 @@ export default function Settings() {
         </div>
 
         {/* Function 3 */}
-        <div className="bg-white rounded-xl shadow-md border border-gray-200 p-4 overflow-auto">
+        <div className="bg-white rounded-xl shadow-md p-5 overflow-auto">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="text-sm font-bold text-gray-900">F3: Targeting Optimization</h2>
@@ -152,7 +152,7 @@ export default function Settings() {
         </div>
 
         {/* Function 4 */}
-        <div className="bg-white rounded-xl shadow-md border border-gray-200 p-4 overflow-auto">
+        <div className="bg-white rounded-xl shadow-md p-5 overflow-auto">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="text-sm font-bold text-gray-900">F4: Auto Ad Optimization</h2>
@@ -192,7 +192,7 @@ export default function Settings() {
         </div>
 
         {/* Function 5 */}
-        <div className="bg-white rounded-xl shadow-md border border-gray-200 p-4 overflow-auto col-span-2">
+        <div className="bg-white rounded-xl shadow-md p-5 overflow-auto col-span-2">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="text-sm font-bold text-gray-900">F5: Campaign Feeding</h2>
