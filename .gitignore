@@ -21,7 +21,7 @@ logs/
 .DS_Store
 
 # File di configurazione IDE
-.vscode/
+# .vscode/  # Commentato - vogliamo condividere settings.json del progetto
 .idea/
 .claude/
 
