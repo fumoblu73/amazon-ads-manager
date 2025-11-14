@@ -1,0 +1,5 @@
+{
+  "claude.apiProvider": "anthropic",
+  "claude.apiKey": "${env:ANTHROPIC_API_KEY}",
+  "claude.useApiKey": true
+}

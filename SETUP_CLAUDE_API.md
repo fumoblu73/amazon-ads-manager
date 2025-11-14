@@ -30,21 +30,26 @@
 3. Clicca **Install**
 4. Riavvia VS Code
 
-### Step 3: Configura Estensione per Usare .env
+### Step 3: Scegli il Metodo di Autenticazione CORRETTO
 
-L'estensione Claude Code dovrebbe automaticamente leggere la variabile `ANTHROPIC_API_KEY` dal file `.env`.
+⚠️ **MOLTO IMPORTANTE!**
 
-**Se l'estensione NON legge automaticamente .env:**
+Quando VS Code ti chiede come vuoi fare login, devi scegliere:
 
-1. Apri Command Palette: `Ctrl+Shift+P`
-2. Digita: **"Preferences: Open User Settings (JSON)"**
-3. Aggiungi questa configurazione:
+✅ **"Anthropic Console"** → Questo usa i crediti API ($250)
+❌ **"Claude.ai Subscription"** → Questo usa il tuo piano Pro (NON i crediti!)
 
-```json
-{
-  "claude.apiKey": "${env:ANTHROPIC_API_KEY}"
-}
-```
+**Passi corretti:**
+1. Scegli: **"Anthropic Console"**
+2. VS Code leggerà automaticamente `ANTHROPIC_API_KEY` dal file `.env`
+3. Non serve autorizzare tramite browser
+4. Dovresti vedere un messaggio di successo
+
+**Se hai già fatto login con "Claude.ai Subscription":**
+1. Premi `Ctrl+Shift+P`
+2. Digita: `Claude Code: Sign Out`
+3. Riavvia VS Code
+4. Riprova scegliendo "Anthropic Console"
 
 ### Step 4: Test Configurazione
 
