@@ -53,9 +53,9 @@ export default function Campaigns() {
   }
 
   return (
-    <div className="h-full bg-gradient-to-br from-gray-50 via-white to-gray-50 p-6 overflow-hidden flex flex-col">
+    <div className="h-full p-8 overflow-hidden flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Campaigns</h1>
         <div className="flex gap-2">
           <button
@@ -102,7 +102,7 @@ export default function Campaigns() {
           </div>
         </div>
       ) : (
-        <div className="flex-1 bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden flex flex-col">
+        <div className="flex-1 bg-white rounded-xl shadow-md overflow-hidden flex flex-col">
           <div className="overflow-auto flex-1">
             <table className="w-full">
               <thead className="bg-gray-50 sticky top-0">
