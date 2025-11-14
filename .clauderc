@@ -1,0 +1,355 @@
+# Claude Code - Istruzioni Progetto Amazon Ads Manager
+
+## 📋 Informazioni Generali Progetto
+
+### Stack Tecnologico
+- **Backend**: Node.js + TypeScript + Express.js
+- **Database**: PostgreSQL (Supabase) con TypeORM
+- **Deployment**: Render.com (auto-deploy da GitHub)
+- **API Esterna**: Amazon Advertising API
+- **Logging**: Winston (4 file separati)
+- **Caching**: In-memory con TTL
+- **Retry Logic**: Exponential backoff con rate limiting (10 req/sec)
+
+### Struttura Progetto
+```
+src/
+├── models/          # Entità TypeORM (Book, Campaign, AutomationLog)
+├── routes/          # API endpoints REST (books, campaigns, logs, automation)
+├── automation/      # Logica automazioni (functions, rules, scheduler)
+├── services/        # Servizi esterni (Amazon API)
+├── utils/           # Utilities (logger, cache, retry)
+└── config/          # Configurazioni (database, environment)
+```
+
+### Funzioni di Automazione
+- **func1**: Progressive Bidding (Lun/Mer/Ven 10:30 IT)
+- **func2**: PPC Campaign Analysis (Lunedì 11:30 IT)
+- **func3**: Dynamic Adjustment (Lun/Mer/Ven 10:30 IT)
+- **func4**: Cost Control (Lunedì 11:30 IT)
+- **func5**: Budget Optimization (Lunedì 11:30 IT)
+
+---
+
+## ⚠️ REGOLE CRITICHE DA RISPETTARE SEMPRE
+
+### 1. Database e TypeORM
+- ✅ **SEMPRE** usare nomi colonne snake_case nel database PostgreSQL
+- ✅ **SEMPRE** mappare colonne con `name: 'snake_case'` nei decorator TypeORM
+- ✅ **MAI** creare colonne camelCase nel database
+- ✅ **SEMPRE** testare query dopo modifiche a entità
+
+**Esempio Corretto:**
+```typescript
+@Column({ type: 'varchar', length: 100, name: 'amazon_campaign_id' })
+amazonCampaignId: string;
+```
+
+### 2. Express Routes
+- ✅ **SEMPRE** definire route specifiche PRIMA di route parametrizzate
+- ✅ Route `/api/logs/recent` DEVE venire PRIMA di `/api/logs/:id`
+- ✅ Questo vale per TUTTI i router (books, campaigns, logs)
+
+**Ordine Corretto:**
+```typescript
+router.get('/recent', ...);      // 1. Specific routes first
+router.get('/stats/summary', ...); // 2. More specific routes
+router.get('/:id', ...);          // 3. Parameterized routes LAST
+```
+
+### 3. Git e Deployment
+- ✅ **SEMPRE** committare con messaggi descrittivi
+- ✅ **SEMPRE** includere footer generato da Claude Code
+- ✅ **SEMPRE** attendere il deployment Render (2-3 minuti) prima di testare
+- ✅ **SEMPRE** testare endpoint dopo deployment
+
+### 4. Migrations Database
+- ✅ **SEMPRE** usare `IF NOT EXISTS` per idempotenza
+- ✅ **SEMPRE** creare file numerati (001_, 002_, 003_)
+- ✅ **SEMPRE** testare su Supabase prima di committare
+- ✅ **MAI** modificare migration già applicate
+
+### 5. Sicurezza e Best Practices
+- ✅ **SEMPRE** validare input utente
+- ✅ **SEMPRE** usare Bearer token per endpoint protetti
+- ✅ **SEMPRE** loggare errori con Winston
+- ✅ **SEMPRE** gestire errori con try-catch
+- ✅ **MAI** esporre secrets o API keys
+- ✅ **MAI** committare .env o credentials
+
+---
+
+## 🔧 Convenzioni Codice
+
+### Naming Conventions
+- **File**: camelCase (es: `automationLog.ts`)
+- **Classi**: PascalCase (es: `AutomationLog`)
+- **Variabili/Funzioni**: camelCase (es: `calculateFastAcos`)
+- **Costanti**: UPPER_SNAKE_CASE (es: `CACHE_TTL_CAMPAIGNS`)
+- **DB Columns**: snake_case (es: `amazon_campaign_id`)
+
+### TypeScript
+- ✅ Tipizzazione forte, evitare `any` quando possibile
+- ✅ Usare interface per oggetti complessi
+- ✅ Usare enum per valori fissi
+- ✅ Abilitare strict mode
+
+### Error Handling
+```typescript
+try {
+  // operation
+  logger.info('✅ Operazione completata');
+} catch (error: any) {
+  logger.error('❌ Errore:', error);
+  res.status(500).json({
+    success: false,
+    error: 'Messaggio user-friendly',
+    details: error.message
+  });
+}
+```
+
+---
+
+## 📚 API Endpoints Disponibili
+
+### Public Endpoints
+- `GET /health` - Health check
+- `GET /` - Info API
+- `GET /api/books` - Lista libri
+- `GET /api/campaigns` - Lista campagne
+- `GET /api/logs` - Lista log (con filtri)
+- `GET /api/logs/recent` - Ultimi 50 log
+- `GET /api/automation/status` - Status scheduler
+
+### Protected Endpoints (Bearer Token Required)
+- `POST /api/books` - Crea libro
+- `PUT /api/books/:id` - Aggiorna libro
+- `DELETE /api/books/:id` - Elimina libro
+- `POST /api/automation/trigger-manual` - Trigger manuale automazioni
+
+---
+
+## 🗄️ Database Schema
+
+### Table: books
+```sql
+id UUID PRIMARY KEY
+asin VARCHAR(10) UNIQUE
+title VARCHAR(255)
+price DECIMAL(10,2)
+printing_cost DECIMAL(10,2)
+royalty_percentage DECIMAL(5,2) DEFAULT 60
+fast_acos DECIMAL(5,2)  -- Auto-calculated
+marketplace VARCHAR(10)
+created_at TIMESTAMP
+updated_at TIMESTAMP
+```
+
+### Table: campaigns
+```sql
+id UUID PRIMARY KEY
+amazon_campaign_id VARCHAR(100) UNIQUE
+name VARCHAR(255)
+state VARCHAR(20)
+daily_budget DECIMAL(10,2)
+campaign_type VARCHAR(50)
+bidding_strategy VARCHAR(50)
+notes TEXT
+created_at TIMESTAMP
+updated_at TIMESTAMP
+```
+
+### Table: automation_logs
+```sql
+id UUID PRIMARY KEY
+action VARCHAR(50)
+target_id VARCHAR(100)
+target_name VARCHAR(255)
+old_value DECIMAL(10,2)
+new_value DECIMAL(10,2)
+reason TEXT
+rule_name VARCHAR(100)
+status VARCHAR(20) DEFAULT 'success'
+error_message TEXT
+created_at TIMESTAMP
+```
+
+---
+
+## 🧪 Testing
+
+### Test Endpoints Localmente
+```bash
+# Health check
+curl http://localhost:3000/health
+
+# Books API
+curl http://localhost:3000/api/books
+
+# Protected endpoint (con token)
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+     -X POST http://localhost:3000/api/books \
+     -H "Content-Type: application/json" \
+     -d '{"asin":"B08XXX","title":"Test",...}'
+```
+
+### Test Endpoints Production
+```bash
+# Sostituisci localhost con l'URL Render
+curl https://amazon-ads-manager.onrender.com/health
+```
+
+---
+
+## 🚀 Workflow Sviluppo Standard
+
+### 1. Modifica Codice
+- Leggi file esistenti prima di modificarli
+- Mantieni stile consistente con codebase
+- Aggiungi commenti solo dove necessario
+
+### 2. Test Locale (se possibile)
+```bash
+npm run dev
+# Test endpoints
+```
+
+### 3. Commit e Push
+```bash
+git add .
+git commit -m "Descrizione modifiche
+
+Dettagli opzionali...
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+git push
+```
+
+### 4. Attendere Deployment
+- Render.com fa auto-deploy da GitHub
+- Attendi 2-3 minuti per completamento
+- Controlla log deployment su Render dashboard
+
+### 5. Test Production
+- Testa endpoint modificati
+- Verifica log applicazione
+- Conferma funzionamento corretto
+
+---
+
+## 🐛 Troubleshooting Comuni
+
+### Errore: "column X does not exist"
+- **Causa**: Manca mapping snake_case in TypeORM
+- **Fix**: Aggiungi `name: 'snake_case'` al @Column decorator
+
+### Errore: "invalid UUID" su route specifico
+- **Causa**: Route order sbagliato (/:id cattura tutto)
+- **Fix**: Sposta route specifico PRIMA di /:id
+
+### Deployment fallisce su Render
+- **Causa**: Build TypeScript errors
+- **Fix**: Controlla output `npm run build` localmente
+
+### Database connection error
+- **Causa**: Variabili ambiente mancanti
+- **Fix**: Verifica .env su Render e Supabase credentials
+
+---
+
+## 📖 Documentazione Utile
+
+### File Documentazione Progetto
+- `README.md` - Overview generale
+- `DEVELOPMENT_SUMMARY.md` - Riepilogo sviluppo
+- `QUICK_START.md` - Guida rapida
+- `migrations/README.md` - Guida migrations database
+
+### Risorse Esterne
+- [TypeORM Docs](https://typeorm.io)
+- [Express.js Docs](https://expressjs.com)
+- [Supabase Docs](https://supabase.com/docs)
+- [Amazon Advertising API](https://advertising.amazon.com/API/docs)
+
+---
+
+## 💡 Best Practices Specifiche Progetto
+
+### FAST ACoS Calculation
+- Formula: `(Royalty / (Price × 1.22)) × 100`
+- Dove: `Royalty = (RoyaltyPercent × Price) - PrintingCost`
+- **SEMPRE** auto-calcolato con BeforeInsert/BeforeUpdate hooks
+
+### Logger Usage
+```typescript
+import { logger, logAutomation, logApi } from './utils/logger';
+
+// Automation logs
+logAutomation.start('func1', { campaignId });
+logAutomation.success('func1', { changes: 5 });
+logAutomation.error('func1', error, { context });
+
+// API logs
+logApi.request(req, 'GET /api/books');
+logApi.response(res, { count: 10 });
+```
+
+### Cache Usage
+```typescript
+import { cache, CACHE_KEYS, CACHE_TTL } from './utils/cache';
+
+// Wrap function with cache
+const campaigns = await cache.wrap(
+  CACHE_KEYS.CAMPAIGNS_LIST,
+  () => amazonApi.getCampaigns(),
+  CACHE_TTL.CAMPAIGNS
+);
+
+// Invalidate cache after updates
+cache.deleteByPrefix(CACHE_KEYS.CAMPAIGNS_PREFIX);
+```
+
+### Retry Logic
+```typescript
+import { withRetry } from './utils/retry';
+
+const result = await withRetry(
+  () => amazonApi.updateBid(campaignId, newBid),
+  { maxRetries: 3, baseDelay: 1000 },
+  'Update campaign bid'
+);
+```
+
+---
+
+## 🎯 Obiettivi Futuri
+
+### Backend (Completato ✅)
+- ✅ API Books, Campaigns, Logs
+- ✅ Winston logging strutturato
+- ✅ Memory caching system
+- ✅ Retry logic con rate limiting
+- ✅ Database migrations
+
+### Frontend (Prossimo)
+- Dashboard React per monitoraggio
+- Visualizzazione libri e campagne
+- Grafici statistiche automazioni
+- Interfaccia configurazione regole
+- Log viewer con filtri
+
+### Future Enhancements
+- Notifiche email per errori critici
+- Backup automatico database
+- Metriche performance (APM)
+- API rate limiting per endpoint pubblici
+- Documentazione API con Swagger/OpenAPI
+
+---
+
+**Ultimo aggiornamento**: 2025-11-13
+**Versione**: 1.0.0
+**Maintainer**: Claude Code Assistant
