@@ -44,194 +44,192 @@ export default function Settings() {
   });
 
   return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Automation Settings</h1>
-        <p className="text-gray-600 mt-2">Configure automation functions parameters</p>
+    <div className="h-full bg-gradient-to-br from-gray-50 via-white to-gray-50 p-6 overflow-hidden flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+        <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors shadow-md">
+          Salva Modifiche
+        </button>
       </div>
 
-      <div className="space-y-6">
+      {/* Functions Grid - 2x3 layout */}
+      <div className="flex-1 grid grid-cols-2 gap-4 min-h-0">
         {/* Function 1 */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white rounded-xl shadow-md border border-gray-200 p-4 overflow-auto">
+          <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="text-xl font-semibold">Function 1: Progressive Bidding Increase</h2>
-              <p className="text-sm text-gray-600">Campaigns 1-4 | Increases bid for low-impression keywords</p>
+              <h2 className="text-sm font-bold text-gray-900">F1: Progressive Bidding</h2>
+              <p className="text-xs text-gray-600">Camp. 1-4 | Bid increase</p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" checked={settings.func1.enabled} className="sr-only peer" readOnly />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
             </label>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Bid Increase</label>
-              <input type="number" value={settings.func1.bidIncrease} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">Bid Increase</label>
+              <input type="number" value={settings.func1.bidIncrease} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Frequency (days)</label>
-              <input type="number" value={settings.func1.frequency} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">Freq. (gg)</label>
+              <input type="number" value={settings.func1.frequency} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Max Impressions</label>
-              <input type="number" value={settings.func1.impressions} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">Max Impr.</label>
+              <input type="number" value={settings.func1.impressions} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Max Clicks</label>
-              <input type="number" value={settings.func1.clicks} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">Max Click</label>
+              <input type="number" value={settings.func1.clicks} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
           </div>
         </div>
 
         {/* Function 2 */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white rounded-xl shadow-md border border-gray-200 p-4 overflow-auto">
+          <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="text-xl font-semibold">Function 2: Placement Optimization</h2>
-              <p className="text-sm text-gray-600">All campaigns | Adjusts placement bids based on FAST ACoS</p>
+              <h2 className="text-sm font-bold text-gray-900">F2: Placement Optimization</h2>
+              <p className="text-xs text-gray-600">Tutte | Ottimizza placement</p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" checked={settings.func2.enabled} className="sr-only peer" readOnly />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
             </label>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Frequency (days)</label>
-              <input type="number" value={settings.func2.frequency} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">Freq. (gg)</label>
+              <input type="number" value={settings.func2.frequency} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Timeframe (weeks)</label>
-              <input type="number" value={settings.func2.timeframeWeeks} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">Timeframe (sett.)</label>
+              <input type="number" value={settings.func2.timeframeWeeks} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
           </div>
         </div>
 
         {/* Function 3 */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white rounded-xl shadow-md border border-gray-200 p-4 overflow-auto">
+          <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="text-xl font-semibold">Function 3: Targeting Optimization</h2>
-              <p className="text-sm text-gray-600">Campaigns 1-4 | Optimizes and pauses keywords/products</p>
+              <h2 className="text-sm font-bold text-gray-900">F3: Targeting Optimization</h2>
+              <p className="text-xs text-gray-600">Camp. 1-4 | Keywords/prodotti</p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" checked={settings.func3.enabled} className="sr-only peer" readOnly />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
             </label>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-2">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Frequency (days)</label>
-              <input type="number" value={settings.func3.frequency} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">Freq.</label>
+              <input type="number" value={settings.func3.frequency} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Timeframe A (low)</label>
-              <input type="number" value={settings.func3.timeframeA} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">TF A</label>
+              <input type="number" value={settings.func3.timeframeA} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Timeframe B (med)</label>
-              <input type="number" value={settings.func3.timeframeB} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">TF B</label>
+              <input type="number" value={settings.func3.timeframeB} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Timeframe C (high)</label>
-              <input type="number" value={settings.func3.timeframeC} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">TF C</label>
+              <input type="number" value={settings.func3.timeframeC} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Clicks Pause</label>
-              <input type="number" value={settings.func3.clicksPause} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">Click Pause</label>
+              <input type="number" value={settings.func3.clicksPause} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Clicks 65 days</label>
-              <input type="number" value={settings.func3.clicks65days} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">Click 65gg</label>
+              <input type="number" value={settings.func3.clicks65days} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
           </div>
         </div>
 
         {/* Function 4 */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white rounded-xl shadow-md border border-gray-200 p-4 overflow-auto">
+          <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="text-xl font-semibold">Function 4: Auto Ad Optimization</h2>
-              <p className="text-sm text-gray-600">Campaign 5 only | Optimizes auto targeting groups</p>
+              <h2 className="text-sm font-bold text-gray-900">F4: Auto Ad Optimization</h2>
+              <p className="text-xs text-gray-600">Camp. 5 | Auto targeting</p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" checked={settings.func4.enabled} className="sr-only peer" readOnly />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
             </label>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-2">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Frequency (days)</label>
-              <input type="number" value={settings.func4.frequency} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">Freq.</label>
+              <input type="number" value={settings.func4.frequency} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Timeframe A</label>
-              <input type="number" value={settings.func4.timeframeA} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">TF A</label>
+              <input type="number" value={settings.func4.timeframeA} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Timeframe B</label>
-              <input type="number" value={settings.func4.timeframeB} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">TF B</label>
+              <input type="number" value={settings.func4.timeframeB} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Timeframe C</label>
-              <input type="number" value={settings.func4.timeframeC} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">TF C</label>
+              <input type="number" value={settings.func4.timeframeC} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Clicks for Negative</label>
-              <input type="number" value={settings.func4.clicksNegative} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">Click Neg.</label>
+              <input type="number" value={settings.func4.clicksNegative} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Spend for Negative</label>
-              <input type="number" value={settings.func4.spendNegative} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">Spend Neg.</label>
+              <input type="number" value={settings.func4.spendNegative} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
           </div>
         </div>
 
         {/* Function 5 */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white rounded-xl shadow-md border border-gray-200 p-4 overflow-auto col-span-2">
+          <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="text-xl font-semibold">Function 5: Campaign Feeding</h2>
-              <p className="text-sm text-gray-600">All campaigns | Feeds performing keywords across campaigns</p>
+              <h2 className="text-sm font-bold text-gray-900">F5: Campaign Feeding</h2>
+              <p className="text-xs text-gray-600">Tutte | Feeding keywords tra campagne</p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" checked={settings.func5.enabled} className="sr-only peer" readOnly />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
             </label>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-6 gap-2">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Frequency (days)</label>
-              <input type="number" value={settings.func5.frequency} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">Freq. (gg)</label>
+              <input type="number" value={settings.func5.frequency} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Min Orders</label>
-              <input type="number" value={settings.func5.minOrders} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">Min Ordini</label>
+              <input type="number" value={settings.func5.minOrders} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Bid Broad</label>
-              <input type="number" step="0.01" value={settings.func5.bidBroad} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">Bid Broad</label>
+              <input type="number" step="0.01" value={settings.func5.bidBroad} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Bid Exact</label>
-              <input type="number" step="0.01" value={settings.func5.bidExact} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">Bid Exact</label>
+              <input type="number" step="0.01" value={settings.func5.bidExact} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Bid Phrase</label>
-              <input type="number" step="0.01" value={settings.func5.bidPhrase} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">Bid Phrase</label>
+              <input type="number" step="0.01" value={settings.func5.bidPhrase} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Bid Expanded</label>
-              <input type="number" step="0.01" value={settings.func5.bidExpanded} className="w-full px-3 py-2 border border-gray-300 rounded-md" readOnly />
+              <label className="block text-xs font-medium text-gray-700 mb-1">Bid Expand</label>
+              <input type="number" step="0.01" value={settings.func5.bidExpanded} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" readOnly />
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="mt-8 flex justify-end">
-        <button className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-          Save Settings
-        </button>
       </div>
     </div>
   );

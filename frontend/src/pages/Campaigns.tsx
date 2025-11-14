@@ -32,131 +32,156 @@ export default function Campaigns() {
 
   const getCampaignTypeName = (type: string) => {
     const types: Record<string, string> = {
-      '1': 'Keyword Targeting',
-      '2': 'Product Targeting',
-      '3': 'Keyword Super',
-      '4': 'Product Super',
-      '5': 'AD Automatica',
+      '1': 'Keyword',
+      '2': 'Product',
+      '3': 'Key Super',
+      '4': 'Prod Super',
+      '5': 'Automatica',
     };
     return types[type] || type;
   };
 
-  return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Campaigns Overview</h1>
-        <p className="text-gray-600 mt-2">Monitor your campaigns and active automations</p>
-      </div>
-
-      {/* Filters */}
-      <div className="mb-6 flex gap-4">
-        <button
-          onClick={() => setFilter('all')}
-          className={`px-4 py-2 rounded-lg ${
-            filter === 'all'
-              ? 'bg-blue-600 text-white'
-              : 'bg-white text-gray-700 border border-gray-300'
-          }`}
-        >
-          All Campaigns
-        </button>
-        <button
-          onClick={() => setFilter('enabled')}
-          className={`px-4 py-2 rounded-lg ${
-            filter === 'enabled'
-              ? 'bg-green-600 text-white'
-              : 'bg-white text-gray-700 border border-gray-300'
-          }`}
-        >
-          Enabled
-        </button>
-        <button
-          onClick={() => setFilter('paused')}
-          className={`px-4 py-2 rounded-lg ${
-            filter === 'paused'
-              ? 'bg-yellow-600 text-white'
-              : 'bg-white text-gray-700 border border-gray-300'
-          }`}
-        >
-          Paused
-        </button>
-      </div>
-
-      {loading ? (
-        <div className="bg-white rounded-lg shadow p-8 text-center">
-          <div className="text-gray-600">Loading campaigns...</div>
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full bg-gradient-to-br from-gray-50 to-white">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="text-gray-600">Caricamento campagne...</div>
         </div>
-      ) : filteredCampaigns.length === 0 ? (
-        <div className="bg-white rounded-lg shadow p-8 text-center">
-          <div className="text-gray-600">No campaigns found</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full bg-gradient-to-br from-gray-50 via-white to-gray-50 p-6 overflow-hidden flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold text-gray-900">Campaigns</h1>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setFilter('all')}
+            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
+              filter === 'all'
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            Tutte ({campaigns.length})
+          </button>
+          <button
+            onClick={() => setFilter('enabled')}
+            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
+              filter === 'enabled'
+                ? 'bg-green-600 text-white shadow-md'
+                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            Attive ({campaigns.filter(c => c.state === 'enabled').length})
+          </button>
+          <button
+            onClick={() => setFilter('paused')}
+            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
+              filter === 'paused'
+                ? 'bg-yellow-600 text-white shadow-md'
+                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            Pause ({campaigns.filter(c => c.state === 'paused').length})
+          </button>
+        </div>
+      </div>
+
+      {/* Campaigns Table */}
+      {filteredCampaigns.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center text-gray-500">
+            <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+            </svg>
+            <p className="text-lg font-medium">Nessuna campagna trovata</p>
+          </div>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Campaign
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Type
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Daily Budget
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Active Automations
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredCampaigns.map((campaign) => (
-                <tr key={campaign.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{campaign.name}</div>
-                    <div className="text-xs text-gray-500">{campaign.amazonCampaignId}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{getCampaignTypeName(campaign.campaignType)}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        campaign.state === 'enabled'
-                          ? 'bg-green-100 text-green-800'
-                          : campaign.state === 'paused'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}
-                    >
-                      {campaign.state}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ${campaign.dailyBudget.toFixed(2)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex gap-1">
-                      {campaign.campaignType !== '5' && (
-                        <>
-                          <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">F1</span>
-                          <span className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded">F3</span>
-                        </>
-                      )}
-                      <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded">F2</span>
-                      {campaign.campaignType === '5' && (
-                        <span className="px-2 py-1 text-xs bg-orange-100 text-orange-800 rounded">F4</span>
-                      )}
-                      <span className="px-2 py-1 text-xs bg-pink-100 text-pink-800 rounded">F5</span>
-                    </div>
-                  </td>
+        <div className="flex-1 bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden flex flex-col">
+          <div className="overflow-auto flex-1">
+            <table className="w-full">
+              <thead className="bg-gray-50 sticky top-0">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Campagna
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Tipo
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Stato
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Budget/g
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Automazioni
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {filteredCampaigns.map((campaign) => (
+                  <tr key={campaign.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="text-sm font-medium text-gray-900 truncate max-w-xs">{campaign.name}</div>
+                      <div className="text-xs text-gray-500 truncate max-w-xs">{campaign.amazonCampaignId}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-indigo-50 text-indigo-700 rounded">
+                        {getCampaignTypeName(campaign.campaignType)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded ${
+                          campaign.state === 'enabled'
+                            ? 'bg-green-100 text-green-800'
+                            : campaign.state === 'paused'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        {campaign.state === 'enabled' ? 'Attiva' : 'Pausa'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                      ${campaign.dailyBudget.toFixed(2)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-1 flex-wrap">
+                        {campaign.campaignType !== '5' && (
+                          <>
+                            <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-800 rounded">
+                              F1
+                            </span>
+                            <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-semibold bg-purple-100 text-purple-800 rounded">
+                              F3
+                            </span>
+                          </>
+                        )}
+                        <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-semibold bg-green-100 text-green-800 rounded">
+                          F2
+                        </span>
+                        {campaign.campaignType === '5' && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-semibold bg-orange-100 text-orange-800 rounded">
+                            F4
+                          </span>
+                        )}
+                        <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-semibold bg-pink-100 text-pink-800 rounded">
+                          F5
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
