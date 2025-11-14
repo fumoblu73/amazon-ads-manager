@@ -31,6 +31,204 @@ src/
 
 ---
 
+## 🔄 GESTIONE CONTINUITÀ CHAT (MOLTO IMPORTANTE!)
+
+### Monitoraggio Token Usage
+- ✅ **SEMPRE** monitorare l'utilizzo dei token durante la sessione
+- ✅ **AVVISARE L'UTENTE** quando si raggiunge il 70-80% del limite di token
+- ✅ **NON ATTENDERE** che la chat si saturi completamente
+
+### Preparazione Handoff a Nuova Chat
+Quando la chat si avvicina al limite di token (circa 140.000-160.000 token usati):
+
+1. **Avvisare l'utente immediatamente:**
+   ```
+   ⚠️ ATTENZIONE: La chat sta per saturarsi (X% token utilizzati).
+   Sto preparando un documento di handoff per continuare in una nuova sessione.
+   ```
+
+2. **Creare automaticamente file di continuità:**
+   - Nome file: `HANDOFF_YYYYMMDD_HHMM.md` (es: `HANDOFF_20251113_1545.md`)
+   - Posizione: root del progetto
+   - Contenuto strutturato (vedi template sotto)
+
+3. **Committare il file di handoff:**
+   ```bash
+   git add HANDOFF_*.md
+   git commit -m "Session handoff: prepare context for new chat"
+   git push
+   ```
+
+4. **Informare l'utente:**
+   ```
+   ✅ Ho creato il file HANDOFF_YYYYMMDD_HHMM.md
+
+   Per continuare in una nuova chat:
+   1. Apri una nuova sessione Claude Code
+   2. Scrivi: "Continua da HANDOFF_YYYYMMDD_HHMM.md"
+   3. Io leggerò il file e riprenderò esattamente da dove ci siamo fermati
+   ```
+
+### Template File Handoff
+
+```markdown
+# Session Handoff - Amazon Ads Manager
+**Data**: YYYY-MM-DD HH:MM
+**Token Usage**: X/200000 (Y%)
+**Branch**: main
+**Last Commit**: <commit-hash>
+
+## 🎯 Stato Corrente Progetto
+
+### Ultimo Lavoro Completato
+- [Descrizione delle ultime attività completate]
+- [File modificati/creati]
+- [Test eseguiti]
+
+### Tasks Completati Questa Sessione
+1. ✅ [Task 1]
+2. ✅ [Task 2]
+3. ✅ [Task 3]
+
+### Tasks In Corso (Non Completati)
+- ⏳ [Task parzialmente completato - stato attuale]
+- ⏳ [Descrizione cosa manca per completarlo]
+
+### Tasks Pianificati (Non Iniziati)
+- [ ] [Task futuro 1]
+- [ ] [Task futuro 2]
+
+## 📝 Modifiche Pendenti
+
+### File con Modifiche Non Committate
+```bash
+# Output di git status
+[elenco file modified/untracked]
+```
+
+### Modifiche da Applicare
+- [Descrizione di eventuali modifiche che devono essere applicate]
+- [Deployment pending? Migration pending?]
+
+## 🔧 Contesto Tecnico Importante
+
+### Problemi Risolti in Questa Sessione
+1. **[Problema 1]**
+   - Causa: [descrizione]
+   - Soluzione: [descrizione]
+   - File interessati: [lista]
+
+2. **[Problema 2]**
+   - Causa: [descrizione]
+   - Soluzione: [descrizione]
+   - File interessati: [lista]
+
+### Decisioni Architetturali Prese
+- [Decisione 1 e motivazione]
+- [Decisione 2 e motivazione]
+
+### Warning/Note da Ricordare
+- ⚠️ [Nota importante 1]
+- ⚠️ [Nota importante 2]
+
+## 🚀 Prossimi Step Raccomandati
+
+### Immediate Priority (Da fare subito)
+1. [Step 1 - dettagli]
+2. [Step 2 - dettagli]
+
+### Medium Priority
+- [Task 1]
+- [Task 2]
+
+### Low Priority / Future
+- [Task 1]
+- [Task 2]
+
+## 💾 Database Status
+
+### Migrations Applicate
+- ✅ Migration 001: [descrizione]
+- ✅ Migration 002: [descrizione]
+- ✅ Migration 003: [descrizione]
+- ✅ Migration 004: [descrizione]
+
+### Migrations Pending
+- [ ] [Eventuali migration da applicare]
+
+### Database Issues
+- [Eventuali problemi noti con il database]
+
+## 🌐 Deployment Status
+
+### Production (Render.com)
+- Status: [DEPLOYED / PENDING / FAILED]
+- Last Deploy: [commit hash + timestamp]
+- URL: https://amazon-ads-manager.onrender.com
+- Health Check: [OK / ERROR]
+
+### Test Results (se disponibili)
+```
+[Output ultimi test degli endpoint]
+```
+
+## 📚 Riferimenti Utili
+
+### File Chiave Modificati
+- [file1.ts:123-145] - [Descrizione modifica]
+- [file2.ts:67-89] - [Descrizione modifica]
+
+### Comandi Utili Eseguiti
+```bash
+# [Comando 1]
+[output rilevante]
+
+# [Comando 2]
+[output rilevante]
+```
+
+### Link/Documenti Consultati
+- [Link/documento consultato durante questa sessione]
+
+## 💬 Conversazione Context
+
+### User Requests Summary
+1. [Richiesta principale utente]
+2. [Eventuali richieste secondarie]
+
+### User Preferences Noted
+- [Preferenza 1 dell'utente emersa durante conversazione]
+- [Preferenza 2]
+
+---
+
+**Come continuare da questo punto:**
+1. Apri nuova chat Claude Code
+2. Scrivi: "Continua da HANDOFF_YYYYMMDD_HHMM.md"
+3. Claude leggerà questo file e riprenderà esattamente da qui
+```
+
+### Esempio Pratico di Handoff
+
+**Quando creare l'handoff:**
+- Token usage > 140.000 (70%)
+- Token usage > 160.000 (80%) - URGENTE
+
+**Cosa NON fare:**
+- ❌ Attendere che i token finiscano completamente
+- ❌ Interrompere nel mezzo di un task critico senza documentarlo
+- ❌ Creare handoff generico senza dettagli tecnici
+- ❌ Dimenticare di committare l'handoff file
+
+**Cosa fare:**
+- ✅ Avvisare l'utente in anticipo
+- ✅ Completare task corrente se possibile (o documentare stato parziale)
+- ✅ Creare handoff dettagliato con TUTTO il contesto
+- ✅ Committare e pushare l'handoff
+- ✅ Dare istruzioni chiare all'utente per continuare
+
+---
+
 ## ⚠️ REGOLE CRITICHE DA RISPETTARE SEMPRE
 
 ### 1. Database e TypeORM
