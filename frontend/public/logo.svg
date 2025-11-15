@@ -1,0 +1,11 @@
+<svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Circle -->
+  <circle cx="50" cy="50" r="48" fill="#FF9900" stroke="#232F3E" stroke-width="2"/>
+
+  <!-- Amazon Smile Arrow -->
+  <path d="M 25 55 Q 50 70 75 55" stroke="#232F3E" stroke-width="4" stroke-linecap="round" fill="none"/>
+  <path d="M 75 55 L 70 50 M 75 55 L 70 60" stroke="#232F3E" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Text "ADS" -->
+  <text x="50" y="45" font-family="Lato, sans-serif" font-size="24" font-weight="900" fill="#232F3E" text-anchor="middle">ADS</text>
+</svg>

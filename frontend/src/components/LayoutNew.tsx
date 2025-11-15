@@ -37,7 +37,7 @@ export default function Layout() {
         {/* Logo */}
         <div className="mb-12">
           <img
-            src="https://chatgpt.com/backend-api/estuary/content?id=file_00000000688c724391e09c1bc0f4dcae&ts=489782&p=fs&cid=1&sig=e1b46805052d06dd586395452b1130479ef12c5ac35c13ddfdce4b37ba561190&v=0"
+            src="/logo.svg"
             alt="Amazon Ads Manager"
             className="w-20 h-20 object-contain"
           />
