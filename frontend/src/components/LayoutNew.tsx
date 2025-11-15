@@ -40,7 +40,7 @@ export default function Layout() {
           </div>
 
           {/* Navigation Icons with text below */}
-          <div className="flex items-center gap-12">
+          <div className="flex items-center gap-[75px]">
             {navItems.map((item) => (
               <NavLink
                 key={item.path}
