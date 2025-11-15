@@ -37,9 +37,9 @@ export default function Layout() {
         {/* Logo */}
         <div className="mb-12">
           <img
-            src="/logo.svg"
+            src="/logoADS.png"
             alt="Amazon Ads Manager"
-            className="w-20 h-20 object-contain"
+            className="w-[75px] h-[75px] object-contain"
           />
         </div>
 
