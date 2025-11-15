@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import Campaigns from './pages/Campaigns';
 import Logs from './pages/Logs';
+import Help from './pages/Help';
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/campaigns" element={<Campaigns />} />
           <Route path="/logs" element={<Logs />} />
+          <Route path="/help" element={<Help />} />
         </Route>
       </Routes>
     </BrowserRouter>
