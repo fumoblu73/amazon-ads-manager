@@ -26,8 +26,16 @@ export default function Campaigns() {
   }, []);
 
   const handleSync = async () => {
-    const token = prompt('Inserisci ADMIN_TOKEN:');
-    if (!token) return;
+    // Try to get token from localStorage first
+    let token = localStorage.getItem('adminToken');
+
+    if (!token) {
+      token = prompt('Inserisci ADMIN_TOKEN (verrà salvato per le prossime volte):');
+      if (!token) return;
+
+      // Save for future use
+      localStorage.setItem('adminToken', token);
+    }
 
     setSyncing(true);
     setSyncMessage(null);
@@ -54,6 +62,17 @@ export default function Campaigns() {
     } finally {
       setSyncing(false);
       setTimeout(() => setSyncMessage(null), 5000);
+    }
+  };
+
+  const handleClearToken = () => {
+    if (confirm('Vuoi eliminare il token salvato? Dovrai inserirlo di nuovo alla prossima sincronizzazione.')) {
+      localStorage.removeItem('adminToken');
+      setSyncMessage({
+        type: 'success',
+        text: '✅ Token eliminato con successo'
+      });
+      setTimeout(() => setSyncMessage(null), 3000);
     }
   };
 
@@ -157,6 +176,13 @@ export default function Campaigns() {
             }`}
           >
             Pause ({campaigns.filter(c => c.state === 'paused').length})
+          </button>
+          <button
+            onClick={handleClearToken}
+            className="px-3 py-1.5 text-xs rounded-lg font-medium transition-all bg-red-500 text-white hover:bg-red-600 shadow-md"
+            title="Elimina token salvato"
+          >
+            Cancella Token
           </button>
         </div>
       </div>
