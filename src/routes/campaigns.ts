@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { AppDataSource } from '../config/database';
 import { Campaign } from '../models/Campaign';
+import { amazonApiService } from '../services/amazonApi';
 
 const router = Router();
 
@@ -245,6 +246,86 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       error: 'Errore nell\'eliminazione della campagna',
+      details: error.message
+    });
+  }
+});
+
+// ================================================
+// POST /api/campaigns/sync-from-amazon - Sincronizza campagne da Amazon API
+// ================================================
+router.post('/sync-from-amazon', requireAuth, async (req: Request, res: Response) => {
+  try {
+    console.log('🔄 Avvio sincronizzazione campagne da Amazon API...');
+
+    // 1. Recupera campagne da Amazon API
+    const amazonCampaigns = await amazonApiService.getCampaigns();
+    console.log(`📥 Trovate ${amazonCampaigns.length} campagne su Amazon`);
+
+    const campaignRepository = AppDataSource.getRepository(Campaign);
+
+    let created = 0;
+    let updated = 0;
+    let errors = 0;
+
+    // 2. Per ogni campagna Amazon, crea o aggiorna nel database
+    for (const amazonCampaign of amazonCampaigns) {
+      try {
+        // Cerca se la campagna esiste già nel database
+        let campaign = await campaignRepository.findOne({
+          where: { amazonCampaignId: amazonCampaign.campaignId.toString() }
+        });
+
+        if (campaign) {
+          // Aggiorna campagna esistente
+          campaign.name = amazonCampaign.name;
+          campaign.state = amazonCampaign.state;
+          campaign.dailyBudget = amazonCampaign.budget?.budget || null;
+          campaign.campaignType = amazonCampaign.targetingType || null;
+          campaign.biddingStrategy = amazonCampaign.biddingStrategy || null;
+
+          await campaignRepository.save(campaign);
+          updated++;
+          console.log(`✏️  Aggiornata: ${campaign.name}`);
+        } else {
+          // Crea nuova campagna
+          campaign = campaignRepository.create({
+            amazonCampaignId: amazonCampaign.campaignId.toString(),
+            name: amazonCampaign.name,
+            state: amazonCampaign.state,
+            dailyBudget: amazonCampaign.budget?.budget || null,
+            campaignType: amazonCampaign.targetingType || null,
+            biddingStrategy: amazonCampaign.biddingStrategy || null,
+            notes: `Sincronizzata da Amazon il ${new Date().toISOString()}`
+          });
+
+          await campaignRepository.save(campaign);
+          created++;
+          console.log(`✅ Creata: ${campaign.name}`);
+        }
+      } catch (error: any) {
+        console.error(`❌ Errore sincronizzazione campagna ${amazonCampaign.campaignId}:`, error.message);
+        errors++;
+      }
+    }
+
+    console.log(`✅ Sincronizzazione completata: ${created} create, ${updated} aggiornate, ${errors} errori`);
+
+    res.json({
+      success: true,
+      message: 'Sincronizzazione completata',
+      data: {
+        total: amazonCampaigns.length,
+        created,
+        updated,
+        errors
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Errore POST /api/campaigns/sync-from-amazon:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Errore nella sincronizzazione delle campagne',
       details: error.message
     });
   }

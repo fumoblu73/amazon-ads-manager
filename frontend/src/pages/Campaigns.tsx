@@ -6,6 +6,8 @@ export default function Campaigns() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     const fetchCampaigns = async () => {
@@ -22,6 +24,38 @@ export default function Campaigns() {
     };
     fetchCampaigns();
   }, []);
+
+  const handleSync = async () => {
+    const token = prompt('Inserisci ADMIN_TOKEN:');
+    if (!token) return;
+
+    setSyncing(true);
+    setSyncMessage(null);
+
+    try {
+      const response = await campaignsApi.syncFromAmazon(token);
+      if (response.success && response.data) {
+        setSyncMessage({
+          type: 'success',
+          text: `✅ Sincronizzazione completata: ${response.data.created} create, ${response.data.updated} aggiornate`
+        });
+
+        // Ricarica campagne
+        const campaignsResponse = await campaignsApi.getAll();
+        if (campaignsResponse.success && campaignsResponse.data) {
+          setCampaigns(campaignsResponse.data);
+        }
+      }
+    } catch (err: any) {
+      setSyncMessage({
+        type: 'error',
+        text: `❌ Errore sincronizzazione: ${err.response?.data?.error || err.message}`
+      });
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSyncMessage(null), 5000);
+    }
+  };
 
   const filteredCampaigns = campaigns.filter((c) => {
     if (filter === 'all') return true;
@@ -56,7 +90,43 @@ export default function Campaigns() {
     <div className="h-full p-8 overflow-hidden flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-white uppercase">Campagne</h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold text-white uppercase">Campagne</h1>
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 ${
+              syncing
+                ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                : 'bg-orange-500 text-white hover:bg-orange-600 shadow-md'
+            }`}
+          >
+            {syncing ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                Sincronizzazione...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Sync da Amazon
+              </>
+            )}
+          </button>
+          {syncMessage && (
+            <div
+              className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                syncMessage.type === 'success'
+                  ? 'bg-green-500 text-white'
+                  : 'bg-red-500 text-white'
+              }`}
+            >
+              {syncMessage.text}
+            </div>
+          )}
+        </div>
         <div className="flex gap-2">
           <button
             onClick={() => setFilter('all')}
@@ -94,11 +164,12 @@ export default function Campaigns() {
       {/* Campaigns Table */}
       {filteredCampaigns.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-center text-gray-500">
-            <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="text-center text-gray-300">
+            <svg className="w-16 h-16 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
             </svg>
-            <p className="text-lg font-medium">Nessuna campagna trovata</p>
+            <p className="text-lg font-medium text-white">Nessuna campagna trovata</p>
+            <p className="text-sm text-gray-400 mt-2">Clicca "Sync da Amazon" per importare le tue campagne</p>
           </div>
         </div>
       ) : (
