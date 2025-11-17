@@ -101,6 +101,17 @@ export const campaignsApi = {
     const response = await apiClient.get<ApiResponse<CampaignStats>>('/api/campaigns/stats/summary');
     return response.data;
   },
+
+  syncFromAmazon: async (token: string) => {
+    const response = await apiClient.post<ApiResponse<{ total: number; created: number; updated: number; errors: number }>>(
+      '/api/campaigns/sync-from-amazon',
+      {},
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+    return response.data;
+  },
 };
 
 // ================================================
