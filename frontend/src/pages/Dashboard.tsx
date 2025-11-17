@@ -53,10 +53,10 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full bg-gradient-to-br from-gray-50 to-white">
+      <div className="flex items-center justify-center h-full bg-black">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <div className="text-gray-600">Caricamento...</div>
+          <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="text-gray-300">Caricamento...</div>
         </div>
       </div>
     );
@@ -64,35 +64,31 @@ export default function Dashboard() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-full bg-gradient-to-br from-gray-50 to-white">
-        <div className="bg-red-50 border border-red-200 rounded-xl p-6 max-w-md">
+      <div className="flex items-center justify-center h-full bg-black">
+        <div className="bg-gray-900 border-2 border-red-500 rounded-xl p-6 max-w-md">
           <div className="flex items-center gap-3 mb-2">
-            <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <div className="text-lg font-semibold text-red-900">Errore</div>
+            <div className="text-lg font-semibold text-white">Errore</div>
           </div>
-          <div className="text-red-700">{error}</div>
+          <div className="text-gray-300">{error}</div>
+          <div className="mt-4 text-sm text-gray-400">
+            Il backend potrebbe essere in sleep mode. Riprova tra qualche minuto.
+          </div>
         </div>
       </div>
     );
   }
 
   const hasErrors = recentErrors.length > 0;
-  const isSchedulerRunning = automationStatus?.scheduler.isRunning;
 
   return (
     <div className="h-full p-8 overflow-hidden">
       <div className="h-full flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg shadow-sm">
-            <div className={`w-2 h-2 rounded-full ${isSchedulerRunning && !hasErrors ? 'bg-green-500 animate-pulse' : 'bg-red-500 animate-pulse'}`}></div>
-            <span className="text-sm font-medium text-gray-700">
-              {isSchedulerRunning && !hasErrors ? 'Sistema Operativo' : 'Attenzione Richiesta'}
-            </span>
-          </div>
+          <h1 className="text-2xl font-bold text-white uppercase">Dashboard</h1>
         </div>
 
         {/* Alert Box - Only if errors */}
@@ -111,12 +107,12 @@ export default function Dashboard() {
         {/* Compact Stats Grid */}
         <div className="flex-1 grid grid-cols-3 gap-6 min-h-0">
           {/* Automation Status */}
-          <div className="bg-white rounded-xl shadow-md p-5 flex flex-col">
+          <div className="bg-black rounded-xl p-5 flex flex-col">
             <div className="flex items-center gap-2 mb-3">
               <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              <h2 className="text-sm font-semibold text-gray-900">Automazioni</h2>
+              <h2 className="text-sm font-semibold text-white">Automazioni</h2>
             </div>
             {automationStatus && (
               <div className="space-y-3 flex-1">
@@ -143,12 +139,12 @@ export default function Dashboard() {
           </div>
 
           {/* Campaign Stats */}
-          <div className="bg-white rounded-xl shadow-md p-5 flex flex-col">
+          <div className="bg-black rounded-xl p-5 flex flex-col">
             <div className="flex items-center gap-2 mb-3">
               <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
               </svg>
-              <h2 className="text-sm font-semibold text-gray-900">Campagne</h2>
+              <h2 className="text-sm font-semibold text-white">Campagne</h2>
             </div>
             {campaignStats && (
               <div className="space-y-3 flex-1">
@@ -175,12 +171,12 @@ export default function Dashboard() {
           </div>
 
           {/* Log Stats */}
-          <div className="bg-white rounded-xl shadow-md p-5 flex flex-col">
+          <div className="bg-black rounded-xl p-5 flex flex-col">
             <div className="flex items-center gap-2 mb-3">
               <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              <h2 className="text-sm font-semibold text-gray-900">Log Attività</h2>
+              <h2 className="text-sm font-semibold text-white">Log Attività</h2>
             </div>
             {logStats && (
               <div className="space-y-3 flex-1">

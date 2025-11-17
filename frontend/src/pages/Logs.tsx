@@ -61,7 +61,7 @@ export default function Logs() {
     <div className="h-full p-8 overflow-hidden flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Activity Log</h1>
+        <h1 className="text-2xl font-bold text-white uppercase">Log Attività</h1>
         <div className="flex gap-2">
           <button
             onClick={() => setStatusFilter('all')}
