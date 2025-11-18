@@ -44,7 +44,25 @@ export default function Campaigns() {
     try {
       const response = await campaignsApi.getProfiles(token);
       if (response.success && response.data) {
-        setProfiles(response.data);
+        // Map profiles by country code for easy lookup
+        const profilesByCountry = new Map(response.data.map(p => [p.countryCode, p]));
+
+        // Create a combined list with all supported marketplaces
+        const supportedMarketplaces = ['AU', 'CA', 'DE', 'ES', 'FR', 'IT', 'UK', 'US'];
+        const allProfiles = supportedMarketplaces.map(code => {
+          const existingProfile = profilesByCountry.get(code);
+          return existingProfile || {
+            profileId: '',
+            countryCode: code,
+            currencyCode: '',
+            timezone: '',
+            accountName: 'Non configurato',
+            marketplaceId: '',
+            type: ''
+          };
+        });
+
+        setProfiles(allProfiles);
         setShowProfileSelector(true);
       }
     } catch (err: any) {
@@ -462,33 +480,52 @@ export default function Campaigns() {
             <p className="text-sm text-gray-600 mb-6">Scegli da quale marketplace sincronizzare le campagne</p>
 
             <div className="space-y-2 max-h-96 overflow-y-auto">
-              {profiles.map((profile) => (
-                <button
-                  key={profile.profileId}
-                  onClick={() => handleSync(profile.profileId)}
-                  className="w-full px-4 py-3 text-left rounded-lg border-2 border-gray-200 hover:border-orange-500 hover:bg-orange-50 transition-all flex items-center justify-between group"
-                >
-                  <div>
-                    <div className="font-semibold text-gray-900 group-hover:text-orange-600">
-                      {profile.countryCode === 'US' && '🇺🇸 US'}
-                      {profile.countryCode === 'CA' && '🇨🇦 CA'}
-                      {profile.countryCode === 'GB' && '🇬🇧 GB'}
-                      {profile.countryCode === 'UK' && '🇬🇧 UK'}
-                      {profile.countryCode === 'IT' && '🇮🇹 IT'}
-                      {profile.countryCode === 'DE' && '🇩🇪 DE'}
-                      {profile.countryCode === 'FR' && '🇫🇷 FR'}
-                      {profile.countryCode === 'ES' && '🇪🇸 ES'}
-                      {profile.countryCode === 'AU' && '🇦🇺 AU'}
+              {profiles.map((profile) => {
+                const isConfigured = profile.profileId !== '';
+                const getFlag = (code: string) => {
+                  const flags: Record<string, string> = {
+                    'US': '🇺🇸',
+                    'CA': '🇨🇦',
+                    'UK': '🇬🇧',
+                    'IT': '🇮🇹',
+                    'DE': '🇩🇪',
+                    'FR': '🇫🇷',
+                    'ES': '🇪🇸',
+                    'AU': '🇦🇺'
+                  };
+                  return flags[code] || '';
+                };
+
+                return (
+                  <button
+                    key={profile.countryCode}
+                    onClick={() => isConfigured && handleSync(profile.profileId)}
+                    disabled={!isConfigured}
+                    className={`w-full px-4 py-3 text-left rounded-lg border-2 transition-all flex items-center justify-between group ${
+                      isConfigured
+                        ? 'border-gray-200 hover:border-orange-500 hover:bg-orange-50 cursor-pointer'
+                        : 'border-gray-100 bg-gray-50 cursor-not-allowed opacity-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{getFlag(profile.countryCode)}</span>
+                      <div>
+                        <div className={`font-semibold ${isConfigured ? 'text-gray-900 group-hover:text-orange-600' : 'text-gray-400'}`}>
+                          {profile.countryCode}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {profile.accountName || profile.marketplaceId}
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      {profile.accountName || profile.marketplaceId}
-                    </div>
-                  </div>
-                  <svg className="w-5 h-5 text-gray-400 group-hover:text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
-              ))}
+                    {isConfigured && (
+                      <svg className="w-5 h-5 text-gray-400 group-hover:text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             <div className="mt-6 flex gap-2">
