@@ -387,6 +387,7 @@ export default function Campaigns() {
                           {campaign.marketplace === 'US' && '🇺🇸'}
                           {campaign.marketplace === 'CA' && '🇨🇦'}
                           {campaign.marketplace === 'GB' && '🇬🇧'}
+                          {campaign.marketplace === 'UK' && '🇬🇧'}
                           {campaign.marketplace === 'IT' && '🇮🇹'}
                           {campaign.marketplace === 'DE' && '🇩🇪'}
                           {campaign.marketplace === 'FR' && '🇫🇷'}
@@ -472,6 +473,7 @@ export default function Campaigns() {
                       {profile.countryCode === 'US' && '🇺🇸 US'}
                       {profile.countryCode === 'CA' && '🇨🇦 CA'}
                       {profile.countryCode === 'GB' && '🇬🇧 GB'}
+                      {profile.countryCode === 'UK' && '🇬🇧 UK'}
                       {profile.countryCode === 'IT' && '🇮🇹 IT'}
                       {profile.countryCode === 'DE' && '🇩🇪 DE'}
                       {profile.countryCode === 'FR' && '🇫🇷 FR'}
