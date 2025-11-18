@@ -106,10 +106,15 @@ class AmazonApiService {
   // METODI PER CAMPAGNE
   // ================================================
 
-  // Recupera tutte le campagne del profilo
+  // Recupera tutte le campagne del profilo di default
   async getCampaigns(): Promise<any[]> {
+    return this.getCampaignsForProfile(amazonConfig.profileId);
+  }
+
+  // Recupera tutte le campagne per un profilo specifico
+  async getCampaignsForProfile(profileId: string): Promise<any[]> {
     try {
-      console.log('📥 Recupero campagne...');
+      console.log(`📥 Recupero campagne per profilo ${profileId}...`);
 
       // Amazon API v3 richiede Content-Type e Accept specifici
       const response = await this.client.post('/sp/campaigns/list', {
@@ -120,15 +125,16 @@ class AmazonApiService {
       }, {
         headers: {
           'Content-Type': 'application/vnd.spcampaign.v3+json',
-          'Accept': 'application/vnd.spcampaign.v3+json'
+          'Accept': 'application/vnd.spcampaign.v3+json',
+          'Amazon-Advertising-API-Scope': profileId
         }
       });
 
       const campaigns = response.data.campaigns || [];
-      console.log(`✅ Trovate ${campaigns.length} campagne`);
+      console.log(`✅ Trovate ${campaigns.length} campagne per profilo ${profileId}`);
       return campaigns;
     } catch (error) {
-      console.error('❌ Errore recupero campagne:', error);
+      console.error(`❌ Errore recupero campagne per profilo ${profileId}:`, error);
       throw error;
     }
   }
