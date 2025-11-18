@@ -385,12 +385,23 @@ export default function Campaigns() {
                       <div className="flex items-center gap-2">
                         <span className="text-lg">
                           {campaign.marketplace === 'US' && '🇺🇸'}
+                          {campaign.marketplace === 'CA' && '🇨🇦'}
+                          {campaign.marketplace === 'MX' && '🇲🇽'}
+                          {campaign.marketplace === 'BR' && '🇧🇷'}
                           {campaign.marketplace === 'GB' && '🇬🇧'}
                           {campaign.marketplace === 'DE' && '🇩🇪'}
                           {campaign.marketplace === 'FR' && '🇫🇷'}
                           {campaign.marketplace === 'IT' && '🇮🇹'}
                           {campaign.marketplace === 'ES' && '🇪🇸'}
-                          {campaign.marketplace === 'CA' && '🇨🇦'}
+                          {campaign.marketplace === 'NL' && '🇳🇱'}
+                          {campaign.marketplace === 'SE' && '🇸🇪'}
+                          {campaign.marketplace === 'PL' && '🇵🇱'}
+                          {campaign.marketplace === 'TR' && '🇹🇷'}
+                          {campaign.marketplace === 'AU' && '🇦🇺'}
+                          {campaign.marketplace === 'SG' && '🇸🇬'}
+                          {campaign.marketplace === 'AE' && '🇦🇪'}
+                          {campaign.marketplace === 'SA' && '🇸🇦'}
+                          {campaign.marketplace === 'IN' && '🇮🇳'}
                           {campaign.marketplace === 'JP' && '🇯🇵'}
                         </span>
                         <div className="flex-1 min-w-0">
@@ -470,12 +481,23 @@ export default function Campaigns() {
                   <div>
                     <div className="font-semibold text-gray-900 group-hover:text-orange-600">
                       {profile.countryCode === 'US' && '🇺🇸'}
+                      {profile.countryCode === 'CA' && '🇨🇦'}
+                      {profile.countryCode === 'MX' && '🇲🇽'}
+                      {profile.countryCode === 'BR' && '🇧🇷'}
                       {profile.countryCode === 'GB' && '🇬🇧'}
                       {profile.countryCode === 'DE' && '🇩🇪'}
                       {profile.countryCode === 'FR' && '🇫🇷'}
                       {profile.countryCode === 'IT' && '🇮🇹'}
                       {profile.countryCode === 'ES' && '🇪🇸'}
-                      {profile.countryCode === 'CA' && '🇨🇦'}
+                      {profile.countryCode === 'NL' && '🇳🇱'}
+                      {profile.countryCode === 'SE' && '🇸🇪'}
+                      {profile.countryCode === 'PL' && '🇵🇱'}
+                      {profile.countryCode === 'TR' && '🇹🇷'}
+                      {profile.countryCode === 'AU' && '🇦🇺'}
+                      {profile.countryCode === 'SG' && '🇸🇬'}
+                      {profile.countryCode === 'AE' && '🇦🇪'}
+                      {profile.countryCode === 'SA' && '🇸🇦'}
+                      {profile.countryCode === 'IN' && '🇮🇳'}
                       {profile.countryCode === 'JP' && '🇯🇵'}
                       {' '}{profile.countryCode}
                     </div>
