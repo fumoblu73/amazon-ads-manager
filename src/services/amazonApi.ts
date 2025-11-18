@@ -88,11 +88,16 @@ class AmazonApiService {
     try {
       console.log('📥 Recupero campagne...');
 
-      // Amazon ha cambiato l'API: ora usa POST /sp/campaigns/list invece di GET /v2/sp/campaigns
+      // Amazon API v3 richiede Content-Type e Accept specifici
       const response = await this.client.post('/sp/campaigns/list', {
         maxResults: 1000,
         stateFilter: {
           include: ['ENABLED', 'PAUSED', 'ARCHIVED']
+        }
+      }, {
+        headers: {
+          'Content-Type': 'application/vnd.spcampaign.v3+json',
+          'Accept': 'application/vnd.spcampaign.v3+json'
         }
       });
 
