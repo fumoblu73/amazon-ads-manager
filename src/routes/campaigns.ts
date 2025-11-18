@@ -52,6 +52,39 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // ================================================
+// GET /api/campaigns/profiles - Lista tutti i profili Amazon disponibili
+// ================================================
+// IMPORTANTE: Deve essere PRIMA di /:id altrimenti Express matcha "profiles" come :id
+router.get('/profiles', requireAuth, async (req: Request, res: Response) => {
+  try {
+    console.log('🔍 Recupero profili Amazon...');
+
+    const profiles = await amazonApiService.getProfiles();
+
+    res.json({
+      success: true,
+      message: 'Profili recuperati con successo',
+      data: profiles.map(p => ({
+        profileId: p.profileId,
+        countryCode: p.countryCode,
+        currencyCode: p.currencyCode,
+        timezone: p.timezone,
+        accountName: p.accountInfo?.name,
+        marketplaceId: p.accountInfo?.marketplaceStringId,
+        type: p.accountInfo?.type
+      }))
+    });
+  } catch (error: any) {
+    console.error('❌ Errore GET /api/campaigns/profiles:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Errore nel recupero dei profili',
+      details: error.message
+    });
+  }
+});
+
+// ================================================
 // GET /api/campaigns/:id - Dettagli campagna singola
 // ================================================
 router.get('/:id', async (req: Request, res: Response) => {
@@ -246,38 +279,6 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       error: 'Errore nell\'eliminazione della campagna',
-      details: error.message
-    });
-  }
-});
-
-// ================================================
-// GET /api/campaigns/profiles - Lista tutti i profili Amazon disponibili
-// ================================================
-router.get('/profiles', requireAuth, async (req: Request, res: Response) => {
-  try {
-    console.log('🔍 Recupero profili Amazon...');
-
-    const profiles = await amazonApiService.getProfiles();
-
-    res.json({
-      success: true,
-      message: 'Profili recuperati con successo',
-      data: profiles.map(p => ({
-        profileId: p.profileId,
-        countryCode: p.countryCode,
-        currencyCode: p.currencyCode,
-        timezone: p.timezone,
-        accountName: p.accountInfo?.name,
-        marketplaceId: p.accountInfo?.marketplaceStringId,
-        type: p.accountInfo?.type
-      }))
-    });
-  } catch (error: any) {
-    console.error('❌ Errore GET /api/campaigns/profiles:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Errore nel recupero dei profili',
       details: error.message
     });
   }
