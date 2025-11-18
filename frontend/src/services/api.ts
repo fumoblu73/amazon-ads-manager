@@ -3,6 +3,7 @@ import type {
   ApiResponse,
   Book,
   Campaign,
+  Profile,
   AutomationLog,
   CampaignStats,
   LogStats,
@@ -102,10 +103,20 @@ export const campaignsApi = {
     return response.data;
   },
 
-  syncFromAmazon: async (token: string) => {
+  syncFromAmazon: async (token: string, profileId?: string) => {
     const response = await apiClient.post<ApiResponse<{ total: number; created: number; updated: number; errors: number }>>(
       '/api/campaigns/sync-from-amazon',
-      {},
+      profileId ? { profileId } : {},
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+    return response.data;
+  },
+
+  getProfiles: async (token: string) => {
+    const response = await apiClient.get<ApiResponse<Profile[]>>(
+      '/api/campaigns/profiles',
       {
         headers: { Authorization: `Bearer ${token}` },
       }
