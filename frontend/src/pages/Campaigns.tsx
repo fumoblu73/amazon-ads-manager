@@ -387,7 +387,6 @@ export default function Campaigns() {
                           {campaign.marketplace === 'US' && '🇺🇸'}
                           {campaign.marketplace === 'CA' && '🇨🇦'}
                           {campaign.marketplace === 'GB' && '🇬🇧'}
-                          {campaign.marketplace === 'UK' && '🇬🇧'}
                           {campaign.marketplace === 'IT' && '🇮🇹'}
                           {campaign.marketplace === 'DE' && '🇩🇪'}
                           {campaign.marketplace === 'FR' && '🇫🇷'}
@@ -470,16 +469,14 @@ export default function Campaigns() {
                 >
                   <div>
                     <div className="font-semibold text-gray-900 group-hover:text-orange-600">
-                      {profile.countryCode === 'US' && '🇺🇸'}
-                      {profile.countryCode === 'CA' && '🇨🇦'}
-                      {profile.countryCode === 'GB' && '🇬🇧'}
-                      {profile.countryCode === 'UK' && '🇬🇧'}
-                      {profile.countryCode === 'IT' && '🇮🇹'}
-                      {profile.countryCode === 'DE' && '🇩🇪'}
-                      {profile.countryCode === 'FR' && '🇫🇷'}
-                      {profile.countryCode === 'ES' && '🇪🇸'}
-                      {profile.countryCode === 'AU' && '🇦🇺'}
-                      {' '}{profile.countryCode}
+                      {profile.countryCode === 'US' && '🇺🇸 US'}
+                      {profile.countryCode === 'CA' && '🇨🇦 CA'}
+                      {profile.countryCode === 'GB' && '🇬🇧 GB'}
+                      {profile.countryCode === 'IT' && '🇮🇹 IT'}
+                      {profile.countryCode === 'DE' && '🇩🇪 DE'}
+                      {profile.countryCode === 'FR' && '🇫🇷 FR'}
+                      {profile.countryCode === 'ES' && '🇪🇸 ES'}
+                      {profile.countryCode === 'AU' && '🇦🇺 AU'}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">
                       {profile.accountName || profile.marketplaceId}
