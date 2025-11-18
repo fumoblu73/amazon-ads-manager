@@ -386,23 +386,13 @@ export default function Campaigns() {
                         <span className="text-lg">
                           {campaign.marketplace === 'US' && '🇺🇸'}
                           {campaign.marketplace === 'CA' && '🇨🇦'}
-                          {campaign.marketplace === 'MX' && '🇲🇽'}
-                          {campaign.marketplace === 'BR' && '🇧🇷'}
                           {campaign.marketplace === 'GB' && '🇬🇧'}
+                          {campaign.marketplace === 'UK' && '🇬🇧'}
+                          {campaign.marketplace === 'IT' && '🇮🇹'}
                           {campaign.marketplace === 'DE' && '🇩🇪'}
                           {campaign.marketplace === 'FR' && '🇫🇷'}
-                          {campaign.marketplace === 'IT' && '🇮🇹'}
                           {campaign.marketplace === 'ES' && '🇪🇸'}
-                          {campaign.marketplace === 'NL' && '🇳🇱'}
-                          {campaign.marketplace === 'SE' && '🇸🇪'}
-                          {campaign.marketplace === 'PL' && '🇵🇱'}
-                          {campaign.marketplace === 'TR' && '🇹🇷'}
                           {campaign.marketplace === 'AU' && '🇦🇺'}
-                          {campaign.marketplace === 'SG' && '🇸🇬'}
-                          {campaign.marketplace === 'AE' && '🇦🇪'}
-                          {campaign.marketplace === 'SA' && '🇸🇦'}
-                          {campaign.marketplace === 'IN' && '🇮🇳'}
-                          {campaign.marketplace === 'JP' && '🇯🇵'}
                         </span>
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium text-gray-900 truncate">{campaign.name}</div>
@@ -482,23 +472,13 @@ export default function Campaigns() {
                     <div className="font-semibold text-gray-900 group-hover:text-orange-600">
                       {profile.countryCode === 'US' && '🇺🇸'}
                       {profile.countryCode === 'CA' && '🇨🇦'}
-                      {profile.countryCode === 'MX' && '🇲🇽'}
-                      {profile.countryCode === 'BR' && '🇧🇷'}
                       {profile.countryCode === 'GB' && '🇬🇧'}
+                      {profile.countryCode === 'UK' && '🇬🇧'}
+                      {profile.countryCode === 'IT' && '🇮🇹'}
                       {profile.countryCode === 'DE' && '🇩🇪'}
                       {profile.countryCode === 'FR' && '🇫🇷'}
-                      {profile.countryCode === 'IT' && '🇮🇹'}
                       {profile.countryCode === 'ES' && '🇪🇸'}
-                      {profile.countryCode === 'NL' && '🇳🇱'}
-                      {profile.countryCode === 'SE' && '🇸🇪'}
-                      {profile.countryCode === 'PL' && '🇵🇱'}
-                      {profile.countryCode === 'TR' && '🇹🇷'}
                       {profile.countryCode === 'AU' && '🇦🇺'}
-                      {profile.countryCode === 'SG' && '🇸🇬'}
-                      {profile.countryCode === 'AE' && '🇦🇪'}
-                      {profile.countryCode === 'SA' && '🇸🇦'}
-                      {profile.countryCode === 'IN' && '🇮🇳'}
-                      {profile.countryCode === 'JP' && '🇯🇵'}
                       {' '}{profile.countryCode}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">
