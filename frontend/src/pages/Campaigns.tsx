@@ -6,6 +6,7 @@ export default function Campaigns() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
+  const [marketplaceFilter, setMarketplaceFilter] = useState<string>('all');
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showProfileSelector, setShowProfileSelector] = useState(false);
@@ -90,6 +91,72 @@ export default function Campaigns() {
     }
   };
 
+  const handleSyncAll = async () => {
+    // Get token from localStorage or prompt
+    let token = localStorage.getItem('adminToken');
+
+    if (!token) {
+      token = prompt('Inserisci ADMIN_TOKEN (verrà salvato per le prossime volte):');
+      if (!token) return;
+      localStorage.setItem('adminToken', token);
+    }
+
+    // Load all profiles
+    setLoadingProfiles(true);
+    try {
+      const response = await campaignsApi.getProfiles(token);
+      if (!response.success || !response.data) {
+        throw new Error('Impossibile caricare i profili');
+      }
+
+      const allProfiles = response.data;
+      setLoadingProfiles(false);
+
+      // Sync all profiles sequentially
+      setSyncing(true);
+      setSyncMessage(null);
+
+      let totalCreated = 0;
+      let totalUpdated = 0;
+      let errors = 0;
+
+      for (const profile of allProfiles) {
+        try {
+          const syncResponse = await campaignsApi.syncFromAmazon(token, profile.profileId);
+          if (syncResponse.success && syncResponse.data) {
+            totalCreated += syncResponse.data.created;
+            totalUpdated += syncResponse.data.updated;
+          }
+        } catch (err: any) {
+          console.error(`Errore sync marketplace ${profile.countryCode}:`, err);
+          errors++;
+        }
+      }
+
+      // Show summary message
+      setSyncMessage({
+        type: errors === allProfiles.length ? 'error' : 'success',
+        text: `✅ Sync completato: ${totalCreated} create, ${totalUpdated} aggiornate${errors > 0 ? `, ${errors} errori` : ''}`
+      });
+
+      // Reload campaigns
+      const campaignsResponse = await campaignsApi.getAll();
+      if (campaignsResponse.success && campaignsResponse.data) {
+        setCampaigns(campaignsResponse.data);
+      }
+
+    } catch (err: any) {
+      setSyncMessage({
+        type: 'error',
+        text: `❌ Errore: ${err.response?.data?.error || err.message}`
+      });
+      setLoadingProfiles(false);
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSyncMessage(null), 5000);
+    }
+  };
+
   const handleClearToken = () => {
     if (confirm('Vuoi eliminare il token salvato? Dovrai inserirlo di nuovo alla prossima sincronizzazione.')) {
       localStorage.removeItem('adminToken');
@@ -102,11 +169,22 @@ export default function Campaigns() {
   };
 
   const filteredCampaigns = campaigns.filter((c) => {
-    if (filter === 'all') return true;
-    if (filter === 'enabled') return c.state === 'enabled';
-    if (filter === 'paused') return c.state === 'paused';
-    return true;
+    // Filter by state
+    let matchesStateFilter = true;
+    if (filter === 'enabled') matchesStateFilter = c.state === 'enabled';
+    else if (filter === 'paused') matchesStateFilter = c.state === 'paused';
+
+    // Filter by marketplace
+    let matchesMarketplaceFilter = true;
+    if (marketplaceFilter !== 'all') {
+      matchesMarketplaceFilter = c.marketplace === marketplaceFilter;
+    }
+
+    return matchesStateFilter && matchesMarketplaceFilter;
   });
+
+  // Get unique marketplaces from campaigns
+  const uniqueMarketplaces = Array.from(new Set(campaigns.map(c => c.marketplace))).sort();
 
   const getCampaignTypeName = (type: string) => {
     const types: Record<string, string> = {
@@ -160,7 +238,35 @@ export default function Campaigns() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
-                Sync da Amazon
+                Sync Singolo Marketplace
+              </>
+            )}
+          </button>
+          <button
+            onClick={handleSyncAll}
+            disabled={syncing || loadingProfiles}
+            className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 ${
+              syncing || loadingProfiles
+                ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                : 'bg-purple-500 text-white hover:bg-purple-600 shadow-md'
+            }`}
+          >
+            {syncing ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                Sincronizzazione...
+              </>
+            ) : loadingProfiles ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                Caricamento...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Sync Tutti i Marketplace
               </>
             )}
           </button>
@@ -207,6 +313,27 @@ export default function Campaigns() {
           >
             Pause ({campaigns.filter(c => c.state === 'paused').length})
           </button>
+
+          {/* Marketplace Filters */}
+          {uniqueMarketplaces.length > 0 && (
+            <>
+              <div className="w-px h-6 bg-gray-300 my-auto"></div>
+              {uniqueMarketplaces.map((marketplace) => (
+                <button
+                  key={marketplace}
+                  onClick={() => setMarketplaceFilter(marketplace === marketplaceFilter ? 'all' : marketplace)}
+                  className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
+                    marketplaceFilter === marketplace
+                      ? 'bg-indigo-600 text-white shadow-md'
+                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {marketplace} ({campaigns.filter(c => c.marketplace === marketplace).length})
+                </button>
+              ))}
+            </>
+          )}
+
           <button
             onClick={handleClearToken}
             className="px-3 py-1.5 text-xs rounded-lg font-medium transition-all bg-red-500 text-white hover:bg-red-600 shadow-md"
@@ -225,7 +352,7 @@ export default function Campaigns() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
             </svg>
             <p className="text-lg font-medium text-white">Nessuna campagna trovata</p>
-            <p className="text-sm text-gray-400 mt-2">Clicca "Sync da Amazon" per importare le tue campagne</p>
+            <p className="text-sm text-gray-400 mt-2">Clicca "Sync Singolo Marketplace" o "Sync Tutti i Marketplace" per importare le tue campagne</p>
           </div>
         </div>
       ) : (
