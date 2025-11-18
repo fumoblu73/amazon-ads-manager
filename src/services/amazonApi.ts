@@ -80,6 +80,29 @@ class AmazonApiService {
   }
 
   // ================================================
+  // METODI PER PROFILI
+  // ================================================
+
+  // Recupera tutti i profili disponibili per l'account
+  async getProfiles(): Promise<any[]> {
+    try {
+      console.log('📥 Recupero profili disponibili...');
+
+      const response = await this.client.get('/v2/profiles');
+
+      console.log(`✅ Trovati ${response.data.length} profili`);
+      response.data.forEach((profile: any) => {
+        console.log(`   - ${profile.accountInfo?.marketplaceStringId} (${profile.countryCode}): Profile ID ${profile.profileId} - ${profile.accountInfo?.name || 'N/A'}`);
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error('❌ Errore recupero profili:', error);
+      throw error;
+    }
+  }
+
+  // ================================================
   // METODI PER CAMPAGNE
   // ================================================
 

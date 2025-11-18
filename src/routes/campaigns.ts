@@ -252,6 +252,38 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
 });
 
 // ================================================
+// GET /api/campaigns/profiles - Lista tutti i profili Amazon disponibili
+// ================================================
+router.get('/profiles', requireAuth, async (req: Request, res: Response) => {
+  try {
+    console.log('🔍 Recupero profili Amazon...');
+
+    const profiles = await amazonApiService.getProfiles();
+
+    res.json({
+      success: true,
+      message: 'Profili recuperati con successo',
+      data: profiles.map(p => ({
+        profileId: p.profileId,
+        countryCode: p.countryCode,
+        currencyCode: p.currencyCode,
+        timezone: p.timezone,
+        accountName: p.accountInfo?.name,
+        marketplaceId: p.accountInfo?.marketplaceStringId,
+        type: p.accountInfo?.type
+      }))
+    });
+  } catch (error: any) {
+    console.error('❌ Errore GET /api/campaigns/profiles:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Errore nel recupero dei profili',
+      details: error.message
+    });
+  }
+});
+
+// ================================================
 // POST /api/campaigns/sync-from-amazon - Sincronizza campagne da Amazon API
 // ================================================
 router.post('/sync-from-amazon', requireAuth, async (req: Request, res: Response) => {
