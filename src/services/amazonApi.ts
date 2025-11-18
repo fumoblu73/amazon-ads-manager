@@ -88,10 +88,17 @@ class AmazonApiService {
     try {
       console.log('📥 Recupero campagne...');
 
-      const response = await this.client.get('/v2/sp/campaigns');
+      // Amazon ha cambiato l'API: ora usa POST /sp/campaigns/list invece di GET /v2/sp/campaigns
+      const response = await this.client.post('/sp/campaigns/list', {
+        maxResults: 1000,
+        stateFilter: {
+          include: ['ENABLED', 'PAUSED', 'ARCHIVED']
+        }
+      });
 
-      console.log(`✅ Trovate ${response.data.length} campagne`);
-      return response.data;
+      const campaigns = response.data.campaigns || [];
+      console.log(`✅ Trovate ${campaigns.length} campagne`);
+      return campaigns;
     } catch (error) {
       console.error('❌ Errore recupero campagne:', error);
       throw error;

@@ -10,7 +10,7 @@ import { automationScheduler } from './automation/scheduler';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT || '3000', 10);
 
 // CORS configuration
 app.use((req, res, next) => {
