@@ -288,11 +288,33 @@ router.get('/profiles', requireAuth, async (req: Request, res: Response) => {
 // ================================================
 router.post('/sync-from-amazon', requireAuth, async (req: Request, res: Response) => {
   try {
+    // Accetta profileId opzionale nel body della request
+    const { profileId } = req.body;
+
     console.log('🔄 Avvio sincronizzazione campagne da Amazon API...');
 
-    // 1. Recupera campagne da Amazon API
-    const amazonCampaigns = await amazonApiService.getCampaigns();
-    console.log(`📥 Trovate ${amazonCampaigns.length} campagne su Amazon`);
+    // 1. Se profileId è fornito, recupera info del profilo per ottenere il marketplace
+    let marketplace = 'US'; // Default
+    if (profileId) {
+      const profiles = await amazonApiService.getProfiles();
+      const selectedProfile = profiles.find(p => p.profileId.toString() === profileId.toString());
+
+      if (!selectedProfile) {
+        return res.status(400).json({
+          success: false,
+          error: `Profilo ${profileId} non trovato`
+        });
+      }
+
+      marketplace = selectedProfile.countryCode;
+      console.log(`📍 Marketplace selezionato: ${marketplace} (Profile ID: ${profileId})`);
+    }
+
+    // 2. Recupera campagne da Amazon API
+    const amazonCampaigns = profileId
+      ? await amazonApiService.getCampaignsForProfile(profileId)
+      : await amazonApiService.getCampaigns();
+    console.log(`📥 Trovate ${amazonCampaigns.length} campagne su Amazon per marketplace ${marketplace}`);
 
     const campaignRepository = AppDataSource.getRepository(Campaign);
 
@@ -300,12 +322,15 @@ router.post('/sync-from-amazon', requireAuth, async (req: Request, res: Response
     let updated = 0;
     let errors = 0;
 
-    // 2. Per ogni campagna Amazon, crea o aggiorna nel database
+    // 3. Per ogni campagna Amazon, crea o aggiorna nel database
     for (const amazonCampaign of amazonCampaigns) {
       try {
-        // Cerca se la campagna esiste già nel database
+        // Cerca se la campagna esiste già nel database (per questo marketplace)
         let campaign = await campaignRepository.findOne({
-          where: { amazonCampaignId: amazonCampaign.campaignId.toString() }
+          where: {
+            amazonCampaignId: amazonCampaign.campaignId.toString(),
+            marketplace: marketplace
+          }
         });
 
         if (campaign) {
@@ -318,22 +343,23 @@ router.post('/sync-from-amazon', requireAuth, async (req: Request, res: Response
 
           await campaignRepository.save(campaign);
           updated++;
-          console.log(`✏️  Aggiornata: ${campaign.name}`);
+          console.log(`✏️  Aggiornata: ${campaign.name} (${marketplace})`);
         } else {
           // Crea nuova campagna
           campaign = campaignRepository.create({
             amazonCampaignId: amazonCampaign.campaignId.toString(),
+            marketplace: marketplace,
             name: amazonCampaign.name,
             state: amazonCampaign.state,
             dailyBudget: amazonCampaign.budget?.budget || null,
             campaignType: amazonCampaign.targetingType || null,
             biddingStrategy: amazonCampaign.biddingStrategy || null,
-            notes: `Sincronizzata da Amazon il ${new Date().toISOString()}`
+            notes: `Sincronizzata da Amazon (${marketplace}) il ${new Date().toISOString()}`
           });
 
           await campaignRepository.save(campaign);
           created++;
-          console.log(`✅ Creata: ${campaign.name}`);
+          console.log(`✅ Creata: ${campaign.name} (${marketplace})`);
         }
       } catch (error: any) {
         console.error(`❌ Errore sincronizzazione campagna ${amazonCampaign.campaignId}:`, error.message);

@@ -1,12 +1,16 @@
-import { Entity, PrimaryGeneratedColumn, Column, UpdateDateColumn, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, UpdateDateColumn, CreateDateColumn, Index } from 'typeorm';
 
 @Entity('campaigns')
+@Index(['amazonCampaignId', 'marketplace'], { unique: true })
 export class Campaign {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar', length: 100, unique: true, name: 'amazon_campaign_id' })
+  @Column({ type: 'varchar', length: 100, name: 'amazon_campaign_id' })
   amazonCampaignId: string;
+
+  @Column({ type: 'varchar', length: 10, default: 'US' })
+  marketplace: string;
 
   @Column({ type: 'varchar', length: 255 })
   name: string;
