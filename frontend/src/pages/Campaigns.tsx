@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { campaignsApi } from '../services/api';
-import type { Campaign } from '../types';
+import type { Campaign, Profile } from '../types';
 
 export default function Campaigns() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -8,6 +8,9 @@ export default function Campaigns() {
   const [filter, setFilter] = useState<string>('all');
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [showProfileSelector, setShowProfileSelector] = useState(false);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [loadingProfiles, setLoadingProfiles] = useState(false);
 
   useEffect(() => {
     const fetchCampaigns = async () => {
@@ -25,23 +28,45 @@ export default function Campaigns() {
     fetchCampaigns();
   }, []);
 
-  const handleSync = async () => {
+  const handleOpenProfileSelector = async () => {
     // Try to get token from localStorage first
     let token = localStorage.getItem('adminToken');
 
     if (!token) {
       token = prompt('Inserisci ADMIN_TOKEN (verrà salvato per le prossime volte):');
       if (!token) return;
-
-      // Save for future use
       localStorage.setItem('adminToken', token);
     }
 
+    // Load profiles
+    setLoadingProfiles(true);
+    try {
+      const response = await campaignsApi.getProfiles(token);
+      if (response.success && response.data) {
+        setProfiles(response.data);
+        setShowProfileSelector(true);
+      }
+    } catch (err: any) {
+      setSyncMessage({
+        type: 'error',
+        text: `❌ Errore caricamento profili: ${err.response?.data?.error || err.message}`
+      });
+      setTimeout(() => setSyncMessage(null), 5000);
+    } finally {
+      setLoadingProfiles(false);
+    }
+  };
+
+  const handleSync = async (profileId?: string) => {
+    const token = localStorage.getItem('adminToken');
+    if (!token) return;
+
     setSyncing(true);
     setSyncMessage(null);
+    setShowProfileSelector(false);
 
     try {
-      const response = await campaignsApi.syncFromAmazon(token);
+      const response = await campaignsApi.syncFromAmazon(token, profileId);
       if (response.success && response.data) {
         setSyncMessage({
           type: 'success',
@@ -112,10 +137,10 @@ export default function Campaigns() {
         <div className="flex items-center gap-4">
           <h1 className="text-2xl font-bold text-white uppercase">Campagne</h1>
           <button
-            onClick={handleSync}
-            disabled={syncing}
+            onClick={handleOpenProfileSelector}
+            disabled={syncing || loadingProfiles}
             className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 ${
-              syncing
+              syncing || loadingProfiles
                 ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
                 : 'bg-orange-500 text-white hover:bg-orange-600 shadow-md'
             }`}
@@ -124,6 +149,11 @@ export default function Campaigns() {
               <>
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 Sincronizzazione...
+              </>
+            ) : loadingProfiles ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                Caricamento...
               </>
             ) : (
               <>
@@ -225,8 +255,22 @@ export default function Campaigns() {
                 {filteredCampaigns.map((campaign) => (
                   <tr key={campaign.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3">
-                      <div className="text-sm font-medium text-gray-900 truncate max-w-xs">{campaign.name}</div>
-                      <div className="text-xs text-gray-500 truncate max-w-xs">{campaign.amazonCampaignId}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">
+                          {campaign.marketplace === 'US' && '🇺🇸'}
+                          {campaign.marketplace === 'GB' && '🇬🇧'}
+                          {campaign.marketplace === 'DE' && '🇩🇪'}
+                          {campaign.marketplace === 'FR' && '🇫🇷'}
+                          {campaign.marketplace === 'IT' && '🇮🇹'}
+                          {campaign.marketplace === 'ES' && '🇪🇸'}
+                          {campaign.marketplace === 'CA' && '🇨🇦'}
+                          {campaign.marketplace === 'JP' && '🇯🇵'}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-900 truncate">{campaign.name}</div>
+                          <div className="text-xs text-gray-500 truncate">{campaign.amazonCampaignId}</div>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-indigo-50 text-indigo-700 rounded">
@@ -278,6 +322,55 @@ export default function Campaigns() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Profile Selector Modal */}
+      {showProfileSelector && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Seleziona Marketplace</h2>
+            <p className="text-sm text-gray-600 mb-6">Scegli da quale marketplace sincronizzare le campagne</p>
+
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {profiles.map((profile) => (
+                <button
+                  key={profile.profileId}
+                  onClick={() => handleSync(profile.profileId)}
+                  className="w-full px-4 py-3 text-left rounded-lg border-2 border-gray-200 hover:border-orange-500 hover:bg-orange-50 transition-all flex items-center justify-between group"
+                >
+                  <div>
+                    <div className="font-semibold text-gray-900 group-hover:text-orange-600">
+                      {profile.countryCode === 'US' && '🇺🇸'}
+                      {profile.countryCode === 'GB' && '🇬🇧'}
+                      {profile.countryCode === 'DE' && '🇩🇪'}
+                      {profile.countryCode === 'FR' && '🇫🇷'}
+                      {profile.countryCode === 'IT' && '🇮🇹'}
+                      {profile.countryCode === 'ES' && '🇪🇸'}
+                      {profile.countryCode === 'CA' && '🇨🇦'}
+                      {profile.countryCode === 'JP' && '🇯🇵'}
+                      {' '}{profile.countryCode}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {profile.accountName || profile.marketplaceId}
+                    </div>
+                  </div>
+                  <svg className="w-5 h-5 text-gray-400 group-hover:text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-6 flex gap-2">
+              <button
+                onClick={() => setShowProfileSelector(false)}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all font-medium"
+              >
+                Annulla
+              </button>
+            </div>
           </div>
         </div>
       )}

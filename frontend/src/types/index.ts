@@ -18,6 +18,7 @@ export interface Book {
 export interface Campaign {
   id: string;
   amazonCampaignId: string;
+  marketplace: string;
   name: string;
   state: 'enabled' | 'paused' | 'archived';
   dailyBudget: number;
@@ -26,6 +27,16 @@ export interface Campaign {
   notes?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Profile {
+  profileId: string;
+  countryCode: string;
+  currencyCode: string;
+  timezone: string;
+  accountName: string;
+  marketplaceId: string;
+  type: string;
 }
 
 export interface AutomationLog {
