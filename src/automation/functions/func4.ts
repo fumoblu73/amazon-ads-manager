@@ -66,6 +66,7 @@ export interface Func4Result {
 export async function executeFunc4(
   campaignId: string,
   campaignName: string,
+  marketplace: string,
   adGroupId: string,
   book: Book,
   totalImpressions30Days: number,
@@ -125,11 +126,11 @@ export async function executeFunc4(
     console.log('\n📊 PARTE 1: Ottimizzazione Targeting Groups');
 
     // 4. Recupera targeting groups
-    const targetingGroups = await amazonApiService.getAutoTargetingGroups(campaignId);
+    const targetingGroups = await amazonApiService.getAutoTargetingGroups(marketplace, campaignId);
     console.log(`   Trovati ${targetingGroups.length} targeting groups`);
 
     // 5. Richiedi report per targeting groups
-    const reportIdGroups = await amazonApiService.requestReport(startDateStr, [
+    const reportIdGroups = await amazonApiService.requestReport(marketplace, startDateStr, [
       'targetId',
       'impressions',
       'clicks',
@@ -139,7 +140,7 @@ export async function executeFunc4(
       'bid'
     ]);
 
-    const reportDataGroups = await amazonApiService.waitAndDownloadReport(reportIdGroups);
+    const reportDataGroups = await amazonApiService.waitAndDownloadReport(marketplace, reportIdGroups);
 
     // 6. Processa ogni targeting group
     for (const group of targetingGroups) {
@@ -166,7 +167,7 @@ export async function executeFunc4(
         // a) CONTROLLO PAUSA
         if (clicks > cfg.clicksNegative && orders === 0) {
           console.log(`   ⏸️  PAUSA ${groupName}: clicks=${clicks}, orders=0`);
-          await amazonApiService.updateTargetState(targetId, 'paused');
+          await amazonApiService.updateTargetState(marketplace, targetId, 'paused');
           result.targetingGroupsPaused++;
           continue;
         }
@@ -182,7 +183,7 @@ export async function executeFunc4(
             console.log(`      ACoS: ${acos.toFixed(2)}% (Fascia ${band.band})`);
             console.log(`      Bid: ${currentBid.toFixed(2)} → ${newBid.toFixed(2)}`);
 
-            await amazonApiService.updateTargetBid(targetId, newBid);
+            await amazonApiService.updateTargetBid(marketplace, targetId, newBid);
             result.targetingGroupsBidUpdated++;
           }
         }
@@ -200,13 +201,13 @@ export async function executeFunc4(
     console.log('\n📊 PARTE 2: Negative Targeting (Search Terms)');
 
     // 7. Richiedi report search terms
-    const reportIdSearchTerms = await amazonApiService.requestSearchTermsReport(
-      startDateStr,
-      endDateStr,
+    const reportIdSearchTerms = await amazonApiService.requestSearchTermsReport(marketplace, {
+      startDate: startDateStr,
+      endDate: endDateStr,
       campaignId
-    );
+    });
 
-    const searchTermsData = await amazonApiService.waitAndDownloadReport(reportIdSearchTerms);
+    const searchTermsData = await amazonApiService.waitAndDownloadReport(marketplace, reportIdSearchTerms);
     console.log(`   Trovati ${searchTermsData.length} search terms`);
 
     // 8. Processa ogni search term
@@ -229,12 +230,12 @@ export async function executeFunc4(
           if (isAsin) {
             // Aggiungi a negative products
             console.log(`   ➖ Negative ASIN: ${term} (clicks=${clicks}, cost=${cost.toFixed(2)})`);
-            await amazonApiService.addNegativeTarget(campaignId, adGroupId, term);
+            await amazonApiService.addNegativeTarget(marketplace, campaignId, adGroupId, term);
             result.negativeTargetsAdded++;
           } else {
             // Aggiungi a negative keywords
             console.log(`   ➖ Negative Keyword: "${term}" (clicks=${clicks}, cost=${cost.toFixed(2)})`);
-            await amazonApiService.addNegativeKeyword(campaignId, adGroupId, term, 'negativeExact');
+            await amazonApiService.addNegativeKeyword(marketplace, campaignId, adGroupId, term, 'negativeExact');
             result.negativeKeywordsAdded++;
           }
         }

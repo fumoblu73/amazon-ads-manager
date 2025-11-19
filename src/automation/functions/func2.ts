@@ -62,6 +62,7 @@ export interface Func2Result {
 export async function executeFunc2(
   campaignId: string,
   campaignName: string,
+  marketplace: string,
   book: Book,
   currentPlacements: {
     topOfSearch: number;
@@ -112,13 +113,13 @@ export async function executeFunc2(
     console.log(`📅 Periodo analisi ACoS: ${startDateStr} - ${endDateStr} (${cfg.placementTimeframeWeeks} settimane)`);
 
     // 3. Richiedi report della campagna
-    const reportId = await amazonApiService.requestReport(startDateStr, [
+    const reportId = await amazonApiService.requestReport(marketplace, startDateStr, [
       'campaignId',
       'cost',
       'sales'
     ]);
 
-    const reportData = await amazonApiService.waitAndDownloadReport(reportId);
+    const reportData = await amazonApiService.waitAndDownloadReport(marketplace, reportId);
 
     // 4. Trova metriche della campagna
     const campaignMetrics = reportData.find((r: any) => r.campaignId === campaignId);
@@ -156,7 +157,7 @@ export async function executeFunc2(
     console.log(`   Product Pages: ${currentPlacements.productPages}% → ${result.newPlacements.productPages}%`);
 
     // 8. Aggiorna i placement su Amazon
-    await amazonApiService.updateCampaignPlacements(campaignId, result.newPlacements);
+    await amazonApiService.updateCampaignPlacements(marketplace, campaignId, result.newPlacements);
 
     result.placementsUpdated = true;
 

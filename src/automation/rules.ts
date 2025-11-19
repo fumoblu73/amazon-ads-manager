@@ -105,11 +105,12 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
   const campaignId = campaign.campaignId;
   const campaignName = campaign.name;
   const campaignType = determineCampaignType(campaign);
+  const marketplace = campaign.marketplace || campaign.countryCode || 'US';
   const createdAt = new Date(campaign.startDate || campaign.creationDate || Date.now());
 
   console.log(`\n${'─'.repeat(60)}`);
   console.log(`📢 Campagna: ${campaignName}`);
-  console.log(`   Tipo: ${campaignType} | ID: ${campaignId}`);
+  console.log(`   Tipo: ${campaignType} | ID: ${campaignId} | Marketplace: ${marketplace}`);
   console.log(`${'─'.repeat(60)}`);
 
   // ================================================
@@ -197,7 +198,7 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
 
     if (shouldRun) {
       try {
-        await executeFunc1(campaignId, campaignType as any, campaignName, {
+        await executeFunc1(campaignId, campaignType as any, campaignName, marketplace, {
           bidIncrease: mockConfig.func1_bidIncrease,
           frequency: mockConfig.func1_frequency,
           maxImpressions: mockConfig.func1_impressions,
@@ -226,6 +227,7 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
           campaignId,
           campaignType as any,
           campaignName,
+          marketplace,
           mockBook,
           mockTotalImpressions,
           {
@@ -258,6 +260,7 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
         await executeFunc2(
           campaignId,
           campaignName,
+          marketplace,
           mockBook,
           mockPlacements,
           {
@@ -286,6 +289,7 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
         await executeFunc4(
           campaignId,
           campaignName,
+          marketplace,
           mockAdGroupId,
           mockBook,
           mockTotalImpressions,
@@ -333,6 +337,7 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
         await executeFunc5(
           campaignId,
           campaignType as any,
+          marketplace,
           mockCampaignMapping,
           {
             frequency: mockConfig.func5_frequency,

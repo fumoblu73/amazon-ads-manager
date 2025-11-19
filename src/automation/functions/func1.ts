@@ -44,6 +44,7 @@ export async function executeFunc1(
   campaignId: string,
   campaignType: 1 | 2 | 3 | 4,
   campaignName: string,
+  marketplace: string,
   config?: Partial<Func1Config>
 ): Promise<Func1Result> {
   console.log('\n════════════════════════════════════════');
@@ -79,27 +80,25 @@ export async function executeFunc1(
     console.log(`📅 Periodo analisi: ${startDateStr} - ${endDateStr} (${cfg.frequency} giorni)`);
 
     // 2. Richiedi report delle performance
-    const reportId = await amazonApiService.requestReport(startDateStr, [
-      'keywordId',
-      'targetId',
-      'impressions',
-      'clicks',
-      'bid'
-    ]);
+    const reportId = await amazonApiService.requestReport(marketplace, 'spKeyword', {
+      startDate: startDateStr,
+      endDate: endDateStr,
+      metrics: 'impressions,clicks,spend,sales'
+    });
 
     // 3. Aspetta e scarica il report
-    const reportData = await amazonApiService.waitAndDownloadReport(reportId);
+    const reportData = await amazonApiService.waitAndDownloadReport(marketplace, reportId);
 
     // 4. Recupera keywords o targets in base al tipo di campagna
     let items: any[] = [];
 
     if (campaignType === 1 || campaignType === 3) {
       // Campagne Keyword-based
-      items = await amazonApiService.getKeywords(campaignId);
+      items = await amazonApiService.getKeywords(marketplace, campaignId);
       console.log(`📊 Trovate ${items.length} keywords`);
     } else if (campaignType === 2 || campaignType === 4) {
       // Campagne Product-based
-      items = await amazonApiService.getTargets(campaignId);
+      items = await amazonApiService.getTargets(marketplace, campaignId);
       console.log(`📊 Trovati ${items.length} targets`);
     }
 
@@ -136,9 +135,9 @@ export async function executeFunc1(
 
           // Aggiorna il bid
           if (campaignType === 1 || campaignType === 3) {
-            await amazonApiService.updateKeywordBid(itemId, newBid);
+            await amazonApiService.updateKeywordBid(marketplace, itemId, newBid);
           } else {
-            await amazonApiService.updateTargetBid(itemId, newBid);
+            await amazonApiService.updateTargetBid(marketplace, itemId, newBid);
           }
 
           result.itemsIncreased++;
