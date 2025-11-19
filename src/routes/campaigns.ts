@@ -327,8 +327,12 @@ router.post('/sync-from-amazon', requireAuth, async (req: Request, res: Response
 
     console.log('🔄 Avvio sincronizzazione campagne da Amazon API...');
 
-    // 1. Se profileId è fornito, recupera info del profilo per ottenere il marketplace
-    let marketplace = 'US'; // Default
+    const campaignRepository = AppDataSource.getRepository(Campaign);
+    let created = 0;
+    let updated = 0;
+    let errors = 0;
+
+    // 1. Se profileId è fornito, usa sync per profilo singolo
     if (profileId) {
       const profiles = await amazonApiService.getProfiles();
       const selectedProfile = profiles.find(p => p.profileId.toString() === profileId.toString());
@@ -340,64 +344,107 @@ router.post('/sync-from-amazon', requireAuth, async (req: Request, res: Response
         });
       }
 
-      marketplace = selectedProfile.countryCode;
+      const marketplace = selectedProfile.countryCode;
       console.log(`📍 Marketplace selezionato: ${marketplace} (Profile ID: ${profileId})`);
-    }
 
-    // 2. Recupera campagne da Amazon API
-    const amazonCampaigns = profileId
-      ? await amazonApiService.getCampaignsForProfile(profileId)
-      : await amazonApiService.getCampaigns();
-    console.log(`📥 Trovate ${amazonCampaigns.length} campagne su Amazon per marketplace ${marketplace}`);
+      // 2. Recupera campagne da Amazon API per questo profilo
+      const amazonCampaigns = await amazonApiService.getCampaignsForProfile(profileId);
+      console.log(`📥 Trovate ${amazonCampaigns.length} campagne su Amazon per marketplace ${marketplace}`);
 
-    const campaignRepository = AppDataSource.getRepository(Campaign);
-
-    let created = 0;
-    let updated = 0;
-    let errors = 0;
-
-    // 3. Per ogni campagna Amazon, crea o aggiorna nel database
-    for (const amazonCampaign of amazonCampaigns) {
-      try {
-        // Cerca se la campagna esiste già nel database (per questo marketplace)
-        let campaign = await campaignRepository.findOne({
-          where: {
-            amazonCampaignId: amazonCampaign.campaignId.toString(),
-            marketplace: marketplace
-          }
-        });
-
-        if (campaign) {
-          // Aggiorna campagna esistente
-          campaign.name = amazonCampaign.name;
-          campaign.state = amazonCampaign.state;
-          campaign.dailyBudget = amazonCampaign.budget?.budget || null;
-          campaign.campaignType = amazonCampaign.targetingType || null;
-          campaign.biddingStrategy = amazonCampaign.biddingStrategy || null;
-
-          await campaignRepository.save(campaign);
-          updated++;
-          console.log(`✏️  Aggiornata: ${campaign.name} (${marketplace})`);
-        } else {
-          // Crea nuova campagna
-          campaign = campaignRepository.create({
-            amazonCampaignId: amazonCampaign.campaignId.toString(),
-            marketplace: marketplace,
-            name: amazonCampaign.name,
-            state: amazonCampaign.state,
-            dailyBudget: amazonCampaign.budget?.budget || null,
-            campaignType: amazonCampaign.targetingType || null,
-            biddingStrategy: amazonCampaign.biddingStrategy || null,
-            notes: `Sincronizzata da Amazon (${marketplace}) il ${new Date().toISOString()}`
+      // 3. Per ogni campagna Amazon, crea o aggiorna nel database
+      for (const amazonCampaign of amazonCampaigns) {
+        try {
+          // Cerca se la campagna esiste già nel database (per questo marketplace)
+          let campaign = await campaignRepository.findOne({
+            where: {
+              amazonCampaignId: amazonCampaign.campaignId.toString(),
+              marketplace: marketplace
+            }
           });
 
-          await campaignRepository.save(campaign);
-          created++;
-          console.log(`✅ Creata: ${campaign.name} (${marketplace})`);
+          if (campaign) {
+            // Aggiorna campagna esistente
+            campaign.name = amazonCampaign.name;
+            campaign.state = amazonCampaign.state;
+            campaign.dailyBudget = amazonCampaign.budget?.budget || null;
+            campaign.campaignType = amazonCampaign.targetingType || null;
+            campaign.biddingStrategy = amazonCampaign.biddingStrategy || null;
+
+            await campaignRepository.save(campaign);
+            updated++;
+            console.log(`✏️  Aggiornata: ${campaign.name} (${marketplace})`);
+          } else {
+            // Crea nuova campagna
+            campaign = campaignRepository.create({
+              amazonCampaignId: amazonCampaign.campaignId.toString(),
+              marketplace: marketplace,
+              name: amazonCampaign.name,
+              state: amazonCampaign.state,
+              dailyBudget: amazonCampaign.budget?.budget || null,
+              campaignType: amazonCampaign.targetingType || null,
+              biddingStrategy: amazonCampaign.biddingStrategy || null,
+              notes: `Sincronizzata da Amazon (${marketplace}) il ${new Date().toISOString()}`
+            });
+
+            await campaignRepository.save(campaign);
+            created++;
+            console.log(`✅ Creata: ${campaign.name} (${marketplace})`);
+          }
+        } catch (error: any) {
+          console.error(`❌ Errore sincronizzazione campagna ${amazonCampaign.campaignId}:`, error.message);
+          errors++;
         }
-      } catch (error: any) {
-        console.error(`❌ Errore sincronizzazione campagna ${amazonCampaign.campaignId}:`, error.message);
-        errors++;
+      }
+    } else {
+      // 2. Se profileId NON è fornito, usa sync multi-marketplace (tutti i profili)
+      console.log('🌍 Modalità multi-marketplace: sincronizzazione da TUTTI i profili...');
+
+      const allCampaignsWithProfile = await amazonApiService.getAllCampaignsFromAllProfiles();
+      console.log(`📥 Trovate ${allCampaignsWithProfile.length} campagne totali da tutti i marketplace`);
+
+      // 3. Per ogni campagna Amazon, crea o aggiorna nel database
+      for (const { campaign: amazonCampaign, countryCode } of allCampaignsWithProfile) {
+        try {
+          // Cerca se la campagna esiste già nel database (per questo marketplace)
+          let campaign = await campaignRepository.findOne({
+            where: {
+              amazonCampaignId: amazonCampaign.campaignId.toString(),
+              marketplace: countryCode
+            }
+          });
+
+          if (campaign) {
+            // Aggiorna campagna esistente
+            campaign.name = amazonCampaign.name;
+            campaign.state = amazonCampaign.state;
+            campaign.dailyBudget = amazonCampaign.budget?.budget || null;
+            campaign.campaignType = amazonCampaign.targetingType || null;
+            campaign.biddingStrategy = amazonCampaign.biddingStrategy || null;
+
+            await campaignRepository.save(campaign);
+            updated++;
+            console.log(`✏️  Aggiornata: ${campaign.name} (${countryCode})`);
+          } else {
+            // Crea nuova campagna
+            campaign = campaignRepository.create({
+              amazonCampaignId: amazonCampaign.campaignId.toString(),
+              marketplace: countryCode,
+              name: amazonCampaign.name,
+              state: amazonCampaign.state,
+              dailyBudget: amazonCampaign.budget?.budget || null,
+              campaignType: amazonCampaign.targetingType || null,
+              biddingStrategy: amazonCampaign.biddingStrategy || null,
+              notes: `Sincronizzata da Amazon (${countryCode}) il ${new Date().toISOString()}`
+            });
+
+            await campaignRepository.save(campaign);
+            created++;
+            console.log(`✅ Creata: ${campaign.name} (${countryCode})`);
+          }
+        } catch (error: any) {
+          console.error(`❌ Errore sincronizzazione campagna ${amazonCampaign.campaignId}:`, error.message);
+          errors++;
+        }
       }
     }
 
@@ -407,7 +454,7 @@ router.post('/sync-from-amazon', requireAuth, async (req: Request, res: Response
       success: true,
       message: 'Sincronizzazione completata',
       data: {
-        total: amazonCampaigns.length,
+        total: created + updated + errors,
         created,
         updated,
         errors

@@ -111,6 +111,51 @@ class AmazonApiService {
     return this.getCampaignsForProfile(amazonConfig.profileId);
   }
 
+  // Recupera tutte le campagne da tutti i profili (per account multi-marketplace unificati)
+  async getAllCampaignsFromAllProfiles(): Promise<Array<{ campaign: any, profileId: string, countryCode: string }>> {
+    try {
+      console.log('🌍 Recupero campagne da TUTTI i profili (multi-marketplace)...');
+
+      // 1. Ottieni tutti i profili disponibili
+      const profiles = await this.getProfiles();
+      console.log(`📋 Trovati ${profiles.length} profili, recupero campagne da ognuno...`);
+
+      const allCampaigns: Array<{ campaign: any, profileId: string, countryCode: string }> = [];
+
+      // 2. Per ogni profilo, recupera le campagne
+      for (const profile of profiles) {
+        try {
+          const profileId = profile.profileId.toString();
+          const countryCode = profile.countryCode;
+
+          console.log(`   📥 Profilo ${countryCode} (${profileId})...`);
+
+          const campaigns = await this.getCampaignsForProfile(profileId);
+
+          // Aggiungi metadata del profilo a ogni campagna
+          campaigns.forEach(campaign => {
+            allCampaigns.push({
+              campaign,
+              profileId,
+              countryCode
+            });
+          });
+
+          console.log(`      ✅ ${campaigns.length} campagne trovate`);
+        } catch (error: any) {
+          console.error(`      ❌ Errore recupero campagne per profilo ${profile.countryCode}:`, error.message);
+          // Continua con il prossimo profilo anche se questo fallisce
+        }
+      }
+
+      console.log(`✅ Totale: ${allCampaigns.length} campagne da ${profiles.length} profili`);
+      return allCampaigns;
+    } catch (error) {
+      console.error('❌ Errore recupero campagne multi-marketplace:', error);
+      throw error;
+    }
+  }
+
   // Recupera tutte le campagne per un profilo specifico
   async getCampaignsForProfile(profileId: string): Promise<any[]> {
     try {
