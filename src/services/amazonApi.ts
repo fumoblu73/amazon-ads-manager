@@ -177,6 +177,17 @@ class AmazonApiService {
 
       const campaigns = response.data.campaigns || [];
       console.log(`✅ Trovate ${campaigns.length} campagne per profilo ${profileId}`);
+
+      // LOG DETTAGLIATO: Mostra la risposta completa di Amazon
+      if (campaigns.length === 0) {
+        console.log(`   🔍 DEBUG: Risposta completa Amazon API per profilo ${profileId}:`);
+        console.log(`   📄 Status: ${response.status}`);
+        console.log(`   📄 Headers:`, JSON.stringify(response.headers, null, 2));
+        console.log(`   📄 Data:`, JSON.stringify(response.data, null, 2));
+      } else {
+        console.log(`   📄 Esempio prima campagna:`, JSON.stringify(campaigns[0], null, 2));
+      }
+
       return campaigns;
     } catch (error) {
       console.error(`❌ Errore recupero campagne per profilo ${profileId}:`, error);
