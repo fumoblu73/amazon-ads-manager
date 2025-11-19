@@ -95,12 +95,23 @@ Assicurati che il backend su Render abbia queste variabili:
 # Database
 DATABASE_URL=postgresql://postgres.dyagpkecnrasowyvbupb:o5NQuY%40jJHWfF%26@aws-1-eu-west-3.pooler.supabase.com:5432/postgres
 
-# Amazon API (aggiorna con i tuoi valori reali)
-AMAZON_CLIENT_ID=your_real_client_id
-AMAZON_CLIENT_SECRET=your_real_client_secret
-AMAZON_REFRESH_TOKEN=your_real_refresh_token
-AMAZON_PROFILE_ID=your_real_profile_id
-AMAZON_REGION=EU
+# Amazon API - Multi-Region Support
+# IMPORTANTE: Devi configurare le credenziali per OGNI regione dove hai campagne
+
+# EU Region (Europa: UK, IT, DE, FR, ES, etc.)
+AMAZON_EU_CLIENT_ID=your_eu_client_id
+AMAZON_EU_CLIENT_SECRET=your_eu_client_secret
+AMAZON_EU_REFRESH_TOKEN=your_eu_refresh_token
+
+# NA Region (Nord America: US, CA, MX, BR) - OBBLIGATORIO se hai campagne US
+AMAZON_NA_CLIENT_ID=your_na_client_id
+AMAZON_NA_CLIENT_SECRET=your_na_client_secret
+AMAZON_NA_REFRESH_TOKEN=your_na_refresh_token
+
+# FE Region (Far East: AU, JP, SG, IN) - OBBLIGATORIO se hai campagne AU
+AMAZON_FE_CLIENT_ID=your_fe_client_id
+AMAZON_FE_CLIENT_SECRET=your_fe_client_secret
+AMAZON_FE_REFRESH_TOKEN=your_fe_refresh_token
 
 # Security
 ADMIN_TOKEN=mio_token_segreto_admin_123
@@ -111,6 +122,22 @@ NODE_ENV=production
 PORT=10000
 LOG_LEVEL=info
 ```
+
+### 📋 Come Ottenere i Token Multi-Region
+
+Per ogni regione (EU, NA, FE):
+
+1. Vai su https://advertising.amazon.com
+2. Accedi con il tuo account Amazon Advertising
+3. Vai su **Settings** → **API** → **Developer Console**
+4. **PER OGNI REGIONE**:
+   - Crea una nuova applicazione (o usa quella esistente)
+   - Autorizza l'applicazione per la regione specifica
+   - Ottieni: Client ID, Client Secret, Refresh Token
+
+5. Inserisci i token nelle variabili d'ambiente corrispondenti su Render
+
+**NOTA IMPORTANTE**: Le tue campagne US richiedono token NA, non EU!
 
 ---
 
