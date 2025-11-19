@@ -25,20 +25,53 @@ router.get('/', async (req: Request, res: Response) => {
     const campaignRepository = AppDataSource.getRepository(Campaign);
 
     // Filtri opzionali
-    const { state, campaignType } = req.query;
+    const {
+      state,
+      campaignType,
+      marketplace,
+      minAcos,
+      maxAcos,
+      includeConfig
+    } = req.query;
+
     const where: any = {};
 
     if (state) where.state = state;
     if (campaignType) where.campaignType = campaignType;
+    if (marketplace) where.marketplace = marketplace;
 
-    const campaigns = await campaignRepository.find({
-      where,
-      order: { createdAt: 'DESC' }
-    });
+    // Query builder per filtri avanzati e join opzionale
+    let queryBuilder = campaignRepository
+      .createQueryBuilder('campaign')
+      .orderBy('campaign.createdAt', 'DESC');
+
+    // Applica filtri base
+    if (state) queryBuilder.andWhere('campaign.state = :state', { state });
+    if (campaignType) queryBuilder.andWhere('campaign.campaignType = :campaignType', { campaignType });
+    if (marketplace) queryBuilder.andWhere('campaign.marketplace = :marketplace', { marketplace });
+
+    // Join con automation_config se richiesto
+    if (includeConfig === 'true') {
+      queryBuilder
+        .leftJoinAndSelect('campaign.automationConfig', 'config')
+        .leftJoinAndSelect('config.book', 'book');
+    }
+
+    const campaigns = await queryBuilder.getMany();
+
+    // Se richiesto, calcola e filtra per ACoS
+    // Nota: ACoS non è salvato nella tabella campaigns, quindi questo filtro
+    // richiede dati esterni (reports). Per ora restituiamo tutte le campagne
+    // TODO: Implementare calcolo ACoS da reports quando disponibile
 
     res.json({
       success: true,
       count: campaigns.length,
+      filters: {
+        state: state || 'all',
+        campaignType: campaignType || 'all',
+        marketplace: marketplace || 'all'
+      },
       data: campaigns
     });
   } catch (error: any) {
