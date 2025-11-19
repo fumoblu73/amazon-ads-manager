@@ -86,9 +86,19 @@ export const booksApi = {
 // ================================================
 
 export const campaignsApi = {
-  getAll: async (filters?: { state?: string; campaignType?: string }) => {
+  getAll: async (filters?: {
+    state?: string;
+    campaignType?: string;
+    marketplace?: string;
+    minAcos?: number;
+    maxAcos?: number;
+    includeConfig?: boolean;
+  }) => {
     const response = await apiClient.get<ApiResponse<Campaign[]>>('/api/campaigns', {
-      params: filters,
+      params: {
+        ...filters,
+        includeConfig: filters?.includeConfig ? 'true' : undefined,
+      },
     });
     return response.data;
   },
@@ -192,6 +202,101 @@ export const automationApi = {
 
   triggerManual: async (token: string) => {
     const response = await apiClient.post<ApiResponse<void>>('/api/automation/trigger-manual', {}, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+};
+
+// ================================================
+// AUTOMATION CONFIG API
+// ================================================
+
+export interface AutomationConfig {
+  id: string;
+  campaignId: string;
+  bookId: string | null;
+
+  // Function 1
+  func1Enabled: boolean;
+  func1BidIncrease: number;
+  func1Frequency: number;
+  func1Impressions: number;
+  func1Clicks: number;
+
+  // Function 2
+  func2Enabled: boolean;
+  func2Frequency: number;
+  func2TimeframeWeeks: number;
+
+  // Function 3
+  func3Enabled: boolean;
+  func3Frequency: number;
+  func3TimeframeA: number;
+  func3TimeframeB: number;
+  func3TimeframeC: number;
+  func3ClicksPause: number;
+  func3Clicks65days: number;
+
+  // Function 4
+  func4Enabled: boolean;
+  func4Frequency: number;
+  func4TimeframeA: number;
+  func4TimeframeB: number;
+  func4TimeframeC: number;
+  func4ClicksNegative: number;
+  func4SpendNegative: number;
+
+  // Function 5
+  func5Enabled: boolean;
+  func5Frequency: number;
+  func5MinOrders: number;
+  func5BidBroad: number;
+  func5BidExact: number;
+  func5BidPhrase: number;
+  func5BidExpanded: number;
+
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const automationConfigApi = {
+  getByCampaignId: async (campaignId: string) => {
+    const response = await apiClient.get<ApiResponse<AutomationConfig>>(`/api/automation-config/${campaignId}`);
+    return response.data;
+  },
+
+  create: async (config: Partial<AutomationConfig>, token: string) => {
+    const response = await apiClient.post<ApiResponse<AutomationConfig>>('/api/automation-config', config, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+
+  update: async (campaignId: string, config: Partial<AutomationConfig>, token: string) => {
+    const response = await apiClient.put<ApiResponse<AutomationConfig>>(
+      `/api/automation-config/${campaignId}`,
+      config,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+    return response.data;
+  },
+
+  toggleFunction: async (campaignId: string, functionNumber: number, enabled: boolean, token: string) => {
+    const response = await apiClient.patch<ApiResponse<AutomationConfig>>(
+      `/api/automation-config/${campaignId}/toggle/${functionNumber}`,
+      { enabled },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+    return response.data;
+  },
+
+  delete: async (campaignId: string, token: string) => {
+    const response = await apiClient.delete<ApiResponse<void>>(`/api/automation-config/${campaignId}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     return response.data;

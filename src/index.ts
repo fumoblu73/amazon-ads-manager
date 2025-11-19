@@ -1,6 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import automationRoutes from './routes/automation';
+import automationConfigRoutes from './routes/automationConfig';
 import booksRoutes from './routes/books';
 import campaignsRoutes from './routes/campaigns';
 import logsRoutes from './routes/logs';
@@ -36,6 +37,7 @@ app.get('/', (req, res) => {
       health: '/health',
       automation_trigger: '/api/automation/trigger?secret=YOUR_SECRET (POST)',
       automation_status: '/api/automation/status',
+      automation_config: '/api/automation-config',
       books: '/api/books',
       campaigns: '/api/campaigns',
       logs: '/api/logs'
@@ -52,6 +54,7 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/api/automation', automationRoutes);
+app.use('/api/automation-config', automationConfigRoutes);
 app.use('/api/books', booksRoutes);
 app.use('/api/campaigns', campaignsRoutes);
 app.use('/api/logs', logsRoutes);
