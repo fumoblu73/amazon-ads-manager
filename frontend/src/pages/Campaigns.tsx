@@ -135,49 +135,26 @@ export default function Campaigns() {
       localStorage.setItem('adminToken', token);
     }
 
-    setLoadingProfiles(true);
+    setSyncing(true);
+    setSyncMessage(null);
+
     try {
-      const response = await campaignsApi.getProfiles(token);
-      if (!response.success || !response.data) {
-        throw new Error('Impossibile caricare i profili');
+      // Chiama l'endpoint SENZA profileId per sincronizzare tutti i marketplace
+      const response = await campaignsApi.syncFromAmazon(token);
+
+      if (response.success && response.data) {
+        setSyncMessage({
+          type: 'success',
+          text: `Sync completato: ${response.data.created} create, ${response.data.updated} aggiornate`
+        });
+
+        fetchCampaigns();
       }
-
-      const allProfiles = response.data;
-      setLoadingProfiles(false);
-
-      setSyncing(true);
-      setSyncMessage(null);
-
-      let totalCreated = 0;
-      let totalUpdated = 0;
-      let errors = 0;
-
-      for (const profile of allProfiles) {
-        try {
-          const syncResponse = await campaignsApi.syncFromAmazon(token, profile.profileId);
-          if (syncResponse.success && syncResponse.data) {
-            totalCreated += syncResponse.data.created;
-            totalUpdated += syncResponse.data.updated;
-          }
-        } catch (err: any) {
-          console.error(`Errore sync marketplace ${profile.countryCode}:`, err);
-          errors++;
-        }
-      }
-
-      setSyncMessage({
-        type: errors === allProfiles.length ? 'error' : 'success',
-        text: `Sync completato: ${totalCreated} create, ${totalUpdated} aggiornate${errors > 0 ? `, ${errors} errori` : ''}`
-      });
-
-      fetchCampaigns();
-
     } catch (err: any) {
       setSyncMessage({
         type: 'error',
         text: `Errore: ${err.response?.data?.error || err.message}`
       });
-      setLoadingProfiles(false);
     } finally {
       setSyncing(false);
       setTimeout(() => setSyncMessage(null), 5000);
