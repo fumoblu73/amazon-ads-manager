@@ -45,6 +45,7 @@ export async function executeFunc3(
   campaignId: string,
   campaignType: 1 | 2 | 3 | 4,
   campaignName: string,
+  marketplace: string,
   book: Book,
   totalImpressions30Days: number,
   config?: Partial<Func3Config>
@@ -94,23 +95,23 @@ export async function executeFunc3(
     startDate65.setDate(startDate65.getDate() - 65);
 
     // 4. Richiedi report
-    const reportId = await amazonApiService.requestReport(formatDateForAmazon(startDate), [
+    const reportId = await amazonApiService.requestReport(marketplace, formatDateForAmazon(startDate), [
       'keywordId', 'targetId', 'impressions', 'clicks', 'cost', 'sales', 'orders', 'bid'
     ]);
-    const reportData = await amazonApiService.waitAndDownloadReport(reportId);
+    const reportData = await amazonApiService.waitAndDownloadReport(marketplace, reportId);
 
     // Report ultimi 65 giorni per controllo pausa
-    const reportId65 = await amazonApiService.requestReport(formatDateForAmazon(startDate65), [
+    const reportId65 = await amazonApiService.requestReport(marketplace, formatDateForAmazon(startDate65), [
       'keywordId', 'targetId', 'clicks', 'orders'
     ]);
-    const reportData65 = await amazonApiService.waitAndDownloadReport(reportId65);
+    const reportData65 = await amazonApiService.waitAndDownloadReport(marketplace, reportId65);
 
     // 5. Recupera items
     let items: any[] = [];
     if (campaignType === 1 || campaignType === 3) {
-      items = await amazonApiService.getKeywords(campaignId);
+      items = await amazonApiService.getKeywords(marketplace, campaignId);
     } else {
-      items = await amazonApiService.getTargets(campaignId);
+      items = await amazonApiService.getTargets(marketplace, campaignId);
     }
 
     console.log(`📊 Trovati ${items.length} items da analizzare`);
@@ -150,9 +151,9 @@ export async function executeFunc3(
           console.log(`   ⏸️  PAUSA ${itemName}: clicks=${clicks}/${clicks65}, orders=${orders}/${orders65}`);
 
           if (campaignType === 1 || campaignType === 3) {
-            await amazonApiService.updateKeywordState(itemId, 'paused');
+            await amazonApiService.updateKeywordState(marketplace, itemId, 'paused');
           } else {
-            await amazonApiService.updateTargetState(itemId, 'paused');
+            await amazonApiService.updateTargetState(marketplace, itemId, 'paused');
           }
 
           result.itemsPaused++;
@@ -172,9 +173,9 @@ export async function executeFunc3(
             console.log(`   ${bidAdjustment > 0 ? '🔼' : '🔽'} ${itemName}: ${currentBid.toFixed(2)} → ${newBid.toFixed(2)} (Fascia ${band.band})`);
 
             if (campaignType === 1 || campaignType === 3) {
-              await amazonApiService.updateKeywordBid(itemId, newBid);
+              await amazonApiService.updateKeywordBid(marketplace, itemId, newBid);
             } else {
-              await amazonApiService.updateTargetBid(itemId, newBid);
+              await amazonApiService.updateTargetBid(marketplace, itemId, newBid);
             }
 
             if (bidAdjustment > 0) result.itemsBidIncreased++;
