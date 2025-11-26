@@ -46,15 +46,40 @@ router.post('/trigger', async (req: Request, res: Response) => {
     });
   }
 
-  // 3. RISPONDE SUBITO (evita timeout HTTP)
+  // 3. Pre-warm database (wake up Supabase if paused)
+  let dbStatus = 'unknown';
+  try {
+    const { AppDataSource } = await import('../config/database');
+    await AppDataSource.query('SELECT 1');
+    dbStatus = 'active';
+    console.log('✅ Database pre-warmed successfully');
+  } catch (error) {
+    console.error('⚠️  Database pre-warm failed, retrying...', error);
+
+    // Retry con backoff di 2 secondi
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    try {
+      const { AppDataSource } = await import('../config/database');
+      await AppDataSource.query('SELECT 1');
+      dbStatus = 'active (after retry)';
+      console.log('✅ Database pre-warmed successfully after retry');
+    } catch (retryError) {
+      dbStatus = 'failed';
+      console.error('❌ Database pre-warm failed after retry:', retryError);
+    }
+  }
+
+  // 4. RISPONDE SUBITO (evita timeout HTTP)
   res.json({
     success: true,
     message: 'Automations queued successfully',
+    dbStatus,
     timestamp: new Date().toISOString(),
     note: 'Execution started in background. Check /api/automation/status for progress.'
   });
 
-  // 4. Triggera esecuzione in background (non aspetta risposta)
+  // 5. Triggera esecuzione in background (non aspetta risposta)
   console.log('🚀 Triggering automations in background...');
   automationQueue.emit('run');
 });
