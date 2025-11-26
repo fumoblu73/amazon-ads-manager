@@ -35,6 +35,7 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     endpoints: {
       health: '/health',
+      health_db: '/health/db (database keep-alive)',
       automation_trigger: '/api/automation/trigger?secret=YOUR_SECRET (POST)',
       automation_status: '/api/automation/status',
       automation_config: '/api/automation-config',
@@ -51,6 +52,31 @@ app.get('/health', (req, res) => {
     message: 'Amazon Ads Manager is running',
     timestamp: new Date().toISOString()
   });
+});
+
+// Health check con query database (per keep-alive Supabase)
+app.get('/health/db', async (req, res) => {
+  try {
+    const { AppDataSource } = await import('./config/database');
+
+    // Query leggera per verificare che il database sia attivo
+    await AppDataSource.query('SELECT 1');
+
+    res.json({
+      status: 'OK',
+      database: 'connected',
+      timestamp: new Date().toISOString(),
+      message: 'Database is active and responding'
+    });
+  } catch (error) {
+    console.error('❌ Health check database failed:', error);
+    res.status(503).json({
+      status: 'ERROR',
+      database: 'disconnected',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 app.use('/api/automation', automationRoutes);

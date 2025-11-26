@@ -40,12 +40,25 @@ const getDatabaseConfig = () => {
 
 export const AppDataSource = new DataSource(getDatabaseConfig());
 
-export const initializeDatabase = async () => {
-  try {
-    await AppDataSource.initialize();
-    console.log('✅ Database connesso con successo!');
-  } catch (error) {
-    console.error('❌ Errore connessione database:', error);
-    process.exit(1);
+export const initializeDatabase = async (maxRetries = 3): Promise<void> => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      if (!AppDataSource.isInitialized) {
+        await AppDataSource.initialize();
+        console.log('✅ Database connesso con successo!');
+        return;
+      }
+    } catch (error) {
+      console.error(`❌ Tentativo ${attempt}/${maxRetries} di connessione database fallito:`, error);
+
+      if (attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+        console.log(`⏳ Nuovo tentativo tra ${delay / 1000}s...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        console.error('❌ Impossibile connettersi al database dopo', maxRetries, 'tentativi');
+        throw error;
+      }
+    }
   }
 };
