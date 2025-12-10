@@ -8,6 +8,8 @@ import logsRoutes from './routes/logs';
 import authRoutes from './routes/auth';
 import kdpBooksRoutes from './routes/kdp/books';
 import kdpSyncRoutes from './routes/kdp/sync';
+import kdpAnalyticsRoutes from './routes/kdp/analytics';
+import kdpTestDataRoutes from './routes/kdp/testData';
 import { initializeDatabase } from './config/database';
 import { automationScheduler } from './automation/scheduler';
 
@@ -47,7 +49,8 @@ app.get('/', (req, res) => {
       logs: '/api/logs',
       auth: '/api/auth (register, login, me)',
       kdp_books: '/api/kdp/books',
-      kdp_sync: '/api/kdp/sync'
+      kdp_sync: '/api/kdp/sync',
+      kdp_analytics: '/api/kdp/analytics (book/:id, overview, comparison)'
     }
   });
 });
@@ -93,6 +96,8 @@ app.use('/api/logs', logsRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/kdp/books', kdpBooksRoutes);
 app.use('/api/kdp/sync', kdpSyncRoutes);
+app.use('/api/kdp/analytics', kdpAnalyticsRoutes);
+app.use('/api/kdp/test-data', kdpTestDataRoutes);
 
 // Inizializza database, scheduler e poi avvia server
 const startServer = async () => {
