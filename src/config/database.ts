@@ -5,6 +5,11 @@ import { KeywordPerformance } from '../models/KeywordPerformance';
 import { Campaign } from '../models/Campaign';
 import { Book } from '../models/Book';
 import { AutomationConfigEntity } from '../models/AutomationConfigEntity';
+import { User } from '../entities/User';
+import { KdpBook } from '../entities/KdpBook';
+import { KdpDailyStats } from '../entities/KdpDailyStats';
+import { JournalEvent } from '../entities/JournalEvent';
+import { KdpSyncLog } from '../entities/KdpSyncLog';
 
 dotenv.config();
 
@@ -16,7 +21,7 @@ const getDatabaseConfig = () => {
       url: process.env.DATABASE_URL,
       synchronize: false, // Non auto-sincronizzare in produzione
       logging: process.env.NODE_ENV === 'development',
-      entities: [AutomationLog, KeywordPerformance, Campaign, Book, AutomationConfigEntity],
+      entities: [AutomationLog, KeywordPerformance, Campaign, Book, AutomationConfigEntity, User, KdpBook, KdpDailyStats, JournalEvent, KdpSyncLog],
       migrations: ['src/migrations/**/*.ts'],
       ssl: {
         rejectUnauthorized: false // Necessario per Supabase
@@ -33,7 +38,7 @@ const getDatabaseConfig = () => {
     database: process.env.DB_DATABASE || 'amazon_ads_manager',
     synchronize: true, // Auto-crea le tabelle (solo sviluppo!)
     logging: process.env.NODE_ENV === 'development',
-    entities: [AutomationLog, KeywordPerformance, Campaign, Book, AutomationConfigEntity],
+    entities: [AutomationLog, KeywordPerformance, Campaign, Book, AutomationConfigEntity, User, KdpBook, KdpDailyStats, JournalEvent, KdpSyncLog],
     migrations: ['src/migrations/**/*.ts'],
   };
 };
