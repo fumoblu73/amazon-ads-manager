@@ -5,6 +5,10 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 
 export interface AuthRequest extends Request {
   userId?: string;
+  body: any;
+  query: any;
+  params: any;
+  headers: any;
 }
 
 export interface JwtPayload {
