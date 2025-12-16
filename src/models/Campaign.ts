@@ -1,5 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, UpdateDateColumn, CreateDateColumn, Index, OneToOne } from 'typeorm';
-import { AutomationConfigEntity } from './AutomationConfigEntity';
+import { Entity, PrimaryGeneratedColumn, Column, UpdateDateColumn, CreateDateColumn, Index } from 'typeorm';
 
 @Entity('campaigns')
 @Index(['amazonCampaignId', 'marketplace'], { unique: true })
@@ -36,8 +35,4 @@ export class Campaign {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
-
-  // Relazione con automation_config
-  @OneToOne(() => AutomationConfigEntity, (config) => config.campaign)
-  automationConfig?: AutomationConfigEntity;
 }
