@@ -8,7 +8,6 @@ import type {
   LogStats,
   AutomationStatus,
   KdpBook,
-  KdpDailyStats,
   JournalEvent,
   EventCategoryMeta,
   RoiAnalytics,

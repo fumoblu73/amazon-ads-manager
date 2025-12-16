@@ -45,7 +45,7 @@ export default function HistoricalStats() {
 
   const formatCurrency = (value: number) => `$${value.toFixed(2)}`;
 
-  const bookColumns: Column<typeof data.books[0]>[] = [
+  const bookColumns: Column<any>[] = [
     {
       key: 'title',
       header: 'Title',

@@ -34,7 +34,7 @@ export default function BookStats() {
 
   const formatCurrency = (value: number) => `$${value.toFixed(2)}`;
 
-  const columns: Column<typeof data.books[0]>[] = [
+  const columns: Column<any>[] = [
     {
       key: 'title',
       header: 'Title',

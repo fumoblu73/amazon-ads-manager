@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import {
   LineChart,
   Line,
@@ -45,7 +45,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 shadow-lg">
       <p className="text-sm font-medium text-white mb-2">{label}</p>
-      {payload.map((entry, index) => (
+      {payload.map((entry: any, index: number) => (
         <div key={index} className="flex items-center gap-2 text-sm">
           <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
           <span className="text-gray-400">{entry.name}:</span>
