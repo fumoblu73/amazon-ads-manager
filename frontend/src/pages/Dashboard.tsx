@@ -114,7 +114,7 @@ export default function Dashboard() {
               </svg>
               <h2 className="text-sm font-semibold text-white">Automazioni</h2>
             </div>
-            {automationStatus && (
+            {automationStatus && automationStatus.scheduler ? (
               <div className="space-y-3 flex-1">
                 <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-3 rounded-lg">
                   <div className="text-xs text-gray-600 mb-1">Scheduler</div>
@@ -125,15 +125,19 @@ export default function Dashboard() {
                 <div className="bg-gradient-to-br from-green-50 to-green-100 p-3 rounded-lg">
                   <div className="text-xs text-gray-600 mb-1">Tasks Attivi</div>
                   <div className="text-xl font-bold text-green-700">
-                    {automationStatus.scheduler.activeTasks}
+                    {automationStatus.scheduler.activeTasks || 0}
                   </div>
                 </div>
                 <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-3 rounded-lg">
                   <div className="text-xs text-gray-600 mb-1">Ultima Esecuzione</div>
                   <div className="text-lg font-bold text-purple-700">
-                    {automationStatus.lastExecution.status}
+                    {automationStatus.lastExecution?.status || 'N/A'}
                   </div>
                 </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+                Automazioni temporaneamente disabilitate
               </div>
             )}
           </div>
