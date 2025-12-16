@@ -1,7 +1,9 @@
 export default function Login() {
   const handleLogin = () => {
     // Reindirizza al backend che gestirà l'OAuth flow
-    window.location.href = `${import.meta.env.VITE_API_URL}/api/auth/login`;
+    // In produzione usa percorsi relativi (stesso dominio)
+    const apiUrl = import.meta.env.PROD ? '' : 'http://localhost:3000';
+    window.location.href = `${apiUrl}/api/auth/login`;
   };
 
   return (

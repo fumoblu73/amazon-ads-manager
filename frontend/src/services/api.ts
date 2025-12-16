@@ -20,12 +20,12 @@ import type {
   BookshelfFilters
 } from '../types';
 
-// Base API URL - cambia in produzione
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://amazon-ads-manager.onrender.com';
+// In production, use relative paths (same domain). In development, use localhost backend
+const API_BASE_URL = import.meta.env.PROD ? '' : 'http://localhost:3000';
 
 // Debug log
 console.log('🔗 API Base URL:', API_BASE_URL);
-console.log('🔧 VITE_API_URL env:', import.meta.env.VITE_API_URL);
+console.log('🔧 Production mode:', import.meta.env.PROD);
 
 // Axios instance
 const apiClient = axios.create({

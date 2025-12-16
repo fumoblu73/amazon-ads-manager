@@ -1,6 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
+import path from 'path';
 // Temporarily disabled due to TypeScript errors - will be fixed after OAuth deploy
 // import automationRoutes from './routes/automation';
 import booksRoutes from './routes/books';
@@ -78,6 +79,17 @@ app.use('/api/kdp/books', kdpBooksRoutes);
 app.use('/api/kdp', kdpAnalyticsRoutes);
 app.use('/api/kdp/bsr', kdpBsrRoutes);
 app.use('/api/kdp/journal-events', kdpJournalEventsRoutes);
+
+// Serve frontend static files in production
+if (process.env.NODE_ENV === 'production') {
+  const frontendPath = path.join(__dirname, '..', 'frontend', 'dist');
+  app.use(express.static(frontendPath));
+
+  // Handle client-side routing - serve index.html for all non-API routes
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(frontendPath, 'index.html'));
+  });
+}
 
 // Inizializza database, scheduler e poi avvia server
 const startServer = async () => {

@@ -118,12 +118,8 @@ router.get('/callback', async (req: Request, res: Response) => {
     // Cancella lo state cookie
     res.clearCookie('oauth_state');
 
-    // Reindirizza al frontend
-    const frontendUrl = process.env.NODE_ENV === 'production'
-      ? process.env.FRONTEND_URL || 'https://amazon-ads-manager.onrender.com'
-      : 'http://localhost:5173';
-
-    res.redirect(`${frontendUrl}/dashboard`);
+    // Reindirizza al dashboard (stesso dominio in produzione)
+    res.redirect('/dashboard');
   } catch (error: any) {
     console.error('OAuth callback error:', error);
     res.status(500).json({ error: 'Authentication failed', details: error.message });
