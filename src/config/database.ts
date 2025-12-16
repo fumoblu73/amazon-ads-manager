@@ -18,7 +18,7 @@ const getDatabaseConfig = () => {
     return {
       type: 'postgres' as const,
       url: process.env.DATABASE_URL,
-      synchronize: false, // Non auto-sincronizzare in produzione
+      synchronize: true, // Temporaneamente true per aggiornare schema
       logging: process.env.NODE_ENV === 'development',
       entities: [User, AutomationLog, KeywordPerformance, Campaign, Book, KdpBook, KdpDailyStats, JournalEvent, KdpSyncLog],
       migrations: ['src/migrations/**/*.ts'],
