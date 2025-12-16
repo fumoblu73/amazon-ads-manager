@@ -4,12 +4,11 @@ import { AutomationLog } from '../models/AutomationLog';
 import { KeywordPerformance } from '../models/KeywordPerformance';
 import { Campaign } from '../models/Campaign';
 import { Book } from '../models/Book';
-import { AutomationConfigEntity } from '../models/AutomationConfigEntity';
-import { User } from '../entities/User';
-import { KdpBook } from '../entities/KdpBook';
-import { KdpDailyStats } from '../entities/KdpDailyStats';
-import { JournalEvent } from '../entities/JournalEvent';
-import { KdpSyncLog } from '../entities/KdpSyncLog';
+import { KdpBook } from '../models/KdpBook';
+import { KdpDailyStats } from '../models/KdpDailyStats';
+import { JournalEvent } from '../models/JournalEvent';
+import { KdpSyncLog } from '../models/KdpSyncLog';
+import { User } from '../models/User';
 
 dotenv.config();
 
@@ -21,7 +20,7 @@ const getDatabaseConfig = () => {
       url: process.env.DATABASE_URL,
       synchronize: false, // Non auto-sincronizzare in produzione
       logging: process.env.NODE_ENV === 'development',
-      entities: [AutomationLog, KeywordPerformance, Campaign, Book, AutomationConfigEntity, User, KdpBook, KdpDailyStats, JournalEvent, KdpSyncLog],
+      entities: [User, AutomationLog, KeywordPerformance, Campaign, Book, KdpBook, KdpDailyStats, JournalEvent, KdpSyncLog],
       migrations: ['src/migrations/**/*.ts'],
       ssl: {
         rejectUnauthorized: false // Necessario per Supabase
@@ -38,32 +37,26 @@ const getDatabaseConfig = () => {
     database: process.env.DB_DATABASE || 'amazon_ads_manager',
     synchronize: true, // Auto-crea le tabelle (solo sviluppo!)
     logging: process.env.NODE_ENV === 'development',
-    entities: [AutomationLog, KeywordPerformance, Campaign, Book, AutomationConfigEntity, User, KdpBook, KdpDailyStats, JournalEvent, KdpSyncLog],
+    entities: [User, AutomationLog, KeywordPerformance, Campaign, Book, KdpBook, KdpDailyStats, JournalEvent, KdpSyncLog],
     migrations: ['src/migrations/**/*.ts'],
   };
 };
 
 export const AppDataSource = new DataSource(getDatabaseConfig());
 
-export const initializeDatabase = async (maxRetries = 3): Promise<void> => {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      if (!AppDataSource.isInitialized) {
-        await AppDataSource.initialize();
-        console.log('✅ Database connesso con successo!');
-        return;
-      }
-    } catch (error) {
-      console.error(`❌ Tentativo ${attempt}/${maxRetries} di connessione database fallito:`, error);
+export const initializeDatabase = async () => {
+  // Skip database connection if USE_MOCK_DATA is enabled
+  if (process.env.USE_MOCK_DATA === 'true') {
+    console.log('⚠️  Database connection skipped (USE_MOCK_DATA=true)');
+    console.log('📊 Using mock data for all endpoints');
+    return;
+  }
 
-      if (attempt < maxRetries) {
-        const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
-        console.log(`⏳ Nuovo tentativo tra ${delay / 1000}s...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      } else {
-        console.error('❌ Impossibile connettersi al database dopo', maxRetries, 'tentativi');
-        throw error;
-      }
-    }
+  try {
+    await AppDataSource.initialize();
+    console.log('✅ Database connesso con successo!');
+  } catch (error) {
+    console.error('❌ Errore connessione database:', error);
+    process.exit(1);
   }
 };

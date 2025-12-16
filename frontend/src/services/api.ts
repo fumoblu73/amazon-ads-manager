@@ -3,15 +3,30 @@ import type {
   ApiResponse,
   Book,
   Campaign,
-  Profile,
   AutomationLog,
   CampaignStats,
   LogStats,
-  AutomationStatus
+  AutomationStatus,
+  KdpBook,
+  KdpDailyStats,
+  JournalEvent,
+  EventCategoryMeta,
+  RoiAnalytics,
+  BsrAnalysis,
+  KdpDashboardSummary,
+  HistoricalStatsData,
+  BookStatsData,
+  CountryStatsData,
+  MonthComparisonData,
+  BookshelfFilters
 } from '../types';
 
 // Base API URL - cambia in produzione
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://amazon-ads-manager.onrender.com';
+
+// Debug log
+console.log('🔗 API Base URL:', API_BASE_URL);
+console.log('🔧 VITE_API_URL env:', import.meta.env.VITE_API_URL);
 
 // Axios instance
 const apiClient = axios.create({
@@ -86,19 +101,9 @@ export const booksApi = {
 // ================================================
 
 export const campaignsApi = {
-  getAll: async (filters?: {
-    state?: string;
-    campaignType?: string;
-    marketplace?: string;
-    minAcos?: number;
-    maxAcos?: number;
-    includeConfig?: boolean;
-  }) => {
+  getAll: async (filters?: { state?: string; campaignType?: string }) => {
     const response = await apiClient.get<ApiResponse<Campaign[]>>('/api/campaigns', {
-      params: {
-        ...filters,
-        includeConfig: filters?.includeConfig ? 'true' : undefined,
-      },
+      params: filters,
     });
     return response.data;
   },
@@ -110,27 +115,6 @@ export const campaignsApi = {
 
   getStats: async () => {
     const response = await apiClient.get<ApiResponse<CampaignStats>>('/api/campaigns/stats/summary');
-    return response.data;
-  },
-
-  syncFromAmazon: async (token: string, profileId?: string) => {
-    const response = await apiClient.post<ApiResponse<{ total: number; created: number; updated: number; errors: number }>>(
-      '/api/campaigns/sync-from-amazon',
-      profileId ? { profileId } : {},
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    );
-    return response.data;
-  },
-
-  getProfiles: async (token: string) => {
-    const response = await apiClient.get<ApiResponse<Profile[]>>(
-      '/api/campaigns/profiles',
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    );
     return response.data;
   },
 };
@@ -209,74 +193,227 @@ export const automationApi = {
 };
 
 // ================================================
-// AUTOMATION CONFIG API
+// KDP BOOKS API
 // ================================================
 
-export interface AutomationConfig {
-  id: string;
-  campaignId: string;
-  bookId: string | null;
-
-  // Function 1
-  func1Enabled: boolean;
-  func1BidIncrease: number;
-  func1Frequency: number;
-  func1Impressions: number;
-  func1Clicks: number;
-
-  // Function 2
-  func2Enabled: boolean;
-  func2Frequency: number;
-  func2TimeframeWeeks: number;
-
-  // Function 3
-  func3Enabled: boolean;
-  func3Frequency: number;
-  func3TimeframeA: number;
-  func3TimeframeB: number;
-  func3TimeframeC: number;
-  func3ClicksPause: number;
-  func3Clicks65days: number;
-
-  // Function 4
-  func4Enabled: boolean;
-  func4Frequency: number;
-  func4TimeframeA: number;
-  func4TimeframeB: number;
-  func4TimeframeC: number;
-  func4ClicksNegative: number;
-  func4SpendNegative: number;
-
-  // Function 5
-  func5Enabled: boolean;
-  func5Frequency: number;
-  func5MinOrders: number;
-  func5BidBroad: number;
-  func5BidExact: number;
-  func5BidPhrase: number;
-  func5BidExpanded: number;
-
-  createdAt: string;
-  updatedAt: string;
-}
-
-export const automationConfigApi = {
-  getByCampaignId: async (campaignId: string) => {
-    const response = await apiClient.get<ApiResponse<AutomationConfig>>(`/api/automation-config/${campaignId}`);
+export const kdpBooksApi = {
+  getAll: async (filters?: BookshelfFilters) => {
+    const response = await apiClient.get<ApiResponse<KdpBook[]>>('/api/kdp/books', {
+      params: filters,
+    });
     return response.data;
   },
 
-  create: async (config: Partial<AutomationConfig>, token: string) => {
-    const response = await apiClient.post<ApiResponse<AutomationConfig>>('/api/automation-config', config, {
+  getById: async (id: string) => {
+    const response = await apiClient.get<ApiResponse<KdpBook>>(`/api/kdp/books/${id}`);
+    return response.data;
+  },
+
+  sync: async (token: string) => {
+    const response = await apiClient.post<ApiResponse<{ message: string; booksSynced: number }>>(
+      '/api/kdp/books/sync',
+      {},
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+    return response.data;
+  },
+
+  create: async (book: Omit<KdpBook, 'id' | 'userId' | 'createdAt' | 'updatedAt'>, token: string) => {
+    const response = await apiClient.post<ApiResponse<KdpBook>>('/api/kdp/books', book, {
       headers: { Authorization: `Bearer ${token}` },
     });
     return response.data;
   },
 
-  update: async (campaignId: string, config: Partial<AutomationConfig>, token: string) => {
-    const response = await apiClient.put<ApiResponse<AutomationConfig>>(
-      `/api/automation-config/${campaignId}`,
-      config,
+  update: async (id: string, book: Partial<KdpBook>, token: string) => {
+    const response = await apiClient.patch<ApiResponse<KdpBook>>(`/api/kdp/books/${id}`, book, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+
+  delete: async (id: string, token: string) => {
+    const response = await apiClient.delete<ApiResponse<void>>(`/api/kdp/books/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+};
+
+// ================================================
+// KDP ANALYTICS API
+// ================================================
+
+export const kdpAnalyticsApi = {
+  getRoiAnalytics: async (bookId: string, startDate?: string, endDate?: string) => {
+    const response = await apiClient.get<RoiAnalytics>(`/api/kdp/analytics/${bookId}`, {
+      params: { startDate, endDate },
+    });
+    return response.data;
+  },
+
+  getDashboardSummary: async (startDate?: string, endDate?: string) => {
+    const response = await apiClient.get<KdpDashboardSummary>('/api/kdp/dashboard/summary', {
+      params: { startDate, endDate },
+    });
+    return response.data;
+  },
+
+  getHistoricalStats: async (filters?: {
+    startDate?: string;
+    endDate?: string;
+    bookId?: string;
+    marketplace?: string;
+  }) => {
+    const response = await apiClient.get<HistoricalStatsData>('/api/kdp/analytics/historical', {
+      params: filters,
+    });
+    return response.data;
+  },
+
+  getBookStats: async (filters?: {
+    startDate?: string;
+    endDate?: string;
+    metric?: string;
+  }) => {
+    const response = await apiClient.get<BookStatsData>('/api/kdp/analytics/book-stats', {
+      params: filters,
+    });
+    return response.data;
+  },
+
+  getCountryStats: async (startDate?: string, endDate?: string) => {
+    const response = await apiClient.get<CountryStatsData>('/api/kdp/analytics/country', {
+      params: { startDate, endDate },
+    });
+    return response.data;
+  },
+
+  getMonthComparison: async (month1: string, month2: string) => {
+    const response = await apiClient.get<MonthComparisonData>('/api/kdp/analytics/month-comparison', {
+      params: { month1, month2 },
+    });
+    return response.data;
+  },
+};
+
+// ================================================
+// BSR API
+// ================================================
+
+export const bsrApi = {
+  getAnalysis: async (bookId: string, startDate?: string, endDate?: string) => {
+    const response = await apiClient.get<BsrAnalysis>(`/api/kdp/bsr/${bookId}`, {
+      params: { startDate, endDate },
+    });
+    return response.data;
+  },
+
+  getTrend: async (bookId: string, startDate?: string, endDate?: string) => {
+    const response = await apiClient.get<Omit<BsrAnalysis, 'history'>>(`/api/kdp/bsr/${bookId}/trend`, {
+      params: { startDate, endDate },
+    });
+    return response.data;
+  },
+
+  compareBooks: async (bookIds: string[], startDate?: string, endDate?: string) => {
+    const response = await apiClient.get<{ books: Array<{
+      bookId: string;
+      bookTitle: string;
+      asin: string;
+      statistics: BsrAnalysis['statistics'];
+    }> }>('/api/kdp/bsr/comparison/books', {
+      params: {
+        bookIds: bookIds.join(','),
+        startDate,
+        endDate,
+      },
+    });
+    return response.data;
+  },
+
+  getAlert: async (bookId: string, days = 7, threshold = 20) => {
+    const response = await apiClient.get<{
+      bookId: string;
+      bookTitle: string;
+      hasAlert: boolean;
+      alertType: 'improvement' | 'decline' | 'none';
+      message: string;
+      currentBsr: number | null;
+      trendPercentage: number | null;
+      period: {
+        days: number;
+        startDate: string;
+        endDate: string;
+      };
+    }>(`/api/kdp/bsr/${bookId}/alert`, {
+      params: { days, threshold },
+    });
+    return response.data;
+  },
+};
+
+// ================================================
+// JOURNAL EVENTS API
+// ================================================
+
+export const journalEventsApi = {
+  getAll: async (filters?: {
+    bookId?: string;
+    startDate?: string;
+    endDate?: string;
+    category?: string;
+  }) => {
+    const response = await apiClient.get<{ count: number; events: JournalEvent[] }>('/api/kdp/journal-events', {
+      params: filters,
+    });
+    return response.data;
+  },
+
+  getById: async (id: string) => {
+    const response = await apiClient.get<{ event: JournalEvent }>(`/api/kdp/journal-events/${id}`);
+    return response.data;
+  },
+
+  getTimeline: async (bookId: string, startDate?: string, endDate?: string) => {
+    const response = await apiClient.get<{
+      bookId: string;
+      bookTitle: string;
+      period: {
+        startDate: string | null;
+        endDate: string | null;
+      };
+      eventsCount: number;
+      timeline: Array<{
+        date: string;
+        title: string;
+        category: string;
+        description: string;
+        icon: string;
+      }>;
+    }>(`/api/kdp/journal-events/book/${bookId}/timeline`, {
+      params: { startDate, endDate },
+    });
+    return response.data;
+  },
+
+  getCategories: async () => {
+    const response = await apiClient.get<{ categories: EventCategoryMeta[] }>('/api/kdp/journal-events/meta/categories');
+    return response.data;
+  },
+
+  create: async (event: {
+    title: string;
+    eventDate: string;
+    description?: string;
+    category?: string;
+    bookId?: string;
+  }, token: string) => {
+    const response = await apiClient.post<{ message: string; event: JournalEvent }>(
+      '/api/kdp/journal-events',
+      event,
       {
         headers: { Authorization: `Bearer ${token}` },
       }
@@ -284,10 +421,16 @@ export const automationConfigApi = {
     return response.data;
   },
 
-  toggleFunction: async (campaignId: string, functionNumber: number, enabled: boolean, token: string) => {
-    const response = await apiClient.patch<ApiResponse<AutomationConfig>>(
-      `/api/automation-config/${campaignId}/toggle/${functionNumber}`,
-      { enabled },
+  update: async (id: string, event: Partial<{
+    title: string;
+    eventDate: string;
+    description: string;
+    category: string;
+    bookId: string;
+  }>, token: string) => {
+    const response = await apiClient.patch<{ message: string; event: JournalEvent }>(
+      `/api/kdp/journal-events/${id}`,
+      event,
       {
         headers: { Authorization: `Bearer ${token}` },
       }
@@ -295,8 +438,8 @@ export const automationConfigApi = {
     return response.data;
   },
 
-  delete: async (campaignId: string, token: string) => {
-    const response = await apiClient.delete<ApiResponse<void>>(`/api/automation-config/${campaignId}`, {
+  delete: async (id: string, token: string) => {
+    const response = await apiClient.delete<{ message: string }>(`/api/kdp/journal-events/${id}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     return response.data;

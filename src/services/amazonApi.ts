@@ -1,102 +1,122 @@
 // ================================================
-// SERVIZIO MULTI-REGION AMAZON ADVERTISING API
+// SERVIZIO API AMAZON ADVERTISING
 // ================================================
-// Gestisce chiamate API per tutte le regioni (EU, NA, FE)
+// Questo file gestisce tutte le chiamate all'API di Amazon
+// per recuperare e modificare dati delle campagne pubblicitarie
 
 import axios, { AxiosInstance } from 'axios';
-import {
-  API_ENDPOINTS,
-  getConfiguredRegions,
-  getRegionCredentials,
-  MARKETPLACE_TO_REGION
-} from '../config/amazon';
+import { amazonConfig, getApiEndpoint } from '../config/amazon';
 
-// Gestisce una singola regione Amazon API
-class RegionApiClient {
-  private client: AxiosInstance;
-  private accessToken: string = '';
-  private tokenExpiry: number = 0;
-  private region: 'EU' | 'NA' | 'FE';
-  private clientId: string;
-  private clientSecret: string;
-  private refreshToken: string;
+// Classe che gestisce tutte le interazioni con l'API Amazon
+class AmazonApiService {
+  private client: AxiosInstance;  // Client HTTP per fare richieste
+  private accessToken: string = '';  // Token di accesso (si rinnova automaticamente)
+  private tokenExpiry: number = 0;   // Timestamp scadenza token
 
-  constructor(region: 'EU' | 'NA' | 'FE') {
-    const credentials = getRegionCredentials(region);
-
-    if (!credentials) {
-      throw new Error(`Credenziali mancanti per regione ${region}`);
-    }
-
-    this.region = region;
-    this.clientId = credentials.clientId;
-    this.clientSecret = credentials.clientSecret;
-    this.refreshToken = credentials.refreshToken;
-
-    // Crea client axios con endpoint corretto per la regione
+  constructor() {
+    // Crea un client axios configurato per Amazon API
     this.client = axios.create({
-      baseURL: API_ENDPOINTS[region],
+      baseURL: getApiEndpoint(),  // URL base dell'API
       headers: {
         'Content-Type': 'application/json',
-        'Amazon-Advertising-API-ClientId': this.clientId
+        'Amazon-Advertising-API-ClientId': amazonConfig.clientId
       }
     });
 
-    // Interceptor per aggiungere token automaticamente
+    // Interceptor: modifica ogni richiesta prima di inviarla
+    // Aggiunge automaticamente il token di autenticazione
     this.client.interceptors.request.use(async (config) => {
+      // Controlla se il token è scaduto e lo rinnova
       await this.ensureValidToken();
+
+      // Aggiunge il token all'header Authorization
       config.headers.Authorization = `Bearer ${this.accessToken}`;
+      config.headers['Amazon-Advertising-API-Scope'] = amazonConfig.profileId;
+
       return config;
     });
   }
 
-  // Assicura che il token sia valido
+  // ================================================
+  // GESTIONE AUTENTICAZIONE
+  // ================================================
+
+  // Assicura che il token di accesso sia valido
+  // Se è scaduto, ne richiede uno nuovo
   private async ensureValidToken(): Promise<void> {
     const now = Date.now();
 
+    // Se il token è ancora valido, non fare nulla
     if (this.accessToken && this.tokenExpiry > now) {
       return;
     }
 
+    // Altrimenti, rinnova il token
     await this.refreshAccessToken();
   }
 
-  // Rinnova il token di accesso
+  // Rinnova il token di accesso usando il refresh token
   private async refreshAccessToken(): Promise<void> {
     try {
-      console.log(`🔄 Rinnovo token per regione ${this.region}...`);
+      console.log('🔄 Rinnovo token di accesso Amazon...');
 
+      // Chiamata all'endpoint di autenticazione Amazon
       const response = await axios.post('https://api.amazon.com/auth/o2/token', {
         grant_type: 'refresh_token',
-        refresh_token: this.refreshToken,
-        client_id: this.clientId,
-        client_secret: this.clientSecret
+        refresh_token: amazonConfig.refreshToken,
+        client_id: amazonConfig.clientId,
+        client_secret: amazonConfig.clientSecret
       });
 
+      // Salva il nuovo token e calcola quando scadrà
       this.accessToken = response.data.access_token;
       this.tokenExpiry = Date.now() + (response.data.expires_in * 1000);
 
-      console.log(`✅ Token rinnovato per regione ${this.region}`);
+      console.log('✅ Token rinnovato con successo');
     } catch (error) {
-      console.error(`❌ Errore rinnovo token ${this.region}:`, error);
-      throw new Error(`Impossibile autenticarsi con Amazon API (${this.region})`);
+      console.error('❌ Errore rinnovo token:', error);
+      throw new Error('Impossibile autenticarsi con Amazon API');
     }
   }
 
-  // Recupera profili per questa regione
+  // ================================================
+  // METODI PER PROFILI
+  // ================================================
+
+  // Recupera tutti i profili disponibili per l'account
   async getProfiles(): Promise<any[]> {
     try {
+      console.log('📥 Recupero profili disponibili...');
+
       const response = await this.client.get('/v2/profiles');
+
+      console.log(`✅ Trovati ${response.data.length} profili`);
+      response.data.forEach((profile: any) => {
+        console.log(`   - ${profile.accountInfo?.marketplaceStringId} (${profile.countryCode}): Profile ID ${profile.profileId} - ${profile.accountInfo?.name || 'N/A'}`);
+      });
+
       return response.data;
     } catch (error) {
-      console.error(`❌ Errore recupero profili (${this.region}):`, error);
+      console.error('❌ Errore recupero profili:', error);
       throw error;
     }
   }
 
-  // Recupera campagne per un profilo specifico
+  // ================================================
+  // METODI PER CAMPAGNE
+  // ================================================
+
+  // Recupera tutte le campagne del profilo di default
+  async getCampaigns(): Promise<any[]> {
+    return this.getCampaignsForProfile(amazonConfig.profileId);
+  }
+
+  // Recupera tutte le campagne per un profilo specifico
   async getCampaignsForProfile(profileId: string): Promise<any[]> {
     try {
+      console.log(`📥 Recupero campagne per profilo ${profileId}...`);
+
+      // Amazon API v3 richiede Content-Type e Accept specifici
       const response = await this.client.post('/sp/campaigns/list', {
         maxResults: 1000,
         stateFilter: {
@@ -111,558 +131,496 @@ class RegionApiClient {
       });
 
       const campaigns = response.data.campaigns || [];
-
-      // LOG DETTAGLIATO per debug
-      if (campaigns.length === 0) {
-        console.log(`   🔍 DEBUG: Risposta Amazon API (${this.region}) per profilo ${profileId}:`);
-        console.log(`   📄 Status: ${response.status}`);
-        console.log(`   📄 Data:`, JSON.stringify(response.data, null, 2));
-      }
-
+      console.log(`✅ Trovate ${campaigns.length} campagne per profilo ${profileId}`);
       return campaigns;
     } catch (error) {
-      console.error(`❌ Errore recupero campagne (${this.region}, profilo ${profileId}):`, error);
+      console.error(`❌ Errore recupero campagne per profilo ${profileId}:`, error);
       throw error;
     }
   }
 
-  // Tutti gli altri metodi rimangono disponibili tramite il client
-  getClient(): AxiosInstance {
-    return this.client;
-  }
-
-  getRegion(): 'EU' | 'NA' | 'FE' {
-    return this.region;
-  }
-}
-
-// ================================================
-// SERVIZIO PRINCIPALE MULTI-REGION
-// ================================================
-class MultiRegionAmazonApiService {
-  private regionClients: Map<'EU' | 'NA' | 'FE', RegionApiClient> = new Map();
-
-  constructor() {
-    const configuredRegions = getConfiguredRegions();
-
-    console.log(`🌍 Inizializzazione Amazon API Service per ${configuredRegions.length} regioni: ${configuredRegions.join(', ')}`);
-
-    for (const region of configuredRegions) {
-      try {
-        const client = new RegionApiClient(region);
-        this.regionClients.set(region, client);
-        console.log(`  ✅ Client ${region} inizializzato (${API_ENDPOINTS[region]})`);
-      } catch (error: any) {
-        console.error(`  ❌ Errore inizializzazione client ${region}:`, error.message);
-      }
-    }
-
-    if (this.regionClients.size === 0) {
-      console.error('❌ ERRORE CRITICO: Nessun client Amazon inizializzato');
-    }
-  }
-
-  // Ottieni client per una regione specifica
-  private getClientForRegion(region: 'EU' | 'NA' | 'FE'): RegionApiClient | null {
-    return this.regionClients.get(region) || null;
-  }
-
-  // Ottieni client per un marketplace specifico
-  private getClientForMarketplace(marketplace: string): RegionApiClient | null {
-    const region = MARKETPLACE_TO_REGION[marketplace.toUpperCase()];
-
-    if (!region) {
-      console.warn(`⚠️  Marketplace ${marketplace} non mappato a una regione`);
-      return null;
-    }
-
-    const client = this.getClientForRegion(region);
-
-    if (!client) {
-      console.warn(`⚠️  Client non disponibile per regione ${region} (marketplace ${marketplace})`);
-    }
-
-    return client;
-  }
-
-  // ================================================
-  // METODI PUBBLICI - PROFILI
-  // ================================================
-
-  // Recupera profili da TUTTE le regioni configurate
-  async getProfiles(): Promise<any[]> {
-    console.log('📥 Recupero profili da tutte le regioni...');
-
-    const allProfiles: any[] = [];
-
-    for (const [region, client] of this.regionClients) {
-      try {
-        const profiles = await client.getProfiles();
-        console.log(`   ✅ ${region}: ${profiles.length} profili`);
-
-        profiles.forEach(profile => {
-          console.log(`      - ${profile.accountInfo?.marketplaceStringId || 'N/A'} (${profile.countryCode}): Profile ID ${profile.profileId}`);
-        });
-
-        allProfiles.push(...profiles);
-      } catch (error: any) {
-        console.error(`   ❌ ${region}: Errore recupero profili - ${error.message}`);
-      }
-    }
-
-    console.log(`✅ Totale profili da tutte le regioni: ${allProfiles.length}`);
-    return allProfiles;
-  }
-
-  // ================================================
-  // METODI PUBBLICI - CAMPAGNE
-  // ================================================
-
-  // Recupera campagne da tutti i profili di tutte le regioni
-  async getAllCampaignsFromAllProfiles(): Promise<Array<{ campaign: any, profileId: string, countryCode: string }>> {
+  // Recupera i dettagli di una singola campagna
+  async getCampaign(campaignId: string): Promise<any> {
     try {
-      console.log('🌍 Recupero campagne da TUTTE le regioni e profili...');
-
-      // 1. Ottieni tutti i profili da tutte le regioni
-      const profiles = await this.getProfiles();
-      console.log(`📋 Trovati ${profiles.length} profili totali`);
-
-      const allCampaigns: Array<{ campaign: any, profileId: string, countryCode: string }> = [];
-
-      // 2. Per ogni profilo, recupera le campagne usando il client corretto per marketplace
-      for (const profile of profiles) {
-        try {
-          const profileId = profile.profileId.toString();
-          const countryCode = profile.countryCode;
-
-          console.log(`   📥 Profilo ${countryCode} (${profileId})...`);
-
-          const client = this.getClientForMarketplace(countryCode);
-
-          if (!client) {
-            console.warn(`      ⚠️  Nessun client disponibile per marketplace ${countryCode}, salto`);
-            continue;
-          }
-
-          const campaigns = await client.getCampaignsForProfile(profileId);
-
-          // Aggiungi metadata del profilo a ogni campagna
-          campaigns.forEach(campaign => {
-            allCampaigns.push({
-              campaign,
-              profileId,
-              countryCode
-            });
-          });
-
-          console.log(`      ✅ ${campaigns.length} campagne trovate`);
-        } catch (error: any) {
-          console.error(`      ❌ Errore recupero campagne per profilo ${profile.countryCode}:`, error.message);
-          // Continua con il prossimo profilo
-        }
-      }
-
-      console.log(`✅ Totale: ${allCampaigns.length} campagne da ${profiles.length} profili`);
-      return allCampaigns;
+      const response = await this.client.get(`/v2/sp/campaigns/${campaignId}`);
+      return response.data;
     } catch (error) {
-      console.error('❌ Errore recupero campagne multi-region:', error);
+      console.error(`❌ Errore recupero campagna ${campaignId}:`, error);
       throw error;
     }
   }
 
-  // Recupera campagne per un profilo specifico
-  async getCampaignsForProfile(profileId: string, marketplace?: string): Promise<any[]> {
-    console.log(`📥 Recupero campagne per profilo ${profileId}...`);
+  // ================================================
+  // METODI PER KEYWORD
+  // ================================================
 
-    // Se marketplace è specificato, usa il client corretto
-    if (marketplace) {
-      const client = this.getClientForMarketplace(marketplace);
+  // Recupera tutte le keyword di una campagna
+  async getKeywords(campaignId?: string): Promise<any[]> {
+    try {
+      console.log('📥 Recupero keywords...');
 
-      if (!client) {
-        throw new Error(`Client non disponibile per marketplace ${marketplace}`);
-      }
+      // Se specificato un campaignId, filtra per quella campagna
+      const params = campaignId ? { campaignIdFilter: campaignId } : {};
 
-      return await client.getCampaignsForProfile(profileId);
+      const response = await this.client.get('/v2/sp/keywords', { params });
+
+      console.log(`✅ Trovate ${response.data.length} keywords`);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Errore recupero keywords:', error);
+      throw error;
     }
-
-    // Altrimenti, prova tutti i client disponibili (backward compatibility)
-    for (const [region, client] of this.regionClients) {
-      try {
-        const campaigns = await client.getCampaignsForProfile(profileId);
-        console.log(`✅ Trovate ${campaigns.length} campagne per profilo ${profileId} (${region})`);
-        return campaigns;
-      } catch (error) {
-        console.log(`   ⚠️  Tentativo fallito con regione ${region}, provo la prossima...`);
-      }
-    }
-
-    console.warn(`⚠️  Profilo ${profileId} non trovato in nessuna regione`);
-    return [];
   }
 
-  // Backward compatibility: usa la prima regione disponibile
-  async getCampaigns(): Promise<any[]> {
-    const firstClient = Array.from(this.regionClients.values())[0];
+  // Aggiorna il bid di una keyword
+  async updateKeywordBid(keywordId: string, newBid: number): Promise<any> {
+    try {
+      console.log(`🔧 Aggiorno bid keyword ${keywordId} a ${newBid}...`);
 
-    if (!firstClient) {
-      console.error('❌ Nessun client Amazon disponibile');
-      return [];
+      const response = await this.client.put(`/v2/sp/keywords/${keywordId}`, {
+        bid: newBid
+      });
+
+      console.log(`✅ Bid aggiornato con successo`);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ Errore aggiornamento bid keyword ${keywordId}:`, error);
+      throw error;
     }
+  }
 
-    const profiles = await firstClient.getProfiles();
+  // Mette in pausa o attiva una keyword
+  async updateKeywordState(keywordId: string, state: 'enabled' | 'paused'): Promise<any> {
+    try {
+      console.log(`🔧 Imposto keyword ${keywordId} a ${state}...`);
 
-    if (profiles.length === 0) {
-      return [];
+      const response = await this.client.put(`/v2/sp/keywords/${keywordId}`, {
+        state: state
+      });
+
+      console.log(`✅ Stato keyword aggiornato`);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ Errore aggiornamento stato keyword ${keywordId}:`, error);
+      throw error;
     }
-
-    return await firstClient.getCampaignsForProfile(profiles[0].profileId.toString());
   }
 
   // ================================================
-  // METODI PER AUTOMATION FUNCTIONS
+  // METODI PER REPORT E METRICHE
   // ================================================
-  // Questi metodi accettano solo marketplace e ricavano automaticamente
-  // il profileId corretto chiamando l'API
 
-  // Cache dei profili per marketplace
-  private profileCache: Map<string, string> = new Map();
+  // Richiede un report delle performance
+  // Amazon genera il report in modo asincrono
+  async requestReport(reportDate: string, metrics: string[]): Promise<string> {
+    try {
+      console.log(`📊 Richiesta report per ${reportDate}...`);
 
-  // Ottieni profileId per un marketplace specifico
-  private async getProfileIdForMarketplace(marketplace: string): Promise<string> {
-    // Controlla cache
-    if (this.profileCache.has(marketplace)) {
-      return this.profileCache.get(marketplace)!;
+      const response = await this.client.post('/v2/sp/keywords/report', {
+        reportDate: reportDate,  // Formato: YYYYMMDD
+        metrics: metrics  // Es: ['impressions', 'clicks', 'cost', 'sales']
+      });
+
+      // Ritorna l'ID del report (da usare per scaricarlo dopo)
+      const reportId = response.data.reportId;
+      console.log(`✅ Report richiesto. ID: ${reportId}`);
+
+      return reportId;
+    } catch (error) {
+      console.error('❌ Errore richiesta report:', error);
+      throw error;
     }
-
-    const client = this.getClientForMarketplace(marketplace);
-
-    if (!client) {
-      throw new Error(`Client non disponibile per marketplace ${marketplace}`);
-    }
-
-    // Ottieni profili per questo client
-    const profiles = await client.getProfiles();
-
-    // Trova il profilo che corrisponde al marketplace
-    const profile = profiles.find(p => p.countryCode.toUpperCase() === marketplace.toUpperCase());
-
-    if (!profile) {
-      throw new Error(`Profilo non trovato per marketplace ${marketplace}`);
-    }
-
-    const profileId = profile.profileId.toString();
-
-    // Salva in cache
-    this.profileCache.set(marketplace, profileId);
-
-    return profileId;
   }
 
-  // Richiede un report (per keywords, targets, search terms, ecc.)
-  async requestReport(marketplace: string, reportType: string, params: any): Promise<string> {
-    const client = this.getClientForMarketplace(marketplace);
-    const profileId = await this.getProfileIdForMarketplace(marketplace);
-
-    if (!client) {
-      throw new Error(`Client non disponibile per marketplace ${marketplace}`);
+  // Controlla lo stato di un report
+  async getReportStatus(reportId: string): Promise<any> {
+    try {
+      const response = await this.client.get(`/v2/reports/${reportId}`);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ Errore controllo stato report ${reportId}:`, error);
+      throw error;
     }
+  }
 
-    const response = await client.getClient().post('/reporting/reports', {
-      reportType,
-      ...params
-    }, {
-      headers: {
-        'Amazon-Advertising-API-Scope': profileId
+  // Scarica un report completato
+  async downloadReport(reportId: string): Promise<any> {
+    try {
+      // Prima controlla lo stato
+      const status = await this.getReportStatus(reportId);
+
+      if (status.status !== 'SUCCESS') {
+        throw new Error(`Report non pronto. Stato: ${status.status}`);
       }
-    });
 
-    return response.data.reportId;
+      // Scarica il report dall'URL fornito
+      const reportData = await axios.get(status.location);
+
+      console.log(`✅ Report scaricato`);
+      return reportData.data;
+    } catch (error) {
+      console.error(`❌ Errore download report ${reportId}:`, error);
+      throw error;
+    }
   }
 
-  // Attende e scarica un report
-  async waitAndDownloadReport(marketplace: string, reportId: string): Promise<any> {
-    const client = this.getClientForMarketplace(marketplace);
-    const profileId = await this.getProfileIdForMarketplace(marketplace);
+  // ================================================
+  // METODI PER PLACEMENT BIDDING (Funzione 2)
+  // ================================================
 
-    if (!client) {
-      throw new Error(`Client non disponibile per marketplace ${marketplace}`);
+  /**
+   * Aggiorna i placement bid adjustments di una campagna
+   * I placement sono: Top of Search, Rest of Search, Product Pages
+   */
+  async updateCampaignPlacements(
+    campaignId: string,
+    placements: {
+      topOfSearch?: number;
+      restOfSearch?: number;
+      productPages?: number;
     }
+  ): Promise<any> {
+    try {
+      console.log(`🔧 Aggiorno placements campagna ${campaignId}...`);
 
-    // Attendi che il report sia pronto
-    let status = 'IN_PROGRESS';
-    let downloadUrl = '';
+      const bidding = {
+        placementBidding: []
+      } as any;
 
-    for (let i = 0; i < 60; i++) {
-      const statusResponse = await client.getClient().get(`/reporting/reports/${reportId}`, {
-        headers: {
-          'Amazon-Advertising-API-Scope': profileId
+      if (placements.topOfSearch !== undefined) {
+        bidding.placementBidding.push({
+          placement: 'PLACEMENT_TOP',
+          percentage: placements.topOfSearch
+        });
+      }
+
+      if (placements.restOfSearch !== undefined) {
+        bidding.placementBidding.push({
+          placement: 'PLACEMENT_PRODUCT_PAGE',
+          percentage: placements.restOfSearch
+        });
+      }
+
+      if (placements.productPages !== undefined) {
+        bidding.placementBidding.push({
+          placement: 'PLACEMENT_REST_OF_SEARCH',
+          percentage: placements.productPages
+        });
+      }
+
+      const response = await this.client.put(`/v2/sp/campaigns/${campaignId}`, {
+        bidding
+      });
+
+      console.log(`✅ Placements aggiornati`);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ Errore aggiornamento placements campagna ${campaignId}:`, error);
+      throw error;
+    }
+  }
+
+  // ================================================
+  // METODI PER TARGET (Product Targeting)
+  // ================================================
+
+  /**
+   * Recupera tutti i target (prodotti) di una campagna
+   */
+  async getTargets(campaignId?: string): Promise<any[]> {
+    try {
+      console.log('📥 Recupero targets...');
+
+      const params = campaignId ? { campaignIdFilter: campaignId } : {};
+      const response = await this.client.get('/v2/sp/targets', { params });
+
+      console.log(`✅ Trovati ${response.data.length} targets`);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Errore recupero targets:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Aggiorna il bid di un target
+   */
+  async updateTargetBid(targetId: string, newBid: number): Promise<any> {
+    try {
+      console.log(`🔧 Aggiorno bid target ${targetId} a ${newBid}...`);
+
+      const response = await this.client.put(`/v2/sp/targets/${targetId}`, {
+        bid: newBid
+      });
+
+      console.log(`✅ Bid target aggiornato`);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ Errore aggiornamento bid target ${targetId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mette in pausa o attiva un target
+   */
+  async updateTargetState(targetId: string, state: 'enabled' | 'paused'): Promise<any> {
+    try {
+      console.log(`🔧 Imposto target ${targetId} a ${state}...`);
+
+      const response = await this.client.put(`/v2/sp/targets/${targetId}`, {
+        state: state
+      });
+
+      console.log(`✅ Stato target aggiornato`);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ Errore aggiornamento stato target ${targetId}:`, error);
+      throw error;
+    }
+  }
+
+  // ================================================
+  // METODI PER AUTO ADS (Funzione 4)
+  // ================================================
+
+  /**
+   * Recupera i targeting groups di una campagna automatica
+   * Groups: complements, loose match, close match, substitutes
+   */
+  async getAutoTargetingGroups(campaignId: string): Promise<any[]> {
+    try {
+      console.log(`📥 Recupero auto targeting groups per campagna ${campaignId}...`);
+
+      const response = await this.client.get('/v2/sp/targets', {
+        params: {
+          campaignIdFilter: campaignId,
+          expressionType: 'AUTO'
         }
       });
 
-      status = statusResponse.data.status;
-
-      if (status === 'SUCCESS') {
-        downloadUrl = statusResponse.data.url;
-        break;
-      }
-
-      if (status === 'FAILURE') {
-        throw new Error('Report generation failed');
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      console.log(`✅ Trovati ${response.data.length} auto targeting groups`);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ Errore recupero auto targeting groups:`, error);
+      throw error;
     }
-
-    if (!downloadUrl) {
-      throw new Error('Report timeout');
-    }
-
-    // Scarica il report
-    const reportResponse = await client.getClient().get(downloadUrl);
-    return reportResponse.data;
   }
 
-  // Ottieni keywords per un ad group
-  async getKeywords(marketplace: string, adGroupId: string): Promise<any[]> {
-    const client = this.getClientForMarketplace(marketplace);
-    const profileId = await this.getProfileIdForMarketplace(marketplace);
+  /**
+   * Aggiunge una negative keyword
+   */
+  async addNegativeKeyword(
+    campaignId: string,
+    adGroupId: string,
+    keyword: string,
+    matchType: 'negativeExact' | 'negativePhrase'
+  ): Promise<any> {
+    try {
+      console.log(`➖ Aggiungo negative keyword "${keyword}" (${matchType})...`);
 
-    if (!client) {
-      throw new Error(`Client non disponibile per marketplace ${marketplace}`);
+      const response = await this.client.post('/v2/sp/negativeKeywords', [{
+        campaignId,
+        adGroupId,
+        keywordText: keyword,
+        matchType,
+        state: 'enabled'
+      }]);
+
+      console.log(`✅ Negative keyword aggiunta`);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ Errore aggiunta negative keyword:`, error);
+      throw error;
     }
-
-    const response = await client.getClient().post('/sp/keywords/list', {
-      adGroupIdFilter: {
-        include: [adGroupId]
-      }
-    }, {
-      headers: {
-        'Amazon-Advertising-API-Scope': profileId
-      }
-    });
-
-    return response.data.keywords || [];
   }
 
-  // Ottieni targets per un ad group
-  async getTargets(marketplace: string, adGroupId: string): Promise<any[]> {
-    const client = this.getClientForMarketplace(marketplace);
-    const profileId = await this.getProfileIdForMarketplace(marketplace);
+  /**
+   * Aggiunge un negative target (ASIN)
+   */
+  async addNegativeTarget(
+    campaignId: string,
+    adGroupId: string,
+    asin: string
+  ): Promise<any> {
+    try {
+      console.log(`➖ Aggiungo negative target ASIN ${asin}...`);
 
-    if (!client) {
-      throw new Error(`Client non disponibile per marketplace ${marketplace}`);
+      const response = await this.client.post('/v2/sp/negativeTargets', [{
+        campaignId,
+        adGroupId,
+        expression: [{
+          type: 'asinSameAs',
+          value: asin
+        }],
+        expressionType: 'manual',
+        state: 'enabled'
+      }]);
+
+      console.log(`✅ Negative target aggiunto`);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ Errore aggiunta negative target:`, error);
+      throw error;
     }
-
-    const response = await client.getClient().post('/sp/targets/list', {
-      adGroupIdFilter: {
-        include: [adGroupId]
-      }
-    }, {
-      headers: {
-        'Amazon-Advertising-API-Scope': profileId
-      }
-    });
-
-    return response.data.targets || [];
   }
 
-  // Aggiorna bid di una keyword
-  async updateKeywordBid(marketplace: string, keywordId: string, newBid: number): Promise<void> {
-    const client = this.getClientForMarketplace(marketplace);
-    const profileId = await this.getProfileIdForMarketplace(marketplace);
+  // ================================================
+  // METODI PER SEARCH TERMS (Funzione 5 - Campaign Feeding)
+  // ================================================
 
-    if (!client) {
-      throw new Error(`Client non disponibile per marketplace ${marketplace}`);
-    }
+  /**
+   * Richiede un report dei search terms
+   */
+  async requestSearchTermsReport(
+    startDate: string,
+    endDate: string,
+    campaignIdFilter?: string
+  ): Promise<string> {
+    try {
+      console.log(`📊 Richiesta report search terms ${startDate} - ${endDate}...`);
 
-    await client.getClient().put(`/sp/keywords/${keywordId}`, {
-      bid: newBid
-    }, {
-      headers: {
-        'Amazon-Advertising-API-Scope': profileId
+      const body: any = {
+        reportDate: startDate,
+        metrics: [
+          'campaignId',
+          'adGroupId',
+          'keywordId',
+          'targetId',
+          'searchTerm',
+          'impressions',
+          'clicks',
+          'cost',
+          'sales',
+          'orders'
+        ]
+      };
+
+      if (campaignIdFilter) {
+        body.campaignIdFilter = campaignIdFilter;
       }
-    });
+
+      const response = await this.client.post('/v2/sp/targets/report', body);
+
+      const reportId = response.data.reportId;
+      console.log(`✅ Report search terms richiesto. ID: ${reportId}`);
+
+      return reportId;
+    } catch (error) {
+      console.error('❌ Errore richiesta report search terms:', error);
+      throw error;
+    }
   }
 
-  // Aggiorna bid di un target
-  async updateTargetBid(marketplace: string, targetId: string, newBid: number): Promise<void> {
-    const client = this.getClientForMarketplace(marketplace);
-    const profileId = await this.getProfileIdForMarketplace(marketplace);
+  /**
+   * Aggiunge keyword a una campagna
+   */
+  async addKeywords(
+    campaignId: string,
+    adGroupId: string,
+    keywords: Array<{
+      keywordText: string;
+      matchType: 'broad' | 'phrase' | 'exact';
+      bid: number;
+    }>
+  ): Promise<any> {
+    try {
+      console.log(`➕ Aggiungo ${keywords.length} keywords alla campagna ${campaignId}...`);
 
-    if (!client) {
-      throw new Error(`Client non disponibile per marketplace ${marketplace}`);
+      const keywordsData = keywords.map(kw => ({
+        campaignId,
+        adGroupId,
+        keywordText: kw.keywordText,
+        matchType: kw.matchType,
+        bid: kw.bid,
+        state: 'enabled'
+      }));
+
+      const response = await this.client.post('/v2/sp/keywords', keywordsData);
+
+      console.log(`✅ Keywords aggiunte`);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ Errore aggiunta keywords:`, error);
+      throw error;
     }
-
-    await client.getClient().put(`/sp/targets/${targetId}`, {
-      bid: newBid
-    }, {
-      headers: {
-        'Amazon-Advertising-API-Scope': profileId
-      }
-    });
   }
 
-  // Aggiorna stato di una keyword
-  async updateKeywordState(marketplace: string, keywordId: string, state: string): Promise<void> {
-    const client = this.getClientForMarketplace(marketplace);
-    const profileId = await this.getProfileIdForMarketplace(marketplace);
+  /**
+   * Aggiunge target (ASIN) a una campagna
+   */
+  async addTargets(
+    campaignId: string,
+    adGroupId: string,
+    targets: Array<{
+      asin: string;
+      bid: number;
+      expressionType: 'manual' | 'auto';
+    }>
+  ): Promise<any> {
+    try {
+      console.log(`➕ Aggiungo ${targets.length} targets alla campagna ${campaignId}...`);
 
-    if (!client) {
-      throw new Error(`Client non disponibile per marketplace ${marketplace}`);
+      const targetsData = targets.map(target => ({
+        campaignId,
+        adGroupId,
+        expression: [{
+          type: 'asinSameAs',
+          value: target.asin
+        }],
+        expressionType: target.expressionType,
+        bid: target.bid,
+        state: 'enabled'
+      }));
+
+      const response = await this.client.post('/v2/sp/targets', targetsData);
+
+      console.log(`✅ Targets aggiunti`);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ Errore aggiunta targets:`, error);
+      throw error;
     }
-
-    await client.getClient().put(`/sp/keywords/${keywordId}`, {
-      state
-    }, {
-      headers: {
-        'Amazon-Advertising-API-Scope': profileId
-      }
-    });
   }
 
-  // Aggiorna stato di un target
-  async updateTargetState(marketplace: string, targetId: string, state: string): Promise<void> {
-    const client = this.getClientForMarketplace(marketplace);
-    const profileId = await this.getProfileIdForMarketplace(marketplace);
+  // ================================================
+  // METODI PER RECUPERARE METRICHE DA REPORT
+  // ================================================
 
-    if (!client) {
-      throw new Error(`Client non disponibile per marketplace ${marketplace}`);
+  /**
+   * Recupera le performance di keyword/target da un report
+   * Aspetta che il report sia pronto e lo scarica
+   */
+  async waitAndDownloadReport(reportId: string, maxAttempts: number = 10): Promise<any> {
+    try {
+      console.log(`⏳ Attendo completamento report ${reportId}...`);
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const status = await this.getReportStatus(reportId);
+
+        if (status.status === 'SUCCESS') {
+          console.log(`✅ Report pronto, scarico...`);
+          const reportData = await axios.get(status.location);
+          return reportData.data;
+        }
+
+        if (status.status === 'FAILURE') {
+          throw new Error(`Report fallito: ${status.statusDetails || 'Unknown error'}`);
+        }
+
+        // Aspetta 5 secondi prima di riprovare
+        console.log(`   Tentativo ${attempt}/${maxAttempts}: status=${status.status}`);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+
+      throw new Error(`Report non pronto dopo ${maxAttempts} tentativi`);
+    } catch (error) {
+      console.error(`❌ Errore attesa/download report:`, error);
+      throw error;
     }
-
-    await client.getClient().put(`/sp/targets/${targetId}`, {
-      state
-    }, {
-      headers: {
-        'Amazon-Advertising-API-Scope': profileId
-      }
-    });
-  }
-
-  // Aggiorna placements di una campagna
-  async updateCampaignPlacements(marketplace: string, campaignId: string, placements: any): Promise<void> {
-    const client = this.getClientForMarketplace(marketplace);
-    const profileId = await this.getProfileIdForMarketplace(marketplace);
-
-    if (!client) {
-      throw new Error(`Client non disponibile per marketplace ${marketplace}`);
-    }
-
-    await client.getClient().put(`/sp/campaigns/${campaignId}`, {
-      dynamicBidding: {
-        placementBidding: placements
-      }
-    }, {
-      headers: {
-        'Amazon-Advertising-API-Scope': profileId
-      }
-    });
-  }
-
-  // Ottieni ad groups auto-targeting
-  async getAutoTargetingGroups(marketplace: string, campaignId: string): Promise<any[]> {
-    const client = this.getClientForMarketplace(marketplace);
-    const profileId = await this.getProfileIdForMarketplace(marketplace);
-
-    if (!client) {
-      throw new Error(`Client non disponibile per marketplace ${marketplace}`);
-    }
-
-    const response = await client.getClient().post('/sp/adGroups/list', {
-      campaignIdFilter: {
-        include: [campaignId]
-      }
-    }, {
-      headers: {
-        'Amazon-Advertising-API-Scope': profileId
-      }
-    });
-
-    return response.data.adGroups || [];
-  }
-
-  // Richiedi search terms report
-  async requestSearchTermsReport(marketplace: string, params: any): Promise<string> {
-    return this.requestReport(marketplace, 'spSearchTerm', params);
-  }
-
-  // Aggiungi negative target
-  async addNegativeTarget(marketplace: string, campaignId: string, adGroupId: string, expression: any): Promise<void> {
-    const client = this.getClientForMarketplace(marketplace);
-    const profileId = await this.getProfileIdForMarketplace(marketplace);
-
-    if (!client) {
-      throw new Error(`Client non disponibile per marketplace ${marketplace}`);
-    }
-
-    await client.getClient().post('/sp/negativeTargets', {
-      campaignId,
-      adGroupId,
-      expression,
-      expressionType: 'manual'
-    }, {
-      headers: {
-        'Amazon-Advertising-API-Scope': profileId
-      }
-    });
-  }
-
-  // Aggiungi negative keyword
-  async addNegativeKeyword(marketplace: string, campaignId: string, adGroupId: string, keywordText: string, matchType: string): Promise<void> {
-    const client = this.getClientForMarketplace(marketplace);
-    const profileId = await this.getProfileIdForMarketplace(marketplace);
-
-    if (!client) {
-      throw new Error(`Client non disponibile per marketplace ${marketplace}`);
-    }
-
-    await client.getClient().post('/sp/negativeKeywords', {
-      campaignId,
-      adGroupId,
-      keywordText,
-      matchType
-    }, {
-      headers: {
-        'Amazon-Advertising-API-Scope': profileId
-      }
-    });
-  }
-
-  // Aggiungi targets
-  async addTargets(marketplace: string, targets: any[]): Promise<any> {
-    const client = this.getClientForMarketplace(marketplace);
-    const profileId = await this.getProfileIdForMarketplace(marketplace);
-
-    if (!client) {
-      throw new Error(`Client non disponibile per marketplace ${marketplace}`);
-    }
-
-    const response = await client.getClient().post('/sp/targets', targets, {
-      headers: {
-        'Amazon-Advertising-API-Scope': profileId
-      }
-    });
-
-    return response.data;
-  }
-
-  // Aggiungi keywords
-  async addKeywords(marketplace: string, keywords: any[]): Promise<any> {
-    const client = this.getClientForMarketplace(marketplace);
-    const profileId = await this.getProfileIdForMarketplace(marketplace);
-
-    if (!client) {
-      throw new Error(`Client non disponibile per marketplace ${marketplace}`);
-    }
-
-    const response = await client.getClient().post('/sp/keywords', keywords, {
-      headers: {
-        'Amazon-Advertising-API-Scope': profileId
-      }
-    });
-
-    return response.data;
   }
 }
 
-// Esporta istanza singleton
-export const amazonApiService = new MultiRegionAmazonApiService();
+// Esporta un'istanza unica del servizio (Singleton pattern)
+// In questo modo usi sempre lo stesso client con lo stesso token
+export const amazonApiService = new AmazonApiService();
