@@ -6,7 +6,7 @@ import KdpLayout from './components/KdpLayout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
-import Campaigns from './pages/Campaigns';
+// Temporarily disabled - import Campaigns from './pages/Campaigns';
 import Logs from './pages/Logs';
 import Help from './pages/Help';
 import KdpDashboard from './pages/kdp/KdpDashboard';
@@ -29,7 +29,7 @@ function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/settings" element={<Settings />} />
-            <Route path="/campaigns" element={<Campaigns />} />
+            {/* Temporarily disabled - <Route path="/campaigns" element={<Campaigns />} /> */}
             <Route path="/logs" element={<Logs />} />
             <Route path="/help" element={<Help />} />
 
