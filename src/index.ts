@@ -1,9 +1,10 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
-import automationRoutes from './routes/automation';
+// Temporarily disabled due to TypeScript errors - will be fixed after OAuth deploy
+// import automationRoutes from './routes/automation';
 import booksRoutes from './routes/books';
-import campaignsRoutes from './routes/campaigns';
+// import campaignsRoutes from './routes/campaigns';
 import logsRoutes from './routes/logs';
 import kdpBooksRoutes from './routes/kdp-books';
 import kdpAnalyticsRoutes from './routes/kdp-analytics';
@@ -11,7 +12,7 @@ import kdpBsrRoutes from './routes/kdp-bsr';
 import kdpJournalEventsRoutes from './routes/kdp-journal-events';
 import authRoutes from './routes/auth';
 import { initializeDatabase } from './config/database';
-import { automationScheduler } from './automation/scheduler';
+// import { automationScheduler } from './automation/scheduler';
 
 dotenv.config();
 
@@ -67,9 +68,9 @@ app.get('/health', (req, res) => {
 // Auth Routes
 app.use('/api/auth', authRoutes);
 
-app.use('/api/automation', automationRoutes);
+// app.use('/api/automation', automationRoutes);
 app.use('/api/books', booksRoutes);
-app.use('/api/campaigns', campaignsRoutes);
+// app.use('/api/campaigns', campaignsRoutes);
 app.use('/api/logs', logsRoutes);
 
 // KDP Analytics Routes
@@ -84,16 +85,16 @@ const startServer = async () => {
     // Connetti al database
     await initializeDatabase();
 
-    // Avvia scheduler interno
-    automationScheduler.start();
+    // Avvia scheduler interno (temporarily disabled)
+    // automationScheduler.start();
 
     // Avvia server
     app.listen(PORT, '0.0.0.0', () => {
       console.log('='.repeat(50));
       console.log(`🚀 Server avviato sulla porta ${PORT}`);
       console.log('='.repeat(50));
-      console.log('⏰ Scheduler automazioni interno attivo');
-      console.log('📋 Usa /api/automation/status per vedere lo stato');
+      console.log('✅ OAuth and KDP Analytics active');
+      console.log('⚠️  Automation temporarily disabled - will be fixed soon');
     });
   } catch (error) {
     console.error('❌ Errore avvio server:', error);
