@@ -38,27 +38,30 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(cookieParser());
 
-app.get('/', (req, res) => {
-  res.json({
-    message: 'Amazon Ads Manager API',
-    version: '2.0.0',
-    endpoints: {
-      health: '/health',
-      automation_trigger: '/api/automation/trigger?secret=YOUR_SECRET (POST)',
-      automation_status: '/api/automation/status',
-      books: '/api/books',
-      campaigns: '/api/campaigns',
-      logs: '/api/logs',
-      kdp_books: '/api/kdp/books',
-      kdp_dashboard: '/api/kdp/dashboard/summary',
-      kdp_analytics: '/api/kdp/analytics/*',
-      kdp_bsr: '/api/kdp/bsr',
-      kdp_journal: '/api/kdp/journal-events'
-    }
+// API info endpoint (only in development, in production we serve the frontend)
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/', (req, res) => {
+    res.json({
+      message: 'Amazon Ads Manager API',
+      version: '2.0.0',
+      endpoints: {
+        health: '/health',
+        automation_trigger: '/api/automation/trigger?secret=YOUR_SECRET (POST)',
+        automation_status: '/api/automation/status',
+        books: '/api/books',
+        campaigns: '/api/campaigns',
+        logs: '/api/logs',
+        kdp_books: '/api/kdp/books',
+        kdp_dashboard: '/api/kdp/dashboard/summary',
+        kdp_analytics: '/api/kdp/analytics/*',
+        kdp_bsr: '/api/kdp/bsr',
+        kdp_journal: '/api/kdp/journal-events'
+      }
+    });
   });
-});
+}
 
-app.get('/health', (req, res) => {
+app.get('/api/health', (req, res) => {
   res.json({
     status: 'OK',
     message: 'Amazon Ads Manager is running',
