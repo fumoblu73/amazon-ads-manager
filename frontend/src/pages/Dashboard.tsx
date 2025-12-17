@@ -150,26 +150,30 @@ export default function Dashboard() {
               </svg>
               <h2 className="text-sm font-semibold text-white">Campagne</h2>
             </div>
-            {campaignStats && (
+            {campaignStats ? (
               <div className="space-y-3 flex-1">
                 <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 p-3 rounded-lg">
                   <div className="text-xs text-gray-600 mb-1">Totale</div>
-                  <div className="text-xl font-bold text-indigo-700">{campaignStats.total}</div>
+                  <div className="text-xl font-bold text-indigo-700">{campaignStats.total || 0}</div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-gradient-to-br from-green-50 to-green-100 p-3 rounded-lg">
                     <div className="text-xs text-gray-600 mb-1">Attive</div>
-                    <div className="text-xl font-bold text-green-700">{campaignStats.byState.enabled}</div>
+                    <div className="text-xl font-bold text-green-700">{campaignStats.byState?.enabled || 0}</div>
                   </div>
                   <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 p-3 rounded-lg">
                     <div className="text-xs text-gray-600 mb-1">Pause</div>
-                    <div className="text-xl font-bold text-yellow-700">{campaignStats.byState.paused}</div>
+                    <div className="text-xl font-bold text-yellow-700">{campaignStats.byState?.paused || 0}</div>
                   </div>
                 </div>
                 <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-3 rounded-lg">
                   <div className="text-xs text-gray-600 mb-1">Budget Giornaliero</div>
-                  <div className="text-lg font-bold text-gray-700">${campaignStats.totalDailyBudget.toFixed(2)}</div>
+                  <div className="text-lg font-bold text-gray-700">${(campaignStats.totalDailyBudget || 0).toFixed(2)}</div>
                 </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+                Dati campagne non disponibili
               </div>
             )}
           </div>
@@ -182,20 +186,24 @@ export default function Dashboard() {
               </svg>
               <h2 className="text-sm font-semibold text-white">Log Attività</h2>
             </div>
-            {logStats && (
+            {logStats ? (
               <div className="space-y-3 flex-1">
                 <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-3 rounded-lg">
                   <div className="text-xs text-gray-600 mb-1">Totale Log</div>
-                  <div className="text-xl font-bold text-blue-700">{logStats.total}</div>
+                  <div className="text-xl font-bold text-blue-700">{logStats.total || 0}</div>
                 </div>
                 <div className="bg-gradient-to-br from-green-50 to-green-100 p-3 rounded-lg">
                   <div className="text-xs text-gray-600 mb-1">Successi</div>
-                  <div className="text-xl font-bold text-green-700">{logStats.byStatus.success}</div>
+                  <div className="text-xl font-bold text-green-700">{logStats.byStatus?.success || 0}</div>
                 </div>
                 <div className="bg-gradient-to-br from-red-50 to-red-100 p-3 rounded-lg">
                   <div className="text-xs text-gray-600 mb-1">Falliti</div>
-                  <div className="text-xl font-bold text-red-700">{logStats.byStatus.failed}</div>
+                  <div className="text-xl font-bold text-red-700">{logStats.byStatus?.failed || 0}</div>
                 </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+                Dati log non disponibili
               </div>
             )}
           </div>
