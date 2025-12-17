@@ -109,7 +109,7 @@ export default function Bookshelf() {
       header: 'KENPC',
       accessor: (book) => book.kenpc || 0,
       sortable: true,
-      render: (value) => value.toLocaleString()
+      render: (value) => (value || 0).toLocaleString()
     },
     {
       key: 'lastSyncDate',
