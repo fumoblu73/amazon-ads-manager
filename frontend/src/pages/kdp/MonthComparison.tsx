@@ -21,10 +21,10 @@ export default function MonthComparison() {
     }
   };
 
-  const formatCurrency = (value: number) => `$${value.toFixed(2)}`;
-  const formatPercentage = (value: number | null) => value !== null ? `${value.toFixed(2)}%` : 'N/A';
-  const formatChange = (change: number | null) => {
-    if (change === null) return 'N/A';
+  const formatCurrency = (value: number | undefined | null) => value != null ? `$${value.toFixed(2)}` : '$0.00';
+  const formatPercentage = (value: number | null | undefined) => value != null ? `${value.toFixed(2)}%` : 'N/A';
+  const formatChange = (change: number | null | undefined) => {
+    if (change == null) return 'N/A';
     const sign = change >= 0 ? '+' : '';
     return `${sign}${change.toFixed(2)}%`;
   };

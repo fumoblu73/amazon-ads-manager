@@ -43,7 +43,7 @@ export default function HistoricalStats() {
     loadData(newFilters);
   };
 
-  const formatCurrency = (value: number) => `$${value.toFixed(2)}`;
+  const formatCurrency = (value: number | undefined | null) => value != null ? `$${value.toFixed(2)}` : '$0.00';
 
   const bookColumns: Column<any>[] = [
     {

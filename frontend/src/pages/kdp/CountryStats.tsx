@@ -30,8 +30,8 @@ export default function CountryStats() {
     }
   };
 
-  const formatCurrency = (value: number) => `$${value.toFixed(2)}`;
-  const formatPercentage = (value: number | null) => value !== null ? `${value.toFixed(2)}%` : 'N/A';
+  const formatCurrency = (value: number | undefined | null) => value != null ? `$${value.toFixed(2)}` : '$0.00';
+  const formatPercentage = (value: number | null | undefined) => value != null ? `${value.toFixed(2)}%` : 'N/A';
 
   const countryColumns: Column<any>[] = [
     {
