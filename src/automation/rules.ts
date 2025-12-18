@@ -8,6 +8,9 @@
 // - Ordine di esecuzione (Funz.1 → Funz.3)
 
 import { amazonApiService } from '../services/amazonApi';
+import { createUserAmazonApiService } from '../services/UserAmazonApiFactory';
+import { AppDataSource } from '../data-source';
+import { Campaign } from '../models/Campaign';
 import { isInWarmupPeriod } from '../utils/timeframe';
 import { automationScheduler } from './scheduler';
 
@@ -375,6 +378,113 @@ function determineCampaignType(campaign: any): 1 | 2 | 3 | 4 | 5 {
     return 2; // Product Targeting
   } else {
     return 1; // Keyword Targeting (default)
+  }
+}
+
+/**
+ * PER-USER AUTOMATION EXECUTION
+ * Runs automation rules for a specific user using their OAuth tokens
+ */
+export async function runAutomationRulesForUser(userId: string): Promise<void> {
+  console.log(`\n🤖 Running automations for user ${userId}...`);
+
+  try {
+    // Create per-user API service
+    const apiService = createUserAmazonApiService(userId);
+
+    // Get user's campaigns from database
+    const campaignRepo = AppDataSource.getRepository(Campaign);
+    const campaigns = await campaignRepo.find({
+      where: { userId, state: 'enabled' }
+    });
+
+    console.log(`📊 Found ${campaigns.length} active campaigns for user ${userId}`);
+
+    if (campaigns.length === 0) {
+      console.log('⚠️  No active campaigns for this user. Nothing to do.');
+      return;
+    }
+
+    const stats = {
+      campaignsProcessed: 0,
+      campaignsInWarmup: 0,
+      func1Executed: 0,
+      func2Executed: 0,
+      func3Executed: 0,
+      func4Executed: 0,
+      func5Executed: 0,
+      errors: 0
+    };
+
+    // Process each campaign
+    for (const campaign of campaigns) {
+      try {
+        stats.campaignsProcessed++;
+
+        // Check warmup period (skip if too new)
+        if (isInWarmupPeriod(campaign.createdAt)) {
+          stats.campaignsInWarmup++;
+          console.log(`⏳ Campaign ${campaign.name} is in warmup period (< 7 days). Skipping.`);
+          continue;
+        }
+
+        console.log(`\n📦 Processing campaign: ${campaign.name} (${campaign.marketplace})`);
+
+        // Determine campaign type (you'll need to add this logic based on your campaign structure)
+        const campaignType = determineCampaignType(campaign);
+
+        // Execute functions based on campaign type
+        // Note: You'll need to adapt this to your actual campaign data structure
+        // This is a simplified version
+
+        // Func1: Progressive Bidding (campaigns 1-4)
+        if (campaignType >= 1 && campaignType <= 4) {
+          // Add logic to check if func1 should execute based on frequency/last execution
+          // For now, simplified execution
+          try {
+            await executeFunc1(
+              campaign.amazonCampaignId,
+              campaignType as 1 | 2 | 3 | 4,
+              campaign.name,
+              campaign.marketplace,
+              apiService
+            );
+            stats.func1Executed++;
+          } catch (error) {
+            console.error(`Error executing Func1 for campaign ${campaign.name}:`, error);
+            stats.errors++;
+          }
+        }
+
+        // Add similar logic for func2-5 as needed
+        // This is where you'd implement the full automation logic per campaign
+
+      } catch (error) {
+        stats.errors++;
+        console.error(`❌ Error processing campaign ${campaign.name}:`, error);
+      }
+    }
+
+    // Summary
+    console.log('\n' + '='.repeat(60));
+    console.log(`📊 AUTOMATION SUMMARY FOR USER ${userId}`);
+    console.log('='.repeat(60));
+    console.log(`Campaigns processed: ${stats.campaignsProcessed}`);
+    console.log(`Campaigns in warmup (skipped): ${stats.campaignsInWarmup}`);
+    console.log(`\nFunctions executed:`);
+    console.log(`  - Function 1 (Progressive Bidding): ${stats.func1Executed}`);
+    console.log(`  - Function 2 (Placement Optimization): ${stats.func2Executed}`);
+    console.log(`  - Function 3 (Targeting Optimization): ${stats.func3Executed}`);
+    console.log(`  - Function 4 (Auto Ad Optimization): ${stats.func4Executed}`);
+    console.log(`  - Function 5 (Campaign Feeding): ${stats.func5Executed}`);
+    console.log(`\nErrors: ${stats.errors}`);
+    console.log('='.repeat(60));
+
+    console.log(`\n✅ Completed automations for user ${userId}\n`);
+
+  } catch (error) {
+    console.error(`❌ Fatal error running automations for user ${userId}:`, error);
+    throw error;
   }
 }
 

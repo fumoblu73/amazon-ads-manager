@@ -6,7 +6,10 @@
 // con orari specifici configurabili
 
 import cron from 'node-cron';
-import { runAutomationRules } from './rules';
+import { runAutomationRules, runAutomationRulesForUser } from './rules';
+import { AppDataSource } from '../data-source';
+import { User } from '../entities/User';
+import { IsNull, Not } from 'typeorm';
 
 // Interfaccia per configurazione scheduling
 interface ScheduleConfig {
@@ -122,21 +125,60 @@ class AutomationScheduler {
   }
 
   /**
-   * Esegue tutte le automazioni (chiamato da trigger manuale)
+   * Esegue tutte le automazioni per tutti gli users (chiamato da trigger manuale)
    */
   async runNow() {
-    console.log('🚀 Esecuzione manuale di tutte le automazioni...');
+    console.log('🚀 Esecuzione manuale automazioni per TUTTI gli users...');
     const startTime = Date.now();
 
     try {
-      await runAutomationRules();
+      // Get all active users with Amazon OAuth
+      const userRepo = AppDataSource.getRepository(User);
+      const users = await userRepo.find({
+        where: {
+          isActive: true,
+          amazonUserId: Not(IsNull())
+        }
+      });
+
+      console.log(`👥 Found ${users.length} active users with Amazon authentication`);
+
+      if (users.length === 0) {
+        console.log('⚠️  No active users with Amazon auth. Nothing to do.');
+        return;
+      }
+
+      // Run automations for each user sequentially
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const user of users) {
+        try {
+          console.log(`\n${'='.repeat(80)}`);
+          console.log(`Processing user: ${user.email} (${user.id})`);
+          console.log('='.repeat(80));
+
+          await runAutomationRulesForUser(user.id);
+          successCount++;
+        } catch (error) {
+          errorCount++;
+          console.error(`❌ Failed to run automations for user ${user.email}:`, error);
+          // Continue with other users even if one fails
+        }
+      }
 
       const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(2);
-      console.log(`✅ Esecuzione completata in ${duration} minuti`);
+      console.log(`\n${'='.repeat(80)}`);
+      console.log(`✅ GLOBAL AUTOMATION SUMMARY`);
+      console.log(`   Total users: ${users.length}`);
+      console.log(`   Success: ${successCount}`);
+      console.log(`   Errors: ${errorCount}`);
+      console.log(`   Duration: ${duration} minutes`);
+      console.log('='.repeat(80));
 
     } catch (error) {
       const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(2);
-      console.error(`❌ Errore esecuzione dopo ${duration} minuti:`, error);
+      console.error(`❌ Fatal error during automation execution after ${duration} minutes:`, error);
       throw error;
     }
   }

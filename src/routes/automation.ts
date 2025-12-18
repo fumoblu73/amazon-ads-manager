@@ -1,7 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { automationScheduler } from '../automation/scheduler';
 import { EventEmitter } from 'events';
-import { runAutomationRules } from '../automation/rules';
+import { runAutomationRules, runAutomationRulesForUser } from '../automation/rules';
+import { authMiddleware } from '../middleware/auth';
+import { requireAmazonAuth, AuthRequest } from '../middleware/requireAmazonAuth';
 
 const router = Router();
 
@@ -182,6 +184,40 @@ router.post('/trigger-manual', async (req: Request, res: Response) => {
   });
 
   automationQueue.emit('run');
+});
+
+// ================================================
+// ENDPOINT PER-USER TRIGGER (User-specific automation)
+// ================================================
+router.post('/trigger-user', authMiddleware, requireAmazonAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    console.log(`🚀 User ${req.userId} triggered their automations`);
+
+    // Respond immediately
+    res.json({
+      success: true,
+      message: 'Your automations have been queued',
+      timestamp: new Date().toISOString(),
+      note: 'Execution started in background. Check /api/automation/status for global progress.'
+    });
+
+    // Run user's automations in background (don't wait)
+    runAutomationRulesForUser(req.userId!)
+      .then(() => {
+        console.log(`✅ Completed automations for user ${req.userId}`);
+      })
+      .catch((error) => {
+        console.error(`❌ Failed automations for user ${req.userId}:`, error);
+      });
+
+  } catch (error) {
+    console.error('Error triggering user automations:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to trigger automations',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
 });
 
 // ================================================
