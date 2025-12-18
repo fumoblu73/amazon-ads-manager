@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, UpdateDateColumn, CreateDateColumn, Index } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, UpdateDateColumn, CreateDateColumn, Index, ManyToOne, JoinColumn } from 'typeorm';
+import { User } from '../entities/User';
 
 @Entity('campaigns')
 @Index(['amazonCampaignId', 'marketplace'], { unique: true })
@@ -29,6 +30,14 @@ export class Campaign {
 
   @Column({ type: 'text', nullable: true })
   notes: string;
+
+  // User relationship for multi-user support
+  @Column({ type: 'uuid', nullable: true, name: 'user_id' })
+  userId: string | null;
+
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'user_id' })
+  user: User | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
