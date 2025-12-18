@@ -8,7 +8,7 @@
 //
 // Frequenza: Ogni 3 giorni (sincronizzata con Funzione 3)
 
-import { amazonApiService } from '../../services/amazonApi';
+import { UserAmazonApiService } from '../../services/UserAmazonApiService';
 import { formatDateForAmazon } from '../../utils/timeframe';
 
 export interface Func1Config {
@@ -37,6 +37,9 @@ export interface Func1Result {
  *
  * @param campaignId - ID della campagna Amazon
  * @param campaignType - Tipo campagna (1-4)
+ * @param campaignName - Nome della campagna
+ * @param marketplace - Marketplace code
+ * @param apiService - Per-user Amazon API service instance
  * @param config - Configurazione parametri (opzionale)
  * @returns Risultato con statistiche esecuzione
  */
@@ -45,6 +48,7 @@ export async function executeFunc1(
   campaignType: 1 | 2 | 3 | 4,
   campaignName: string,
   marketplace: string,
+  apiService: UserAmazonApiService,
   config?: Partial<Func1Config>
 ): Promise<Func1Result> {
   console.log('\n════════════════════════════════════════');
@@ -80,25 +84,25 @@ export async function executeFunc1(
     console.log(`📅 Periodo analisi: ${startDateStr} - ${endDateStr} (${cfg.frequency} giorni)`);
 
     // 2. Richiedi report delle performance
-    const reportId = await amazonApiService.requestReport(marketplace, 'spKeyword', {
+    const reportId = await apiService.requestReport('spKeyword', {
       startDate: startDateStr,
       endDate: endDateStr,
       metrics: 'impressions,clicks,spend,sales'
     });
 
     // 3. Aspetta e scarica il report
-    const reportData = await amazonApiService.waitAndDownloadReport(marketplace, reportId);
+    const reportData = await apiService.waitAndDownloadReport(reportId);
 
     // 4. Recupera keywords o targets in base al tipo di campagna
     let items: any[] = [];
 
     if (campaignType === 1 || campaignType === 3) {
       // Campagne Keyword-based
-      items = await amazonApiService.getKeywords(marketplace, campaignId);
+      items = await apiService.getKeywords(campaignId);
       console.log(`📊 Trovate ${items.length} keywords`);
     } else if (campaignType === 2 || campaignType === 4) {
       // Campagne Product-based
-      items = await amazonApiService.getTargets(marketplace, campaignId);
+      items = await apiService.getTargets(campaignId);
       console.log(`📊 Trovati ${items.length} targets`);
     }
 
@@ -135,9 +139,9 @@ export async function executeFunc1(
 
           // Aggiorna il bid
           if (campaignType === 1 || campaignType === 3) {
-            await amazonApiService.updateKeywordBid(marketplace, itemId, newBid);
+            await apiService.updateKeywordBid(itemId, newBid);
           } else {
-            await amazonApiService.updateTargetBid(marketplace, itemId, newBid);
+            await apiService.updateTargetBid(itemId, newBid);
           }
 
           result.itemsIncreased++;
