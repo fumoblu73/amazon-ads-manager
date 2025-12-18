@@ -60,6 +60,17 @@ export default function KdpDashboard() {
   const formatCurrency = (value: number | undefined | null) => value != null ? `$${value.toFixed(2)}` : '$0.00';
   const formatPercentage = (value: number | null | undefined) => value != null ? `${value.toFixed(2)}%` : 'N/A';
 
+  // Safe access to nested properties
+  const monthlyStats = summary.overall?.monthlyStats || {
+    adOrders: 0,
+    grossRoyalties: 0,
+    spending: 0,
+    netRoyalties: 0,
+    overallROI: 0,
+    amsROI: 0,
+    amsACoS: 0
+  };
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -89,43 +100,43 @@ export default function KdpDashboard() {
                 <tr className="border-b border-gray-700">
                   <td className="py-2 text-gray-400">AD Orders</td>
                   <td className="py-2 text-center">0</td>
-                  <td className="py-2 text-center font-medium">{summary.overall.monthlyStats.adOrders}</td>
+                  <td className="py-2 text-center font-medium">{monthlyStats.adOrders}</td>
                   <td className="py-2 text-center text-green-500">0%</td>
                 </tr>
                 <tr className="border-b border-gray-700">
                   <td className="py-2 text-gray-400">Royalties (Gross)</td>
                   <td className="py-2 text-center">$0.00</td>
-                  <td className="py-2 text-center font-medium">{formatCurrency(summary.overall.monthlyStats.grossRoyalties)}</td>
+                  <td className="py-2 text-center font-medium">{formatCurrency(monthlyStats.grossRoyalties)}</td>
                   <td className="py-2 text-center text-green-500">0%</td>
                 </tr>
                 <tr className="border-b border-gray-700">
                   <td className="py-2 text-gray-400">Spending</td>
                   <td className="py-2 text-center">$0.00</td>
-                  <td className="py-2 text-center font-medium">{formatCurrency(summary.overall.monthlyStats.spending)}</td>
+                  <td className="py-2 text-center font-medium">{formatCurrency(monthlyStats.spending)}</td>
                   <td className="py-2 text-center text-green-500">0%</td>
                 </tr>
                 <tr className="border-b border-gray-700">
                   <td className="py-2 text-gray-400">Royalties (Net)</td>
                   <td className="py-2 text-center">$0.00</td>
-                  <td className="py-2 text-center font-medium text-green-500">{formatCurrency(summary.overall.monthlyStats.netRoyalties)}</td>
+                  <td className="py-2 text-center font-medium text-green-500">{formatCurrency(monthlyStats.netRoyalties)}</td>
                   <td className="py-2 text-center text-green-500">0%</td>
                 </tr>
                 <tr className="border-b border-gray-700">
                   <td className="py-2 text-gray-400">Overall ROI</td>
                   <td className="py-2 text-center">0%</td>
-                  <td className="py-2 text-center font-medium">{formatPercentage(summary.overall.monthlyStats.overallROI)}</td>
+                  <td className="py-2 text-center font-medium">{formatPercentage(monthlyStats.overallROI)}</td>
                   <td className="py-2 text-center text-green-500">0%</td>
                 </tr>
                 <tr className="border-b border-gray-700">
                   <td className="py-2 text-gray-400">AMS ROI</td>
                   <td className="py-2 text-center">0%</td>
-                  <td className="py-2 text-center font-medium">{formatPercentage(summary.overall.monthlyStats.amsROI)}</td>
+                  <td className="py-2 text-center font-medium">{formatPercentage(monthlyStats.amsROI)}</td>
                   <td className="py-2 text-center text-green-500">0%</td>
                 </tr>
                 <tr>
                   <td className="py-2 text-gray-400">AMS ACoS</td>
                   <td className="py-2 text-center">-</td>
-                  <td className="py-2 text-center font-medium">{formatPercentage(summary.overall.monthlyStats.amsACoS)}</td>
+                  <td className="py-2 text-center font-medium">{formatPercentage(monthlyStats.amsACoS)}</td>
                   <td className="py-2 text-center">-</td>
                 </tr>
               </tbody>
@@ -222,7 +233,7 @@ export default function KdpDashboard() {
 
         <StatsCard
           title="KENP Reads This Month"
-          value={summary.widgets.kenpReadsThisMonth.toLocaleString()}
+          value={(summary.widgets?.kenpReadsThisMonth || 0).toLocaleString()}
           icon={
             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
