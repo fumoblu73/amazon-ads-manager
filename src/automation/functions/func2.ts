@@ -8,7 +8,7 @@
 //
 // Frequenza: Ogni 7 giorni
 
-import { amazonApiService } from '../../services/amazonApi';
+import { UserAmazonApiService } from '../../services/UserAmazonApiService';
 import { calculateFastAcos, determineFastAcosBand, calculateNewPlacement, calculateAcos } from '../../utils/fastAcos';
 import { formatDateForAmazon } from '../../utils/timeframe';
 
@@ -69,6 +69,7 @@ export async function executeFunc2(
     restOfSearch: number;
     productPages: number;
   },
+  apiService: UserAmazonApiService,
   config?: Partial<Func2Config>
 ): Promise<Func2Result> {
   console.log('\n════════════════════════════════════════');
@@ -113,13 +114,13 @@ export async function executeFunc2(
     console.log(`📅 Periodo analisi ACoS: ${startDateStr} - ${endDateStr} (${cfg.placementTimeframeWeeks} settimane)`);
 
     // 3. Richiedi report della campagna
-    const reportId = await amazonApiService.requestReport(marketplace, startDateStr, [
+    const reportId = await apiService.requestReport(startDateStr, [
       'campaignId',
       'cost',
       'sales'
     ]);
 
-    const reportData = await amazonApiService.waitAndDownloadReport(marketplace, reportId);
+    const reportData = await apiService.waitAndDownloadReport(reportId);
 
     // 4. Trova metriche della campagna
     const campaignMetrics = reportData.find((r: any) => r.campaignId === campaignId);
@@ -157,7 +158,7 @@ export async function executeFunc2(
     console.log(`   Product Pages: ${currentPlacements.productPages}% → ${result.newPlacements.productPages}%`);
 
     // 8. Aggiorna i placement su Amazon
-    await amazonApiService.updateCampaignPlacements(marketplace, campaignId, result.newPlacements);
+    await apiService.updateCampaignPlacements(campaignId, result.newPlacements);
 
     result.placementsUpdated = true;
 

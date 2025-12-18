@@ -8,7 +8,7 @@
 //
 // Frequenza: Ogni 3 giorni (DOPO Funzione 1)
 
-import { amazonApiService } from '../../services/amazonApi';
+import { UserAmazonApiService } from '../../services/UserAmazonApiService';
 import { calculateFastAcos, determineFastAcosBand, calculateNewBid, calculateAcos, getSpecialCaseBidAdjustment } from '../../utils/fastAcos';
 import { calculateTimeframeFunc3, formatDateForAmazon } from '../../utils/timeframe';
 
@@ -48,6 +48,7 @@ export async function executeFunc3(
   marketplace: string,
   book: Book,
   totalImpressions30Days: number,
+  apiService: UserAmazonApiService,
   config?: Partial<Func3Config>
 ): Promise<Func3Result> {
   console.log('\n════════════════════════════════════════');
@@ -95,23 +96,23 @@ export async function executeFunc3(
     startDate65.setDate(startDate65.getDate() - 65);
 
     // 4. Richiedi report
-    const reportId = await amazonApiService.requestReport(marketplace, formatDateForAmazon(startDate), [
+    const reportId = await apiService.requestReport(formatDateForAmazon(startDate), [
       'keywordId', 'targetId', 'impressions', 'clicks', 'cost', 'sales', 'orders', 'bid'
     ]);
-    const reportData = await amazonApiService.waitAndDownloadReport(marketplace, reportId);
+    const reportData = await apiService.waitAndDownloadReport(reportId);
 
     // Report ultimi 65 giorni per controllo pausa
-    const reportId65 = await amazonApiService.requestReport(marketplace, formatDateForAmazon(startDate65), [
+    const reportId65 = await apiService.requestReport(formatDateForAmazon(startDate65), [
       'keywordId', 'targetId', 'clicks', 'orders'
     ]);
-    const reportData65 = await amazonApiService.waitAndDownloadReport(marketplace, reportId65);
+    const reportData65 = await apiService.waitAndDownloadReport(reportId65);
 
     // 5. Recupera items
     let items: any[] = [];
     if (campaignType === 1 || campaignType === 3) {
-      items = await amazonApiService.getKeywords(marketplace, campaignId);
+      items = await apiService.getKeywords(campaignId);
     } else {
-      items = await amazonApiService.getTargets(marketplace, campaignId);
+      items = await apiService.getTargets(campaignId);
     }
 
     console.log(`📊 Trovati ${items.length} items da analizzare`);
@@ -151,9 +152,9 @@ export async function executeFunc3(
           console.log(`   ⏸️  PAUSA ${itemName}: clicks=${clicks}/${clicks65}, orders=${orders}/${orders65}`);
 
           if (campaignType === 1 || campaignType === 3) {
-            await amazonApiService.updateKeywordState(marketplace, itemId, 'paused');
+            await apiService.updateKeywordState(itemId, 'paused');
           } else {
-            await amazonApiService.updateTargetState(marketplace, itemId, 'paused');
+            await apiService.updateTargetState(itemId, 'paused');
           }
 
           result.itemsPaused++;
@@ -173,9 +174,9 @@ export async function executeFunc3(
             console.log(`   ${bidAdjustment > 0 ? '🔼' : '🔽'} ${itemName}: ${currentBid.toFixed(2)} → ${newBid.toFixed(2)} (Fascia ${band.band})`);
 
             if (campaignType === 1 || campaignType === 3) {
-              await amazonApiService.updateKeywordBid(marketplace, itemId, newBid);
+              await apiService.updateKeywordBid(itemId, newBid);
             } else {
-              await amazonApiService.updateTargetBid(marketplace, itemId, newBid);
+              await apiService.updateTargetBid(itemId, newBid);
             }
 
             if (bidAdjustment > 0) result.itemsBidIncreased++;
