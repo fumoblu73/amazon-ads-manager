@@ -16,6 +16,10 @@ export interface AuthRequest extends Request {
   userId?: string;
   user?: User;
   amazonAuthValid?: boolean;
+  // Explicitly include Express Request properties for TypeScript compatibility
+  query: any;
+  body: any;
+  params: any;
 }
 
 /**
