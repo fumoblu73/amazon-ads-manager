@@ -12,6 +12,7 @@ import kdpAnalyticsRoutes from './routes/kdp-analytics';
 import kdpBsrRoutes from './routes/kdp-bsr';
 import kdpJournalEventsRoutes from './routes/kdp-journal-events';
 import authRoutes from './routes/auth';
+import migrateRoutes from './routes/migrate.routes';
 import { initializeDatabase } from './config/database';
 // import { automationScheduler } from './automation/scheduler';
 
@@ -71,6 +72,9 @@ app.get('/api/health', (req, res) => {
 
 // Auth Routes
 app.use('/api/auth', authRoutes);
+
+// Migration endpoint (protected by MIGRATION_SECRET)
+app.use('/api', migrateRoutes);
 
 // app.use('/api/automation', automationRoutes);
 app.use('/api/books', booksRoutes);
