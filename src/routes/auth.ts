@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { AppDataSource } from '../config/database';
-import { User } from '../models/User';
+import { User } from '../entities/User';
 import { AmazonAuthService } from '../services/amazon-auth.service';
 
 const router = Router();
