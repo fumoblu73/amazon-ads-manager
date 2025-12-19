@@ -2,30 +2,21 @@ import { Router, Request, Response } from 'express';
 import { AppDataSource } from '../config/database';
 import { JournalEvent, CreateJournalEventInput, UpdateJournalEventInput, JournalEventFilters, JournalEventModel } from '../models/JournalEvent';
 import { Between } from 'typeorm';
+import { authMiddleware } from '../middleware/auth';
 
 const router = Router();
 
-// Middleware per autenticazione Bearer token
-const requireAuth = (req: Request, res: Response, next: Function) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.replace('Bearer ', '');
-
-  if (!token || token !== process.env.ADMIN_TOKEN) {
-    return res.status(401).json({
-      success: false,
-      error: 'Unauthorized'
-    });
-  }
-
-  next();
-};
+// Extended Request interface with userId
+interface AuthRequest extends Request {
+  userId?: string;
+}
 
 // ================================================
 // GET /api/kdp/journal-events - Lista eventi con filtri
 // ================================================
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const userId = 'demo-user'; // TODO: Get from auth
+    const userId = req.userId; // TODO: Get from auth
     const filters: JournalEventFilters = {
       startDate: req.query.startDate as string,
       endDate: req.query.endDate as string,
@@ -88,9 +79,9 @@ router.get('/', async (req: Request, res: Response) => {
 // ================================================
 // GET /api/kdp/journal-events/summary - Riepilogo eventi
 // ================================================
-router.get('/summary', async (req: Request, res: Response) => {
+router.get('/summary', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const userId = 'demo-user'; // TODO: Get from auth
+    const userId = req.userId; // TODO: Get from auth
     const startDate = req.query.startDate as string;
     const endDate = req.query.endDate as string;
 
@@ -146,9 +137,9 @@ router.get('/summary', async (req: Request, res: Response) => {
 // ================================================
 // GET /api/kdp/journal-events/:id - Dettaglio evento singolo
 // ================================================
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const userId = 'demo-user'; // TODO: Get from auth
+    const userId = req.userId; // TODO: Get from auth
     const eventRepository = AppDataSource.getRepository(JournalEvent);
 
     const event = await eventRepository.findOne({
@@ -182,11 +173,11 @@ router.get('/:id', async (req: Request, res: Response) => {
 // ================================================
 // POST /api/kdp/journal-events - Crea nuovo evento
 // ================================================
-router.post('/', requireAuth, async (req: Request, res: Response) => {
+router.post('/', authMiddleware, authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const eventData: CreateJournalEventInput = {
       ...req.body,
-      userId: 'demo-user' // TODO: Get from auth
+      userId: req.userId // TODO: Get from auth
     };
 
     // Validazione
@@ -222,7 +213,7 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
 // ================================================
 // PUT /api/kdp/journal-events/:id - Aggiorna evento
 // ================================================
-router.put('/:id', requireAuth, async (req: Request, res: Response) => {
+router.put('/:id', authMiddleware, authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const eventData: UpdateJournalEventInput = req.body;
 
@@ -240,7 +231,7 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
     const event = await eventRepository.findOne({
       where: {
         id: req.params.id,
-        userId: 'demo-user' // TODO: Get from auth
+        userId: req.userId // TODO: Get from auth
       }
     });
 
@@ -273,13 +264,13 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
 // ================================================
 // DELETE /api/kdp/journal-events/:id - Elimina evento
 // ================================================
-router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
+router.delete('/:id', authMiddleware, authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const eventRepository = AppDataSource.getRepository(JournalEvent);
     const event = await eventRepository.findOne({
       where: {
         id: req.params.id,
-        userId: 'demo-user' // TODO: Get from auth
+        userId: req.userId // TODO: Get from auth
       }
     });
 
@@ -311,9 +302,9 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
 // ================================================
 // POST /api/kdp/journal-events/bulk - Importazione bulk
 // ================================================
-router.post('/bulk', requireAuth, async (req: Request, res: Response) => {
+router.post('/bulk', authMiddleware, authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const userId = 'demo-user'; // TODO: Get from auth
+    const userId = req.userId; // TODO: Get from auth
     const events: CreateJournalEventInput[] = req.body.events || [];
 
     if (!Array.isArray(events) || events.length === 0) {
