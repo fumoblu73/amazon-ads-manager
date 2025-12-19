@@ -10,9 +10,15 @@ import {
   getMockCountryStats,
   getMockMonthComparison
 } from '../utils/mock-kdp-data';
+import { authMiddleware } from '../middleware/auth';
 
 const router = Router();
 const USE_MOCK_DATA = process.env.USE_MOCK_DATA === 'true';
+
+// Extended Request interface with userId
+interface AuthRequest extends Request {
+  userId?: string;
+}
 
 // Helper function to get date range
 const getDateRange = (startDate?: string, endDate?: string) => {
@@ -33,14 +39,14 @@ const formatCurrency = (value: number): string => {
 // ================================================
 // GET /api/kdp/dashboard/summary - Dashboard principale
 // ================================================
-router.get('/dashboard/summary', async (req: Request, res: Response) => {
+router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     // Return mock data if enabled
     if (USE_MOCK_DATA) {
       return res.json(getMockDashboardSummary());
     }
 
-    const userId = 'demo-user'; // TODO: Get from auth
+    const userId = req.userId; // TODO: Get from auth
     const { startDate, endDate} = getDateRange(
       req.query.startDate as string,
       req.query.endDate as string
@@ -183,14 +189,14 @@ router.get('/dashboard/summary', async (req: Request, res: Response) => {
 // ================================================
 // GET /api/kdp/analytics/historical - Statistiche storiche
 // ================================================
-router.get('/analytics/historical', async (req: Request, res: Response) => {
+router.get('/analytics/historical', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     // Return mock data if enabled
     if (USE_MOCK_DATA) {
       return res.json(getMockHistoricalStats());
     }
 
-    const userId = 'demo-user'; // TODO: Get from auth
+    const userId = req.userId; // TODO: Get from auth
     const { startDate, endDate } = getDateRange(
       req.query.startDate as string,
       req.query.endDate as string
@@ -288,14 +294,14 @@ router.get('/analytics/historical', async (req: Request, res: Response) => {
 // ================================================
 // GET /api/kdp/analytics/book-stats - Statistiche per libro
 // ================================================
-router.get('/analytics/book-stats', async (req: Request, res: Response) => {
+router.get('/analytics/book-stats', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     // Return mock data if enabled
     if (USE_MOCK_DATA) {
       return res.json(getMockBookStats());
     }
 
-    const userId = 'demo-user'; // TODO: Get from auth
+    const userId = req.userId; // TODO: Get from auth
     const { startDate, endDate } = getDateRange(
       req.query.startDate as string,
       req.query.endDate as string
@@ -422,14 +428,14 @@ router.get('/analytics/book-stats', async (req: Request, res: Response) => {
 // ================================================
 // GET /api/kdp/analytics/country - Statistiche per paese
 // ================================================
-router.get('/analytics/country', async (req: Request, res: Response) => {
+router.get('/analytics/country', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     // Return mock data if enabled
     if (USE_MOCK_DATA) {
       return res.json(getMockCountryStats());
     }
 
-    const userId = 'demo-user'; // TODO: Get from auth
+    const userId = req.userId; // TODO: Get from auth
     const { startDate, endDate } = getDateRange(
       req.query.startDate as string,
       req.query.endDate as string
@@ -526,7 +532,7 @@ router.get('/analytics/country', async (req: Request, res: Response) => {
 // ================================================
 // GET /api/kdp/analytics/month-comparison - Confronto mensile
 // ================================================
-router.get('/analytics/month-comparison', async (req: Request, res: Response) => {
+router.get('/analytics/month-comparison', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const month1 = req.query.month1 as string || '2024-01';
     const month2 = req.query.month2 as string || '2024-02';
@@ -536,7 +542,7 @@ router.get('/analytics/month-comparison', async (req: Request, res: Response) =>
       return res.json(getMockMonthComparison(month1, month2));
     }
 
-    const userId = 'demo-user'; // TODO: Get from auth
+    const userId = req.userId; // TODO: Get from auth
     const statsRepository = AppDataSource.getRepository(KdpDailyStats);
 
     // Helper to get month stats

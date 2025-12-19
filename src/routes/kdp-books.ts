@@ -4,29 +4,20 @@ import { KdpBook, CreateKdpBookInput, UpdateKdpBookInput, BookshelfFilters } fro
 import { KdpSyncLog } from '../models/KdpSyncLog';
 import { Like } from 'typeorm';
 import { mockBooks } from '../utils/mock-kdp-data';
+import { authMiddleware } from '../middleware/auth';
 
 const router = Router();
 const USE_MOCK_DATA = process.env.USE_MOCK_DATA === 'true';
 
-// Middleware per autenticazione Bearer token
-const requireAuth = (req: Request, res: Response, next: Function) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.replace('Bearer ', '');
-
-  if (!token || token !== process.env.ADMIN_TOKEN) {
-    return res.status(401).json({
-      success: false,
-      error: 'Unauthorized'
-    });
-  }
-
-  next();
-};
+// Extended Request interface with userId
+interface AuthRequest extends Request {
+  userId?: string;
+}
 
 // ================================================
 // GET /api/kdp/books - Lista libri KDP con filtri
 // ================================================
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     // Return mock data if enabled
     if (USE_MOCK_DATA) {
@@ -56,9 +47,8 @@ router.get('/', async (req: Request, res: Response) => {
     // Build query
     const whereConditions: any = {};
 
-    // TODO: Implement userId from authentication
-    // For now using hardcoded userId
-    whereConditions.userId = 'demo-user';
+    // Use authenticated user's ID
+    whereConditions.userId = req.userId;
 
     if (filters.marketplace) {
       whereConditions.marketplace = filters.marketplace;
@@ -68,7 +58,7 @@ router.get('/', async (req: Request, res: Response) => {
       // Search in title or ASIN
       const searchResults = await bookRepository
         .createQueryBuilder('book')
-        .where('book.userId = :userId', { userId: 'demo-user' })
+        .where('book.userId = :userId', { userId: req.userId })
         .andWhere('(book.title LIKE :search OR book.asin LIKE :search)', {
           search: `%${filters.search}%`
         })
@@ -119,13 +109,13 @@ router.get('/', async (req: Request, res: Response) => {
 // ================================================
 // GET /api/kdp/books/:id - Dettagli libro singolo
 // ================================================
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const bookRepository = AppDataSource.getRepository(KdpBook);
     const book = await bookRepository.findOne({
       where: {
         id: req.params.id,
-        userId: 'demo-user' // TODO: Get from auth
+        userId: req.userId // TODO: Get from auth
       }
     });
 
@@ -153,9 +143,9 @@ router.get('/:id', async (req: Request, res: Response) => {
 // ================================================
 // POST /api/kdp/sync - Sincronizza libri da KDP
 // ================================================
-router.post('/sync', requireAuth, async (req: Request, res: Response) => {
+router.post('/sync', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const userId = 'demo-user'; // TODO: Get from auth token
+    const userId = req.userId;
 
     // Create sync log
     const syncLogRepository = AppDataSource.getRepository(KdpSyncLog);
@@ -249,11 +239,11 @@ router.post('/sync', requireAuth, async (req: Request, res: Response) => {
 // ================================================
 // POST /api/kdp/books - Crea libro manualmente
 // ================================================
-router.post('/', requireAuth, async (req: Request, res: Response) => {
+router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const bookData: CreateKdpBookInput = {
       ...req.body,
-      userId: 'demo-user' // TODO: Get from auth
+      userId: req.userId
     };
 
     const bookRepository = AppDataSource.getRepository(KdpBook);
@@ -292,7 +282,7 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
 // ================================================
 // PUT /api/kdp/books/:id - Aggiorna libro
 // ================================================
-router.put('/:id', requireAuth, async (req: Request, res: Response) => {
+router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const bookData: UpdateKdpBookInput = req.body;
 
@@ -300,7 +290,7 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
     const book = await bookRepository.findOne({
       where: {
         id: req.params.id,
-        userId: 'demo-user' // TODO: Get from auth
+        userId: req.userId // TODO: Get from auth
       }
     });
 
@@ -333,13 +323,13 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
 // ================================================
 // DELETE /api/kdp/books/:id - Elimina libro
 // ================================================
-router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const bookRepository = AppDataSource.getRepository(KdpBook);
     const book = await bookRepository.findOne({
       where: {
         id: req.params.id,
-        userId: 'demo-user' // TODO: Get from auth
+        userId: req.userId // TODO: Get from auth
       }
     });
 

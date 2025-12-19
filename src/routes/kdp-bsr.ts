@@ -1,30 +1,21 @@
 import { Router, Request, Response } from 'express';
 import { AppDataSource } from '../config/database';
 import { KdpBook } from '../models/KdpBook';
+import { authMiddleware } from '../middleware/auth';
 
 const router = Router();
 
-// Middleware per autenticazione Bearer token
-const requireAuth = (req: Request, res: Response, next: Function) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.replace('Bearer ', '');
-
-  if (!token || token !== process.env.ADMIN_TOKEN) {
-    return res.status(401).json({
-      success: false,
-      error: 'Unauthorized'
-    });
-  }
-
-  next();
-};
+// Extended Request interface with userId
+interface AuthRequest extends Request {
+  userId?: string;
+}
 
 // ================================================
 // GET /api/kdp/bsr - Lista BSR per tutti i libri
 // ================================================
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const userId = 'demo-user'; // TODO: Get from auth
+    const userId = req.userId; // TODO: Get from auth
     const marketplace = req.query.marketplace as string;
     const asin = req.query.asin as string;
 
@@ -68,9 +59,9 @@ router.get('/', async (req: Request, res: Response) => {
 // ================================================
 // GET /api/kdp/bsr/:asin - BSR dettagliato per libro
 // ================================================
-router.get('/:asin', async (req: Request, res: Response) => {
+router.get('/:asin', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const userId = 'demo-user'; // TODO: Get from auth
+    const userId = req.userId; // TODO: Get from auth
     const { asin } = req.params;
 
     const bookRepository = AppDataSource.getRepository(KdpBook);
@@ -126,9 +117,9 @@ router.get('/:asin', async (req: Request, res: Response) => {
 // ================================================
 // POST /api/kdp/bsr/sync - Sincronizza BSR da Amazon
 // ================================================
-router.post('/sync', requireAuth, async (req: Request, res: Response) => {
+router.post('/sync', authMiddleware, authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const userId = 'demo-user'; // TODO: Get from auth
+    const userId = req.userId; // TODO: Get from auth
     const { asin } = req.body;
 
     // TODO: Implement actual Amazon API BSR sync
