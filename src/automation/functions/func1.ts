@@ -48,7 +48,7 @@ export async function executeFunc1(
   campaignType: 1 | 2 | 3 | 4,
   campaignName: string,
   marketplace: string,
-  apiService: UserAmazonApiService,
+  apiService: any,  // Support both UserAmazonApiService and AmazonApiService
   config?: Partial<Func1Config>
 ): Promise<Func1Result> {
   console.log('\n════════════════════════════════════════');
@@ -84,11 +84,7 @@ export async function executeFunc1(
     console.log(`📅 Periodo analisi: ${startDateStr} - ${endDateStr} (${cfg.frequency} giorni)`);
 
     // 2. Richiedi report delle performance
-    const reportId = await apiService.requestReport('spKeyword', {
-      startDate: startDateStr,
-      endDate: endDateStr,
-      metrics: 'impressions,clicks,spend,sales'
-    });
+    const reportId = await apiService.requestReport(startDateStr, ['impressions', 'clicks', 'spend', 'sales']);
 
     // 3. Aspetta e scarica il report
     const reportData = await apiService.waitAndDownloadReport(reportId);

@@ -7,7 +7,7 @@
 
 import cron from 'node-cron';
 import { runAutomationRules, runAutomationRulesForUser } from './rules';
-import { AppDataSource } from '../data-source';
+import { AppDataSource } from '../config/database';
 import { User } from '../entities/User';
 import { IsNull, Not } from 'typeorm';
 

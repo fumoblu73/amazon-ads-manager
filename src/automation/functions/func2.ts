@@ -69,7 +69,7 @@ export async function executeFunc2(
     restOfSearch: number;
     productPages: number;
   },
-  apiService: UserAmazonApiService,
+  apiService: any,  // Support both UserAmazonApiService and AmazonApiService
   config?: Partial<Func2Config>
 ): Promise<Func2Result> {
   console.log('\n════════════════════════════════════════');

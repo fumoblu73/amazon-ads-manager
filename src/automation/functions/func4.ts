@@ -70,7 +70,7 @@ export async function executeFunc4(
   adGroupId: string,
   book: Book,
   totalImpressions30Days: number,
-  apiService: UserAmazonApiService,
+  apiService: any,  // Support both UserAmazonApiService and AmazonApiService
   config?: Partial<Func4Config>
 ): Promise<Func4Result> {
   console.log('\n════════════════════════════════════════');
@@ -202,11 +202,7 @@ export async function executeFunc4(
     console.log('\n📊 PARTE 2: Negative Targeting (Search Terms)');
 
     // 7. Richiedi report search terms
-    const reportIdSearchTerms = await apiService.requestSearchTermsReport({
-      startDate: startDateStr,
-      endDate: endDateStr,
-      campaignId
-    });
+    const reportIdSearchTerms = await apiService.requestSearchTermsReport(startDateStr, endDateStr, campaignId);
 
     const searchTermsData = await apiService.waitAndDownloadReport(reportIdSearchTerms);
     console.log(`   Trovati ${searchTermsData.length} search terms`);
