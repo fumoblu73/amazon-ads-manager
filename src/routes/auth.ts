@@ -65,13 +65,19 @@ router.get('/callback', async (req: Request, res: Response) => {
 
     const tokenExpiry = AmazonAuthService.calculateTokenExpiry(tokens.expires_in);
 
-    // Cerca o crea l'utente
+    // Cerca l'utente per amazonUserId o email
     let user = await userRepository.findOne({
-      where: { amazonUserId: userInfo.user_id }
+      where: [
+        { amazonUserId: userInfo.user_id },
+        { email: userInfo.email }
+      ]
     });
 
     if (user) {
-      // Aggiorna token esistente
+      // Aggiorna utente esistente
+      user.email = userInfo.email;
+      user.name = userInfo.name;
+      user.amazonUserId = userInfo.user_id;
       user.accessToken = tokens.access_token;
       user.refreshToken = tokens.refresh_token;
       user.tokenExpiresAt = tokenExpiry;
