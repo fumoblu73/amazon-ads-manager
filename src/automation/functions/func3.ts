@@ -48,7 +48,7 @@ export async function executeFunc3(
   marketplace: string,
   book: Book,
   totalImpressions30Days: number,
-  apiService: UserAmazonApiService,
+  apiService: any,  // Support both UserAmazonApiService and AmazonApiService
   config?: Partial<Func3Config>
 ): Promise<Func3Result> {
   console.log('\n════════════════════════════════════════');

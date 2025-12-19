@@ -81,7 +81,7 @@ export async function executeFunc5(
   sourceCampaignType: 1 | 2 | 3 | 4 | 5,
   marketplace: string,
   campaignMapping: CampaignMapping,
-  apiService: UserAmazonApiService,
+  apiService: any,  // Support both UserAmazonApiService and AmazonApiService
   config?: Partial<Func5Config>
 ): Promise<Func5Result> {
   console.log('\n════════════════════════════════════════');
@@ -121,11 +121,7 @@ export async function executeFunc5(
     console.log(`📅 Periodo analisi: ${startDateStr} - ${endDateStr}`);
 
     // 2. Richiedi report search terms per la campagna sorgente
-    const reportId = await apiService.requestSearchTermsReport({
-      startDate: startDateStr,
-      endDate: endDateStr,
-      campaignId: sourceCampaignId
-    });
+    const reportId = await apiService.requestSearchTermsReport(startDateStr, endDateStr, sourceCampaignId);
 
     const searchTermsData = await apiService.waitAndDownloadReport(reportId);
     console.log(`📊 Trovati ${searchTermsData.length} search terms`);
@@ -152,14 +148,14 @@ export async function executeFunc5(
           // ============================================
           // CAMPAGNA 5 (Auto) → Altre
           // ============================================
-          await feedFromCampaign5(term, isAsin, marketplace, campaignMapping, cfg, result);
+          await feedFromCampaign5(term, isAsin, marketplace, campaignMapping, cfg, result, apiService);
 
         } else if (sourceCampaignType === 1) {
           // ============================================
           // CAMPAGNA 1 (Keyword Broad) → Altre
           // ============================================
           if (!isAsin) {
-            await feedFromCampaign1(term, marketplace, campaignMapping, cfg, result);
+            await feedFromCampaign1(term, marketplace, campaignMapping, cfg, result, apiService);
           }
 
         } else if (sourceCampaignType === 3) {
@@ -167,7 +163,7 @@ export async function executeFunc5(
           // CAMPAGNA 3 (Keyword Super) → Altre
           // ============================================
           if (!isAsin) {
-            await feedFromCampaign3(term, marketplace, campaignMapping, cfg, result);
+            await feedFromCampaign3(term, marketplace, campaignMapping, cfg, result, apiService);
           }
 
         } else if (sourceCampaignType === 2) {
@@ -175,7 +171,7 @@ export async function executeFunc5(
           // CAMPAGNA 2 (Product Exact) → Altre
           // ============================================
           if (isAsin) {
-            await feedFromCampaign2(term, marketplace, campaignMapping, cfg, result);
+            await feedFromCampaign2(term, marketplace, campaignMapping, cfg, result, apiService);
           }
 
         } else if (sourceCampaignType === 4) {
@@ -183,7 +179,7 @@ export async function executeFunc5(
           // CAMPAGNA 4 (Product Super) → Altre
           // ============================================
           if (isAsin) {
-            await feedFromCampaign4(term, marketplace, campaignMapping, cfg, result);
+            await feedFromCampaign4(term, marketplace, campaignMapping, cfg, result, apiService);
           }
         }
 
@@ -231,14 +227,13 @@ async function feedFromCampaign5(
   marketplace: string,
   mapping: CampaignMapping,
   cfg: Func5Config,
-  result: Func5Result
+  result: Func5Result,
+  apiService: any  // Support both UserAmazonApiService and AmazonApiService
 ): Promise<void> {
   if (isAsin) {
     // ASIN → Camp.2 (Exact) + Camp.4 (Expanded)
     if (mapping.campaign2Id && mapping.campaign2AdGroupId) {
-      await apiService.addTargets([{
-        campaignId: mapping.campaign2Id,
-        adGroupId: mapping.campaign2AdGroupId,
+      await apiService.addTargets(mapping.campaign2Id, mapping.campaign2AdGroupId, [{
         asin: term,
         bid: cfg.bidBroad,
         expressionType: 'manual'
@@ -249,9 +244,7 @@ async function feedFromCampaign5(
     }
 
     if (mapping.campaign4Id && mapping.campaign4AdGroupId) {
-      await apiService.addTargets([{
-        campaignId: mapping.campaign4Id,
-        adGroupId: mapping.campaign4AdGroupId,
+      await apiService.addTargets(mapping.campaign4Id, mapping.campaign4AdGroupId, [{
         asin: term,
         bid: cfg.bidExpanded,
         expressionType: 'manual'
@@ -263,9 +256,7 @@ async function feedFromCampaign5(
   } else {
     // Keyword → Camp.1 (Broad) + Camp.3 (Exact+Phrase)
     if (mapping.campaign1Id && mapping.campaign1AdGroupId) {
-      await apiService.addKeywords([{
-        campaignId: mapping.campaign1Id,
-        adGroupId: mapping.campaign1AdGroupId,
+      await apiService.addKeywords(mapping.campaign1Id, mapping.campaign1AdGroupId, [{
         keywordText: term,
         matchType: 'broad',
         bid: cfg.bidBroad
@@ -276,9 +267,9 @@ async function feedFromCampaign5(
     }
 
     if (mapping.campaign3Id && mapping.campaign3AdGroupId) {
-      await apiService.addKeywords([
-        { campaignId: mapping.campaign3Id, adGroupId: mapping.campaign3AdGroupId, keywordText: term, matchType: 'exact', bid: cfg.bidExact },
-        { campaignId: mapping.campaign3Id, adGroupId: mapping.campaign3AdGroupId, keywordText: term, matchType: 'phrase', bid: cfg.bidPhrase }
+      await apiService.addKeywords(mapping.campaign3Id, mapping.campaign3AdGroupId, [
+        { keywordText: term, matchType: 'exact', bid: cfg.bidExact },
+        { keywordText: term, matchType: 'phrase', bid: cfg.bidPhrase }
       ]);
       result.keywordsAdded += 2;
       result.destinationCampaigns.campaign3 = (result.destinationCampaigns.campaign3 || 0) + 2;
@@ -296,13 +287,12 @@ async function feedFromCampaign1(
   marketplace: string,
   mapping: CampaignMapping,
   cfg: Func5Config,
-  result: Func5Result
+  result: Func5Result,
+  apiService: any  // Support both UserAmazonApiService and AmazonApiService
 ): Promise<void> {
   // Auto-feed nella stessa campagna
   if (mapping.campaign1Id && mapping.campaign1AdGroupId) {
-    await apiService.addKeywords([{
-      campaignId: mapping.campaign1Id,
-      adGroupId: mapping.campaign1AdGroupId,
+    await apiService.addKeywords(mapping.campaign1Id, mapping.campaign1AdGroupId, [{
       keywordText: term,
       matchType: 'broad',
       bid: cfg.bidBroad
@@ -314,9 +304,9 @@ async function feedFromCampaign1(
 
   // Feed a Campagna 3
   if (mapping.campaign3Id && mapping.campaign3AdGroupId) {
-    await apiService.addKeywords([
-      { campaignId: mapping.campaign3Id, adGroupId: mapping.campaign3AdGroupId, keywordText: term, matchType: 'exact', bid: cfg.bidExact },
-      { campaignId: mapping.campaign3Id, adGroupId: mapping.campaign3AdGroupId, keywordText: term, matchType: 'phrase', bid: cfg.bidPhrase }
+    await apiService.addKeywords(mapping.campaign3Id, mapping.campaign3AdGroupId, [
+      { keywordText: term, matchType: 'exact', bid: cfg.bidExact },
+      { keywordText: term, matchType: 'phrase', bid: cfg.bidPhrase }
     ]);
     result.keywordsAdded += 2;
     result.destinationCampaigns.campaign3 = (result.destinationCampaigns.campaign3 || 0) + 2;
@@ -333,13 +323,12 @@ async function feedFromCampaign3(
   marketplace: string,
   mapping: CampaignMapping,
   cfg: Func5Config,
-  result: Func5Result
+  result: Func5Result,
+  apiService: any  // Support both UserAmazonApiService and AmazonApiService
 ): Promise<void> {
   // Feed a Campagna 1
   if (mapping.campaign1Id && mapping.campaign1AdGroupId) {
-    await apiService.addKeywords([{
-      campaignId: mapping.campaign1Id,
-      adGroupId: mapping.campaign1AdGroupId,
+    await apiService.addKeywords(mapping.campaign1Id, mapping.campaign1AdGroupId, [{
       keywordText: term,
       matchType: 'broad',
       bid: cfg.bidBroad
@@ -351,9 +340,9 @@ async function feedFromCampaign3(
 
   // Auto-feed nella stessa campagna
   if (mapping.campaign3Id && mapping.campaign3AdGroupId) {
-    await apiService.addKeywords([
-      { campaignId: mapping.campaign3Id, adGroupId: mapping.campaign3AdGroupId, keywordText: term, matchType: 'exact', bid: cfg.bidExact },
-      { campaignId: mapping.campaign3Id, adGroupId: mapping.campaign3AdGroupId, keywordText: term, matchType: 'phrase', bid: cfg.bidPhrase }
+    await apiService.addKeywords(mapping.campaign3Id, mapping.campaign3AdGroupId, [
+      { keywordText: term, matchType: 'exact', bid: cfg.bidExact },
+      { keywordText: term, matchType: 'phrase', bid: cfg.bidPhrase }
     ]);
     result.keywordsAdded += 2;
     result.destinationCampaigns.campaign3 = (result.destinationCampaigns.campaign3 || 0) + 2;
@@ -370,13 +359,12 @@ async function feedFromCampaign2(
   marketplace: string,
   mapping: CampaignMapping,
   cfg: Func5Config,
-  result: Func5Result
+  result: Func5Result,
+  apiService: any  // Support both UserAmazonApiService and AmazonApiService
 ): Promise<void> {
   // Auto-feed nella stessa campagna
   if (mapping.campaign2Id && mapping.campaign2AdGroupId) {
-    await apiService.addTargets([{
-      campaignId: mapping.campaign2Id,
-      adGroupId: mapping.campaign2AdGroupId,
+    await apiService.addTargets(mapping.campaign2Id, mapping.campaign2AdGroupId, [{
       asin: term,
       bid: cfg.bidBroad,
       expressionType: 'manual'
@@ -388,9 +376,7 @@ async function feedFromCampaign2(
 
   // Feed a Campagna 4
   if (mapping.campaign4Id && mapping.campaign4AdGroupId) {
-    await apiService.addTargets([{
-      campaignId: mapping.campaign4Id,
-      adGroupId: mapping.campaign4AdGroupId,
+    await apiService.addTargets(mapping.campaign4Id, mapping.campaign4AdGroupId, [{
       asin: term,
       bid: cfg.bidExpanded,
       expressionType: 'manual'
@@ -410,13 +396,12 @@ async function feedFromCampaign4(
   marketplace: string,
   mapping: CampaignMapping,
   cfg: Func5Config,
-  result: Func5Result
+  result: Func5Result,
+  apiService: any  // Support both UserAmazonApiService and AmazonApiService
 ): Promise<void> {
   // Feed a Campagna 2
   if (mapping.campaign2Id && mapping.campaign2AdGroupId) {
-    await apiService.addTargets([{
-      campaignId: mapping.campaign2Id,
-      adGroupId: mapping.campaign2AdGroupId,
+    await apiService.addTargets(mapping.campaign2Id, mapping.campaign2AdGroupId, [{
       asin: term,
       bid: cfg.bidBroad,
       expressionType: 'manual'
@@ -428,9 +413,7 @@ async function feedFromCampaign4(
 
   // Auto-feed nella stessa campagna
   if (mapping.campaign4Id && mapping.campaign4AdGroupId) {
-    await apiService.addTargets([{
-      campaignId: mapping.campaign4Id,
-      adGroupId: mapping.campaign4AdGroupId,
+    await apiService.addTargets(mapping.campaign4Id, mapping.campaign4AdGroupId, [{
       asin: term,
       bid: cfg.bidExpanded,
       expressionType: 'manual'

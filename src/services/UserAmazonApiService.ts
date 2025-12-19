@@ -5,10 +5,10 @@
 // using each user's OAuth tokens instead of a global refresh token.
 
 import axios, { AxiosInstance } from 'axios';
-import { AppDataSource } from '../data-source';
+import { AppDataSource } from '../config/database';
 import { User } from '../entities/User';
 import { AmazonAuthService } from './amazon-auth.service';
-import { getApiEndpoint } from '../config/amazon';
+import { API_ENDPOINTS, MARKETPLACE_TO_REGION } from '../config/amazon';
 
 /**
  * Per-user Amazon Ads API service
@@ -37,7 +37,8 @@ export class UserAmazonApiService {
       await this.ensureValidToken();
 
       // Set dynamic base URL based on user's region
-      const endpoint = getApiEndpoint(this.user?.countryCode);
+      const region = this.user?.countryCode ? MARKETPLACE_TO_REGION[this.user.countryCode.toUpperCase()] || 'EU' : 'EU';
+      const endpoint = API_ENDPOINTS[region];
       config.baseURL = endpoint;
 
       // Set auth headers

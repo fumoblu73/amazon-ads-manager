@@ -9,7 +9,7 @@
 
 import { amazonApiService } from '../services/amazonApi';
 import { createUserAmazonApiService } from '../services/UserAmazonApiFactory';
-import { AppDataSource } from '../data-source';
+import { AppDataSource } from '../config/database';
 import { Campaign } from '../models/Campaign';
 import { isInWarmupPeriod } from '../utils/timeframe';
 import { automationScheduler } from './scheduler';
@@ -201,7 +201,7 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
 
     if (shouldRun) {
       try {
-        await executeFunc1(campaignId, campaignType as any, campaignName, marketplace, {
+        await executeFunc1(campaignId, campaignType as any, campaignName, marketplace, amazonApiService, {
           bidIncrease: mockConfig.func1_bidIncrease,
           frequency: mockConfig.func1_frequency,
           maxImpressions: mockConfig.func1_impressions,
@@ -233,6 +233,7 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
           marketplace,
           mockBook,
           mockTotalImpressions,
+          amazonApiService,
           {
             frequency: mockConfig.func3_frequency,
             timeframeA: mockConfig.func3_timeframeA,
@@ -266,6 +267,7 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
           marketplace,
           mockBook,
           mockPlacements,
+          amazonApiService,
           {
             frequency: mockConfig.func2_frequency,
             placementTimeframeWeeks: mockConfig.func2_timeframeWeeks
@@ -296,6 +298,7 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
           mockAdGroupId,
           mockBook,
           mockTotalImpressions,
+          amazonApiService,
           {
             frequency: mockConfig.func4_frequency,
             timeframeA: mockConfig.func4_timeframeA,
@@ -342,6 +345,7 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
           campaignType as any,
           marketplace,
           mockCampaignMapping,
+          amazonApiService,
           {
             frequency: mockConfig.func5_frequency,
             minOrders: mockConfig.func5_minOrders,

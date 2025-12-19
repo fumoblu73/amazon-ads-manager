@@ -5,7 +5,7 @@
 // endpoints that require Amazon Ads API access
 
 import { Request, Response, NextFunction } from 'express';
-import { AppDataSource } from '../data-source';
+import { AppDataSource } from '../config/database';
 import { User } from '../entities/User';
 import { AmazonAuthService } from '../services/amazon-auth.service';
 
