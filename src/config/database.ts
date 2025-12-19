@@ -1,14 +1,16 @@
 import { DataSource } from 'typeorm';
 import dotenv from 'dotenv';
+// Import entities from models/
 import { AutomationLog } from '../models/AutomationLog';
 import { KeywordPerformance } from '../models/KeywordPerformance';
 import { Campaign } from '../models/Campaign';
 import { Book } from '../models/Book';
-import { KdpBook } from '../models/KdpBook';
-import { KdpDailyStats } from '../models/KdpDailyStats';
-import { JournalEvent } from '../models/JournalEvent';
-import { KdpSyncLog } from '../models/KdpSyncLog';
-import { User } from '../models/User';
+// Import entities from entities/ (newer structure with relations)
+import { User } from '../entities/User';
+import { KdpBook } from '../entities/KdpBook';
+import { KdpDailyStats } from '../entities/KdpDailyStats';
+import { JournalEvent } from '../entities/JournalEvent';
+import { KdpSyncLog } from '../entities/KdpSyncLog';
 
 dotenv.config();
 
