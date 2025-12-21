@@ -18,7 +18,7 @@ export interface JwtPayload {
 
 /**
  * Middleware per autenticazione JWT
- * Verifica il token nell'header Authorization: Bearer <token>
+ * Verifica il token nel cookie auth_token o nell'header Authorization: Bearer <token>
  * Aggiunge userId alla request se valido
  */
 export const authMiddleware = async (
@@ -27,14 +27,20 @@ export const authMiddleware = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const authHeader = req.headers.authorization;
+    // Try to get token from cookie first, then from Authorization header
+    let token = req.cookies?.auth_token;
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!token) {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7); // Rimuove "Bearer "
+      }
+    }
+
+    if (!token) {
       res.status(401).json({ error: 'Token di autenticazione mancante' });
       return;
     }
-
-    const token = authHeader.substring(7); // Rimuove "Bearer "
 
     try {
       const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
