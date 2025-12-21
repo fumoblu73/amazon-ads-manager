@@ -18,6 +18,10 @@ const USE_MOCK_DATA = process.env.USE_MOCK_DATA === 'true';
 // Extended Request interface with userId
 interface AuthRequest extends Request {
   userId?: string;
+  // Explicitly include Express Request properties for TypeScript compatibility
+  query: any;
+  body: any;
+  params: any;
 }
 
 // Helper function to get date range

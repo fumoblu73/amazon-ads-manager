@@ -8,6 +8,10 @@ const router = Router();
 // Extended Request interface with userId
 interface AuthRequest extends Request {
   userId?: string;
+  // Explicitly include Express Request properties for TypeScript compatibility
+  query: any;
+  body: any;
+  params: any;
 }
 
 // ================================================
