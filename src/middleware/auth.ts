@@ -9,6 +9,7 @@ export interface AuthRequest extends Request {
   query: any;
   params: any;
   headers: any;
+  cookies: any;
 }
 
 export interface JwtPayload {
