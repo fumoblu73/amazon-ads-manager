@@ -22,33 +22,33 @@ export class KdpDailyStats {
   date: string;
 
   // Royalty data
-  @Column({ name: 'grossRoyalties', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @Column({ name: 'grossroyalties', type: 'decimal', precision: 10, scale: 2, default: 0 })
   grossRoyalties: number;
 
   @Column({ name: 'spending', type: 'decimal', precision: 10, scale: 2, default: 0 })
   spending: number;
 
-  @Column({ name: 'netRoyalties', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @Column({ name: 'netroyalties', type: 'decimal', precision: 10, scale: 2, default: 0 })
   netRoyalties: number;
 
   // Sales data
-  @Column({ name: 'paidUnits', type: 'int', default: 0 })
+  @Column({ name: 'paidunits', type: 'int', default: 0 })
   paidUnits: number;
 
-  @Column({ name: 'freeUnits', type: 'int', default: 0 })
+  @Column({ name: 'freeunits', type: 'int', default: 0 })
   freeUnits: number;
 
-  @Column({ name: 'kenpReads', type: 'bigint', default: 0 })
+  @Column({ name: 'kenpreads', type: 'bigint', default: 0 })
   kenpReads: number;
 
   // Performance metrics
-  @Column({ name: 'overallROI', type: 'decimal', precision: 10, scale: 2, nullable: true })
+  @Column({ name: 'overallroi', type: 'decimal', precision: 10, scale: 2, nullable: true })
   overallROI?: number;
 
-  @Column({ name: 'amsROI', type: 'decimal', precision: 10, scale: 2, nullable: true })
+  @Column({ name: 'amsroi', type: 'decimal', precision: 10, scale: 2, nullable: true })
   amsROI?: number;
 
-  @Column({ name: 'amsROAS', type: 'decimal', precision: 10, scale: 2, nullable: true })
+  @Column({ name: 'amsroas', type: 'decimal', precision: 10, scale: 2, nullable: true })
   amsROAS?: number;
 
   @Column({ type: 'varchar', length: 10, nullable: true })

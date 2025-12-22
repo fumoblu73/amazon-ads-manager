@@ -124,8 +124,8 @@ router.get('/callback', async (req: Request, res: Response) => {
     // Cancella lo state cookie
     res.clearCookie('oauth_state');
 
-    // Reindirizza al Visual Dashboard (home page)
-    res.redirect('/');
+    // Reindirizza alla KDP Dashboard
+    res.redirect('/kdp/dashboard');
   } catch (error: any) {
     console.error('OAuth callback error:', error);
     res.status(500).json({ error: 'Authentication failed', details: error.message });
