@@ -23,6 +23,8 @@ interface AuthRequest extends Request {
 // ================================================
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
+    console.log('📚 GET /api/kdp/books - userId:', req.userId);
+
     // Return mock data if enabled
     if (USE_MOCK_DATA) {
       return res.json({
@@ -45,6 +47,8 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       limit: parseInt(req.query.limit as string) || 25
     };
 
+    console.log('📚 Filters:', filters);
+
     const bookRepository = AppDataSource.getRepository(KdpBook);
     const skip = (filters.page! - 1) * filters.limit!;
 
@@ -53,6 +57,8 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 
     // Use authenticated user's ID
     whereConditions.userId = req.userId;
+
+    console.log('📚 Where conditions:', whereConditions);
 
     if (filters.marketplace) {
       whereConditions.marketplace = filters.marketplace;
@@ -83,12 +89,15 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       });
     }
 
+    console.log('📚 Executing query...');
     const [books, total] = await bookRepository.findAndCount({
       where: whereConditions,
       skip,
       take: filters.limit,
       order: { createdAt: 'DESC' }
     });
+
+    console.log('📚 Query result - books:', books.length, 'total:', total);
 
     res.json({
       success: true,
