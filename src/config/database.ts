@@ -5,6 +5,10 @@ import { AutomationLog } from '../models/AutomationLog';
 import { KeywordPerformance } from '../models/KeywordPerformance';
 import { Campaign } from '../models/Campaign';
 import { Book } from '../models/Book';
+import { KdpBook as KdpBookModel } from '../models/KdpBook';
+import { KdpDailyStats as KdpDailyStatsModel } from '../models/KdpDailyStats';
+import { JournalEvent as JournalEventModel } from '../models/JournalEvent';
+import { KdpSyncLog as KdpSyncLogModel } from '../models/KdpSyncLog';
 // Import entities from entities/ (newer structure with relations)
 import { User } from '../entities/User';
 import { KdpBook } from '../entities/KdpBook';
@@ -22,7 +26,7 @@ const getDatabaseConfig = () => {
       url: process.env.DATABASE_URL,
       synchronize: true, // Temporaneamente true per aggiornare schema
       logging: process.env.NODE_ENV === 'development',
-      entities: [User, AutomationLog, KeywordPerformance, Campaign, Book, KdpBook, KdpDailyStats, JournalEvent, KdpSyncLog],
+      entities: [User, AutomationLog, KeywordPerformance, Campaign, Book, KdpBook, KdpDailyStats, JournalEvent, KdpSyncLog, KdpBookModel, KdpDailyStatsModel, JournalEventModel, KdpSyncLogModel],
       migrations: ['src/migrations/**/*.ts'],
       ssl: {
         rejectUnauthorized: false // Necessario per Supabase
@@ -39,7 +43,7 @@ const getDatabaseConfig = () => {
     database: process.env.DB_DATABASE || 'amazon_ads_manager',
     synchronize: true, // Auto-crea le tabelle (solo sviluppo!)
     logging: process.env.NODE_ENV === 'development',
-    entities: [User, AutomationLog, KeywordPerformance, Campaign, Book, KdpBook, KdpDailyStats, JournalEvent, KdpSyncLog],
+    entities: [User, AutomationLog, KeywordPerformance, Campaign, Book, KdpBook, KdpDailyStats, JournalEvent, KdpSyncLog, KdpBookModel, KdpDailyStatsModel, JournalEventModel, KdpSyncLogModel],
     migrations: ['src/migrations/**/*.ts'],
   };
 };
