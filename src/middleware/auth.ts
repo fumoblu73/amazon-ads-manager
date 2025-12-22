@@ -46,6 +46,7 @@ export const authMiddleware = async (
     try {
       const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
       req.userId = decoded.userId;
+      console.log('🔐 Auth middleware - userId:', req.userId, 'email:', decoded.email);
       next();
     } catch (error) {
       if (error instanceof jwt.TokenExpiredError) {
