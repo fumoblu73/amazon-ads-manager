@@ -1,25 +1,8 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Layout() {
-  const [isOnline, setIsOnline] = useState(true);
   const { user, logout } = useAuth();
-
-  useEffect(() => {
-    const checkStatus = async () => {
-      try {
-        const response = await fetch('https://amazon-ads-manager.onrender.com/api/automation/status');
-        setIsOnline(response.ok);
-      } catch (error) {
-        setIsOnline(false);
-      }
-    };
-
-    checkStatus();
-    const interval = setInterval(checkStatus, 30000); // Check every 30 seconds
-    return () => clearInterval(interval);
-  }, []);
   const navItems = [
     { path: '/kdp/dashboard', icon: (
       <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -54,9 +37,9 @@ export default function Layout() {
   return (
     <div className="flex h-screen bg-black">
       {/* Left Sidebar - Vertical Navigation */}
-      <aside className="w-32 bg-black flex flex-col items-center py-8">
+      <aside className="w-32 bg-black flex flex-col items-center py-4">
         {/* Logo */}
-        <div className="mb-8 w-full">
+        <div className="mb-4 w-full">
           <img
             src="/logoADS.png"
             alt="Amazon Ads Manager"
@@ -64,14 +47,8 @@ export default function Layout() {
           />
         </div>
 
-        {/* Status Indicator */}
-        <div className="mb-8 flex items-center gap-2 bg-gray-900 px-3 py-2 rounded-lg border border-gray-700">
-          <div className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} ${isOnline ? 'animate-pulse' : ''}`}></div>
-          <span className="text-xs font-medium text-gray-300">{isOnline ? 'Online' : 'Offline'}</span>
-        </div>
-
         {/* Navigation Icons */}
-        <nav className="flex flex-col items-center gap-4 flex-1">
+        <nav className="flex flex-col items-center gap-3 flex-1">
           {navItems.map((item) => (
             <NavLink
               key={item.path}
