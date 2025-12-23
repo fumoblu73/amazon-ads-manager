@@ -24,7 +24,7 @@ const getDatabaseConfig = () => {
     return {
       type: 'postgres' as const,
       url: process.env.DATABASE_URL,
-      synchronize: true, // Temporaneamente true per aggiornare schema
+      synchronize: process.env.NODE_ENV === 'development',
       logging: process.env.NODE_ENV === 'development',
       entities: [User, AutomationLog, KeywordPerformance, Campaign, Book, KdpBook, KdpDailyStats, JournalEvent, KdpSyncLog, KdpBookModel, KdpDailyStatsModel, JournalEventModel, KdpSyncLogModel],
       migrations: ['src/migrations/**/*.ts'],
@@ -41,7 +41,7 @@ const getDatabaseConfig = () => {
     username: process.env.DB_USERNAME || 'postgres',
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_DATABASE || 'amazon_ads_manager',
-    synchronize: true, // Auto-crea le tabelle (solo sviluppo!)
+    synchronize: process.env.NODE_ENV === 'development',
     logging: process.env.NODE_ENV === 'development',
     entities: [User, AutomationLog, KeywordPerformance, Campaign, Book, KdpBook, KdpDailyStats, JournalEvent, KdpSyncLog, KdpBookModel, KdpDailyStatsModel, JournalEventModel, KdpSyncLogModel],
     migrations: ['src/migrations/**/*.ts'],
