@@ -11,6 +11,7 @@ import kdpBooksRoutes from './routes/kdp-books';
 import kdpAnalyticsRoutes from './routes/kdp-analytics';
 import kdpBsrRoutes from './routes/kdp-bsr';
 import kdpJournalEventsRoutes from './routes/kdp-journal-events';
+import kdpSyncRoutes from './routes/kdp-sync';
 import authRoutes from './routes/auth';
 import settingsRoutes from './routes/settings';
 import migrateRoutes from './routes/migrate.routes';
@@ -88,6 +89,7 @@ app.use('/api/kdp/books', kdpBooksRoutes);
 app.use('/api/kdp', kdpAnalyticsRoutes);
 app.use('/api/kdp/bsr', kdpBsrRoutes);
 app.use('/api/kdp/journal-events', kdpJournalEventsRoutes);
+app.use('/api/kdp-sync', kdpSyncRoutes);
 
 // Serve frontend static files in production
 if (process.env.NODE_ENV === 'production') {
