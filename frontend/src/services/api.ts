@@ -445,4 +445,23 @@ export const journalEventsApi = {
   },
 };
 
+// ================================================
+// AUTOMATION SETTINGS
+// ================================================
+export const settingsApi = {
+  get: async () => {
+    const response = await apiClient.get<ApiResponse<any>>('/api/settings', {
+      withCredentials: true
+    });
+    return response.data;
+  },
+
+  update: async (settings: any) => {
+    const response = await apiClient.put<ApiResponse<any>>('/api/settings', settings, {
+      withCredentials: true
+    });
+    return response.data;
+  }
+};
+
 export default apiClient;
