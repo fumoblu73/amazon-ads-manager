@@ -1,5 +1,7 @@
 // Configurazione API endpoint
-const API_URL = 'http://localhost:3000'; // Cambia in produzione con l'URL reale
+// Auto-detect: usa produzione se disponibile, altrimenti localhost
+const PRODUCTION_URL = 'https://amazon-ads-manager.onrender.com'; // Cambia con il tuo URL Render
+const API_URL = PRODUCTION_URL || 'http://localhost:3000';
 
 // Elementi DOM
 const syncButton = document.getElementById('syncButton');

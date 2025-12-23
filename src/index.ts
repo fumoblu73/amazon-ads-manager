@@ -16,6 +16,7 @@ import authRoutes from './routes/auth';
 import settingsRoutes from './routes/settings';
 import migrateRoutes from './routes/migrate.routes';
 import { initializeDatabase } from './config/database';
+import { kdpSyncScheduler } from './services/kdp-sync-scheduler';
 // import { automationScheduler } from './automation/scheduler';
 
 dotenv.config();
@@ -108,6 +109,9 @@ const startServer = async () => {
     // Connetti al database
     await initializeDatabase();
 
+    // Avvia KDP sync scheduler (every 6 hours)
+    kdpSyncScheduler.start();
+
     // Avvia scheduler interno (temporarily disabled)
     // automationScheduler.start();
 
@@ -117,6 +121,7 @@ const startServer = async () => {
       console.log(`🚀 Server avviato sulla porta ${PORT}`);
       console.log('='.repeat(50));
       console.log('✅ OAuth and KDP Analytics active');
+      console.log('✅ KDP Sync scheduler active (runs every 6 hours)');
       console.log('⚠️  Automation temporarily disabled - will be fixed soon');
     });
   } catch (error) {
