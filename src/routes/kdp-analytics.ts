@@ -103,7 +103,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       .andWhere('stats.date = :date', { date: yesterday })
       .andWhere('stats.asin IS NOT NULL')
       .groupBy('stats.asin')
-      .orderBy('royalties', 'DESC')
+      .orderBy('SUM(stats.grossRoyalties)', 'DESC')
       .limit(10)
       .getRawMany();
 
@@ -116,7 +116,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       .andWhere('stats.date = :date', { date: today })
       .andWhere('stats.asin IS NOT NULL')
       .groupBy('stats.asin')
-      .orderBy('royalties', 'DESC')
+      .orderBy('SUM(stats.grossRoyalties)', 'DESC')
       .limit(10)
       .getRawMany();
 
@@ -250,7 +250,7 @@ router.get('/analytics/historical', authMiddleware, async (req: AuthRequest, res
       .andWhere('stats.date BETWEEN :startDate AND :endDate', { startDate, endDate })
       .andWhere('stats.asin IS NOT NULL')
       .groupBy('stats.asin')
-      .orderBy('grossRoyalties', 'DESC')
+      .orderBy('SUM(stats.grossRoyalties)', 'DESC')
       .getRawMany();
 
     const books = [];
@@ -395,7 +395,7 @@ router.get('/analytics/book-stats', authMiddleware, async (req: AuthRequest, res
       .andWhere('stats.date BETWEEN :startDate AND :endDate', { startDate, endDate })
       .andWhere('stats.asin IS NOT NULL')
       .groupBy('stats.asin')
-      .orderBy('grossRoyalties', 'DESC')
+      .orderBy('SUM(stats.grossRoyalties)', 'DESC')
       .getRawMany();
 
     const books = [];
@@ -458,7 +458,7 @@ router.get('/analytics/country', authMiddleware, async (req: AuthRequest, res: R
       .andWhere('stats.date BETWEEN :startDate AND :endDate', { startDate, endDate })
       .andWhere('stats.marketplace IS NOT NULL')
       .groupBy('stats.marketplace')
-      .orderBy('royalties', 'DESC')
+      .orderBy('SUM(stats.grossRoyalties)', 'DESC')
       .getRawMany();
 
     const marketplaceNames: { [key: string]: string } = {
