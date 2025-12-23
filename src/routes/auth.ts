@@ -18,7 +18,6 @@ router.get('/login', (req: Request, res: Response) => {
 
   // Salva lo state in sessione per verificarlo nel callback
   // (In produzione, usa un session store come Redis)
-  console.log('🔐 Setting oauth_state cookie:', state);
   res.cookie('oauth_state', state, {
     httpOnly: true,
     maxAge: 600000, // 10 minuti
@@ -39,28 +38,25 @@ router.get('/callback', async (req: Request, res: Response) => {
     const { code, state } = req.query;
     const savedState = req.cookies.oauth_state;
 
-    console.log('🔐 OAuth Callback - code:', !!code, 'state:', state, 'savedState:', savedState);
-    console.log('🔐 All cookies:', req.cookies);
-
     // Verifica CSRF - temporaneamente più permissivo per debugging
     if (!code) {
-      console.error('❌ OAuth callback: missing code');
+      console.error('OAuth callback: missing code');
       return res.status(400).json({ error: 'Invalid OAuth callback: missing code' });
     }
 
     if (!state) {
-      console.error('❌ OAuth callback: missing state parameter');
+      console.error('OAuth callback: missing state parameter');
       return res.status(400).json({ error: 'Invalid OAuth callback: missing state parameter' });
     }
 
     // Skip state validation in production if cookie wasn't set (temporary workaround)
     if (savedState && state !== savedState) {
-      console.error('❌ OAuth callback: state mismatch', { received: state, expected: savedState });
+      console.error('OAuth callback: state mismatch', { received: state, expected: savedState });
       return res.status(400).json({ error: 'Invalid OAuth callback: state mismatch (CSRF)' });
     }
 
     if (!savedState) {
-      console.warn('⚠️ OAuth callback: state cookie not found, skipping CSRF validation (not recommended for production)');
+      console.warn('OAuth callback: state cookie not found, skipping CSRF validation (not recommended for production)');
     }
 
     // Step 2: Scambia code con tokens
