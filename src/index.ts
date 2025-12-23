@@ -2,8 +2,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
 import path from 'path';
-// Temporarily disabled due to TypeScript errors - will be fixed after OAuth deploy
-// import automationRoutes from './routes/automation';
+import automationRoutes from './routes/automation';
 import booksRoutes from './routes/books';
 // import campaignsRoutes from './routes/campaigns';
 import logsRoutes from './routes/logs';
@@ -17,7 +16,7 @@ import settingsRoutes from './routes/settings';
 import migrateRoutes from './routes/migrate.routes';
 import { initializeDatabase } from './config/database';
 import { kdpSyncScheduler } from './services/kdp-sync-scheduler';
-// import { automationScheduler } from './automation/scheduler';
+import { automationScheduler } from './automation/scheduler';
 
 dotenv.config();
 
@@ -79,7 +78,7 @@ app.use('/api/auth', authRoutes);
 // Migration endpoint (protected by MIGRATION_SECRET)
 app.use('/api', migrateRoutes);
 
-// app.use('/api/automation', automationRoutes);
+app.use('/api/automation', automationRoutes);
 app.use('/api/books', booksRoutes);
 // app.use('/api/campaigns', campaignsRoutes);
 app.use('/api/logs', logsRoutes);
@@ -112,8 +111,8 @@ const startServer = async () => {
     // Avvia KDP sync scheduler (every 6 hours)
     kdpSyncScheduler.start();
 
-    // Avvia scheduler interno (temporarily disabled)
-    // automationScheduler.start();
+    // Avvia automation scheduler
+    automationScheduler.start();
 
     // Avvia server
     app.listen(PORT, '0.0.0.0', () => {
@@ -122,7 +121,7 @@ const startServer = async () => {
       console.log('='.repeat(50));
       console.log('✅ OAuth and KDP Analytics active');
       console.log('✅ KDP Sync scheduler active (runs every 6 hours)');
-      console.log('⚠️  Automation temporarily disabled - will be fixed soon');
+      console.log('✅ Automation engine active (Func 1+3: Lun/Mer/Ven 10:30 IT, Func 2+4+5: Lun 11:30 IT)');
     });
   } catch (error) {
     console.error('❌ Errore avvio server:', error);
