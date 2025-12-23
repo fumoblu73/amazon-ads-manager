@@ -12,6 +12,7 @@ import kdpAnalyticsRoutes from './routes/kdp-analytics';
 import kdpBsrRoutes from './routes/kdp-bsr';
 import kdpJournalEventsRoutes from './routes/kdp-journal-events';
 import authRoutes from './routes/auth';
+import settingsRoutes from './routes/settings';
 import migrateRoutes from './routes/migrate.routes';
 import { initializeDatabase } from './config/database';
 // import { automationScheduler } from './automation/scheduler';
@@ -80,6 +81,7 @@ app.use('/api', migrateRoutes);
 app.use('/api/books', booksRoutes);
 // app.use('/api/campaigns', campaignsRoutes);
 app.use('/api/logs', logsRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // KDP Analytics Routes
 app.use('/api/kdp/books', kdpBooksRoutes);

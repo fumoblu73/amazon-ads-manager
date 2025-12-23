@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { settingsApi } from '../services/api';
 
 export default function Settings() {
-  const [settings] = useState({
+  const [settings, setSettings] = useState({
     func1: {
       enabled: true,
       bidIncrease: 0.02,
@@ -42,15 +43,83 @@ export default function Settings() {
       bidExpanded: 0.30,
     },
   });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+
+  // Carica settings all'avvio
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const response = await settingsApi.get();
+        if (response.success && response.data) {
+          setSettings(response.data);
+        }
+      } catch (error) {
+        console.error('Error loading settings:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadSettings();
+  }, []);
+
+  // Salva settings
+  const handleSave = async () => {
+    setSaving(true);
+    setMessage('');
+    try {
+      const response = await settingsApi.update(settings);
+      if (response.success) {
+        setMessage('Impostazioni salvate con successo!');
+        setTimeout(() => setMessage(''), 3000);
+      }
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      setMessage('Errore nel salvataggio delle impostazioni');
+      setTimeout(() => setMessage(''), 3000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateSetting = (func: string, key: string, value: any) => {
+    setSettings(prev => ({
+      ...prev,
+      [func]: {
+        ...prev[func as keyof typeof prev],
+        [key]: value
+      }
+    }));
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-white">Caricamento...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full p-8 overflow-hidden flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-white uppercase">Impostazioni</h1>
-        <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors shadow-md">
-          Salva Modifiche
-        </button>
+        <div className="flex items-center gap-4">
+          {message && (
+            <span className={`text-sm ${message.includes('successo') ? 'text-green-500' : 'text-red-500'}`}>
+              {message}
+            </span>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {saving ? 'Salvataggio...' : 'Salva Modifiche'}
+          </button>
+        </div>
       </div>
 
       {/* Functions Grid - 2x3 layout */}
@@ -63,26 +132,52 @@ export default function Settings() {
               <p className="text-sm text-gray-300">Camp. 1-4 | Bid increase</p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" checked={settings.func1.enabled} className="sr-only peer" readOnly />
+              <input
+                type="checkbox"
+                checked={settings.func1.enabled}
+                onChange={(e) => updateSetting('func1', 'enabled', e.target.checked)}
+                className="sr-only peer"
+              />
               <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
             </label>
           </div>
           <div className="grid grid-cols-2 gap-1.5">
             <div>
               <label className="block text-xs font-medium text-gray-300 mb-0.5">Bid Increase</label>
-              <input type="number" value={settings.func1.bidIncrease} className="w-full px-2 py-1 text-sm border border-gray-600 bg-gray-900 text-white rounded" readOnly />
+              <input
+                type="number"
+                step="0.01"
+                value={settings.func1.bidIncrease}
+                onChange={(e) => updateSetting('func1', 'bidIncrease', parseFloat(e.target.value))}
+                className="w-full px-2 py-1 text-sm border border-gray-600 bg-gray-900 text-white rounded"
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-300 mb-0.5">Freq. (gg)</label>
-              <input type="number" value={settings.func1.frequency} className="w-full px-2 py-1 text-sm border border-gray-600 bg-gray-900 text-white rounded" readOnly />
+              <input
+                type="number"
+                value={settings.func1.frequency}
+                onChange={(e) => updateSetting('func1', 'frequency', parseInt(e.target.value))}
+                className="w-full px-2 py-1 text-sm border border-gray-600 bg-gray-900 text-white rounded"
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-300 mb-0.5">Max Impr.</label>
-              <input type="number" value={settings.func1.impressions} className="w-full px-2 py-1 text-sm border border-gray-600 bg-gray-900 text-white rounded" readOnly />
+              <input
+                type="number"
+                value={settings.func1.impressions}
+                onChange={(e) => updateSetting('func1', 'impressions', parseInt(e.target.value))}
+                className="w-full px-2 py-1 text-sm border border-gray-600 bg-gray-900 text-white rounded"
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-300 mb-0.5">Max Click</label>
-              <input type="number" value={settings.func1.clicks} className="w-full px-2 py-1 text-sm border border-gray-600 bg-gray-900 text-white rounded" readOnly />
+              <input
+                type="number"
+                value={settings.func1.clicks}
+                onChange={(e) => updateSetting('func1', 'clicks', parseInt(e.target.value))}
+                className="w-full px-2 py-1 text-sm border border-gray-600 bg-gray-900 text-white rounded"
+              />
             </div>
           </div>
         </div>

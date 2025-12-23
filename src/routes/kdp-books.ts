@@ -149,85 +149,20 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
 // ================================================
 router.post('/sync', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.userId;
+    const userId = req.userId!;
 
-    // Create sync log
-    const syncLogRepository = AppDataSource.getRepository(KdpSyncLog);
-    const syncLog = syncLogRepository.create({
-      userId,
-      syncType: 'books',
-      status: 'in_progress',
-      startedAt: new Date()
-    });
-    await syncLogRepository.save(syncLog);
+    console.log(`🔄 KDP sync requested for user ${userId}`);
+    console.log('⚠️  KDP API not yet implemented - returning success');
 
-    // TODO: Implement actual KDP API sync
-    // For now, create sample books
-    const bookRepository = AppDataSource.getRepository(KdpBook);
-
-    const sampleBooks: CreateKdpBookInput[] = [
-      {
-        userId,
-        asin: 'B0ABC12345',
-        title: 'Sample Book 1: The Beginning',
-        marketplace: 'US',
-        format: 'eBook',
-        author: 'John Doe',
-        publicationDate: '2024-01-15',
-        kenpc: 250
-      },
-      {
-        userId,
-        asin: 'B0DEF67890',
-        title: 'Sample Book 2: The Journey',
-        marketplace: 'UK',
-        format: 'Paperback',
-        author: 'Jane Smith',
-        publicationDate: '2024-02-20',
-        kenpc: 180
-      }
-    ];
-
-    let created = 0;
-    let updated = 0;
-
-    for (const bookData of sampleBooks) {
-      const existingBook = await bookRepository.findOne({
-        where: { userId: bookData.userId, asin: bookData.asin }
-      });
-
-      if (existingBook) {
-        Object.assign(existingBook, bookData);
-        existingBook.lastSyncDate = new Date();
-        await bookRepository.save(existingBook);
-        updated++;
-      } else {
-        const newBook = bookRepository.create({
-          ...bookData,
-          lastSyncDate: new Date()
-        });
-        await bookRepository.save(newBook);
-        created++;
-      }
-    }
-
-    // Update sync log
-    syncLog.status = 'completed';
-    syncLog.completedAt = new Date();
-    syncLog.recordsProcessed = sampleBooks.length;
-    syncLog.recordsCreated = created;
-    syncLog.recordsUpdated = updated;
-    await syncLogRepository.save(syncLog);
-
-    console.log(`✅ KDP Sync completed: ${created} created, ${updated} updated`);
-
+    // TODO: Implement KDP API sync
+    // For now, just return success to avoid errors
     res.json({
       success: true,
       data: {
-        syncedCount: sampleBooks.length,
-        created,
-        updated,
-        syncLogId: syncLog.id
+        syncedCount: 0,
+        created: 0,
+        updated: 0,
+        message: 'KDP API sync not yet implemented'
       }
     });
   } catch (error: any) {

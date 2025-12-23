@@ -15,6 +15,7 @@ import { KdpBook } from '../entities/KdpBook';
 import { KdpDailyStats } from '../entities/KdpDailyStats';
 import { JournalEvent } from '../entities/JournalEvent';
 import { KdpSyncLog } from '../entities/KdpSyncLog';
+import { AutomationSettings } from '../entities/AutomationSettings';
 
 dotenv.config();
 
@@ -26,7 +27,7 @@ const getDatabaseConfig = () => {
       url: process.env.DATABASE_URL,
       synchronize: process.env.NODE_ENV === 'development',
       logging: process.env.NODE_ENV === 'development',
-      entities: [User, AutomationLog, KeywordPerformance, Campaign, Book, KdpBook, KdpDailyStats, JournalEvent, KdpSyncLog, KdpBookModel, KdpDailyStatsModel, JournalEventModel, KdpSyncLogModel],
+      entities: [User, AutomationLog, KeywordPerformance, Campaign, Book, KdpBook, KdpDailyStats, JournalEvent, KdpSyncLog, AutomationSettings, KdpBookModel, KdpDailyStatsModel, JournalEventModel, KdpSyncLogModel],
       migrations: ['src/migrations/**/*.ts'],
       ssl: {
         rejectUnauthorized: false // Necessario per Supabase
