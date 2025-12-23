@@ -1,0 +1,63 @@
+# Render Blueprint for Amazon Ads Manager
+# This file configures Docker-based deployment with Chromium support
+
+services:
+  # Main Web Service
+  - type: web
+    name: amazon-ads-manager
+    runtime: docker
+    repo: https://github.com/fumoblu73/amazon-ads-manager
+    branch: main
+    dockerfilePath: ./Dockerfile
+
+    # Health check
+    healthCheckPath: /api/health
+
+    # Auto-deploy on push
+    autoDeploy: true
+
+    # Environment variables (set these in Render Dashboard)
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      - key: PORT
+        value: 10000
+
+      # Database (set in Dashboard with your Supabase URL)
+      - key: DATABASE_URL
+        sync: false
+
+      # Amazon OAuth (set in Dashboard)
+      - key: AMAZON_ADS_CLIENT_ID
+        sync: false
+      - key: AMAZON_ADS_CLIENT_SECRET
+        sync: false
+      - key: AMAZON_ADS_REDIRECT_URI_PROD
+        sync: false
+      - key: AMAZON_ADS_SCOPES
+        value: profile
+
+      # Security Secrets (set in Dashboard)
+      - key: JWT_SECRET
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: AUTOMATION_SECRET
+        sync: false
+      - key: ADMIN_TOKEN
+        sync: false
+      - key: MIGRATION_SECRET
+        sync: false
+
+      # Frontend URL (set in Dashboard)
+      - key: FRONTEND_URL
+        sync: false
+
+      # Puppeteer Configuration (already set in Dockerfile)
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: true
+      - key: PUPPETEER_EXECUTABLE_PATH
+        value: /usr/bin/chromium
