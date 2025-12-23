@@ -43,6 +43,22 @@ export class User {
   @Column({ type: 'varchar', length: 255, nullable: true })
   name: string | null;
 
+  // KDP Cookie-based sync fields
+  @Column({ type: 'text', name: 'kdp_cookies_encrypted', nullable: true })
+  kdpCookiesEncrypted: string | null; // JSON criptato dei cookie KDP
+
+  @Column({ type: 'varchar', length: 50, name: 'kdp_marketplace', nullable: true })
+  kdpMarketplace: string | null; // US, UK, DE, FR, ES, IT, etc.
+
+  @Column({ type: 'timestamp', name: 'kdp_cookies_updated_at', nullable: true })
+  kdpCookiesUpdatedAt: Date | null;
+
+  @Column({ type: 'timestamp', name: 'kdp_last_sync_at', nullable: true })
+  kdpLastSyncAt: Date | null;
+
+  @Column({ type: 'boolean', name: 'kdp_sync_enabled', default: false })
+  kdpSyncEnabled: boolean;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

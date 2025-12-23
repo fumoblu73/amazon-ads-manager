@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon Ads Manager - KDP Sync</title>
+  <style>
+    body {
+      width: 350px;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      margin: 0;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #ff9900;
+    }
+    .logo {
+      width: 40px;
+      height: 40px;
+      background: #ff9900;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-center;
+      font-weight: bold;
+      color: white;
+      font-size: 20px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 16px;
+      color: #232f3e;
+    }
+    .status {
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+    .status.info {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+    .status.success {
+      background: #e8f5e9;
+      color: #388e3c;
+    }
+    .status.error {
+      background: #ffebee;
+      color: #d32f2f;
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #ff9900;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-bottom: 8px;
+    }
+    button:hover {
+      background: #e88b00;
+    }
+    button:disabled {
+      background: #cccccc;
+      cursor: not-allowed;
+    }
+    .secondary {
+      background: #232f3e;
+    }
+    .secondary:hover {
+      background: #374151;
+    }
+    .info-text {
+      font-size: 12px;
+      color: #666;
+      margin-top: 16px;
+      line-height: 1.5;
+    }
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 8px;
+    }
+    .loading.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">A</div>
+    <h1>KDP Sync</h1>
+  </div>
+
+  <div id="status" class="status info">
+    Apri la tua pagina KDP Dashboard e clicca "Sincronizza"
+  </div>
+
+  <div id="loading" class="loading">
+    <p>⏳ Sincronizzazione in corso...</p>
+  </div>
+
+  <button id="syncButton">🔄 Sincronizza con KDP</button>
+  <button id="checkStatus" class="secondary">📊 Verifica Stato</button>
+
+  <div class="info-text">
+    <strong>Come funziona:</strong><br>
+    1. Accedi a kdp.amazon.com<br>
+    2. Clicca "Sincronizza con KDP"<br>
+    3. I tuoi dati verranno sincronizzati automaticamente
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
