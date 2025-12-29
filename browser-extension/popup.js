@@ -1,6 +1,6 @@
 // Configurazione API endpoint
 // Auto-detect: usa produzione se disponibile, altrimenti localhost
-const PRODUCTION_URL = 'https://amazon-ads-manager.onrender.com'; // Cambia con il tuo URL Render
+const PRODUCTION_URL = 'https://amazon-ads-manager-qsio.onrender.com'; // URL Render produzione
 const API_URL = PRODUCTION_URL || 'http://localhost:3000';
 
 // Elementi DOM
