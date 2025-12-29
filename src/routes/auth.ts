@@ -130,9 +130,17 @@ router.get('/callback', async (req: Request, res: Response) => {
       { expiresIn: '7d' }
     );
 
-    // Salva JWT in cookie
+    // Salva JWT in cookie (httpOnly per sicurezza)
     res.cookie('auth_token', jwtToken, {
       httpOnly: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 giorni
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax'
+    });
+
+    // Cookie duplicato per browser extension (non httpOnly)
+    res.cookie('extension_token', jwtToken, {
+      httpOnly: false, // Extension può leggerlo
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 giorni
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax'

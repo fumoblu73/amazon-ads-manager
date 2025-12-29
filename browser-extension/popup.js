@@ -67,13 +67,28 @@ async function syncKdpCookies() {
 
     showStatus(`✅ Trovati ${cookies.length} cookie. Invio al server...`, 'info');
 
-    // Invia cookie al backend
+    // Recupera JWT token dal cookie del server
+    const serverUrl = new URL(API_URL);
+    const authCookies = await chrome.cookies.getAll({
+      domain: serverUrl.hostname,
+      name: 'extension_token'
+    });
+
+    const jwtToken = authCookies.length > 0 ? authCookies[0].value : null;
+
+    if (!jwtToken) {
+      showStatus('❌ Non sei autenticato. Fai login prima su ' + API_URL, 'error');
+      setLoading(false);
+      return;
+    }
+
+    // Invia cookie al backend con JWT token
     const response = await fetch(`${API_URL}/api/kdp-sync/cookies`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${jwtToken}`
       },
-      credentials: 'include', // Importante per inviare cookie auth
       body: JSON.stringify({
         cookies: cookies.map(c => ({
           name: c.name,
@@ -116,9 +131,26 @@ async function checkSyncStatus() {
   try {
     setLoading(true);
 
+    // Recupera JWT token
+    const serverUrl = new URL(API_URL);
+    const authCookies = await chrome.cookies.getAll({
+      domain: serverUrl.hostname,
+      name: 'extension_token'
+    });
+
+    const jwtToken = authCookies.length > 0 ? authCookies[0].value : null;
+
+    if (!jwtToken) {
+      showStatus('❌ Non sei autenticato. Fai login prima su ' + API_URL, 'error');
+      setLoading(false);
+      return;
+    }
+
     const response = await fetch(`${API_URL}/api/kdp-sync/status`, {
       method: 'GET',
-      credentials: 'include'
+      headers: {
+        'Authorization': `Bearer ${jwtToken}`
+      }
     });
 
     if (!response.ok) {
