@@ -15,7 +15,8 @@
     "*://*.amazon.fr/*",
     "*://*.amazon.es/*",
     "*://*.amazon.ca/*",
-    "*://*.amazon.com.au/*"
+    "*://*.amazon.com.au/*",
+    "https://amazon-ads-manager-qsio.onrender.com/*"
   ],
   "action": {
     "default_popup": "popup.html",
