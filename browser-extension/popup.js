@@ -68,9 +68,9 @@ async function syncKdpCookies() {
     showStatus(`✅ Trovati ${cookies.length} cookie. Invio al server...`, 'info');
 
     // Recupera JWT token dal cookie del server
-    const serverUrl = new URL(API_URL);
+    
     const authCookies = await chrome.cookies.getAll({
-      domain: serverUrl.hostname,
+      url: API_URL,
       name: 'extension_token'
     });
 
@@ -132,9 +132,8 @@ async function checkSyncStatus() {
     setLoading(true);
 
     // Recupera JWT token
-    const serverUrl = new URL(API_URL);
     const authCookies = await chrome.cookies.getAll({
-      domain: serverUrl.hostname,
+      url: API_URL,
       name: 'extension_token'
     });
 
