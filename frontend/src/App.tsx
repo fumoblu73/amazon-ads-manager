@@ -11,6 +11,7 @@ import Logs from './pages/Logs';
 import Help from './pages/Help';
 import KdpDashboard from './pages/kdp/KdpDashboard';
 import Bookshelf from './pages/kdp/Bookshelf';
+import SyncKdp from './pages/kdp/SyncKdp';
 import HistoricalStats from './pages/kdp/HistoricalStats';
 import BookStats from './pages/kdp/BookStats';
 import CountryStats from './pages/kdp/CountryStats';
@@ -38,6 +39,7 @@ function App() {
               <Route index element={<Navigate to="/kdp/dashboard" replace />} />
               <Route path="dashboard" element={<KdpDashboard />} />
               <Route path="bookshelf" element={<Bookshelf />} />
+              <Route path="sync" element={<SyncKdp />} />
               <Route path="analytics">
                 <Route path="historical" element={<HistoricalStats />} />
                 <Route path="book-stats" element={<BookStats />} />
