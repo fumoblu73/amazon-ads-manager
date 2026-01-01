@@ -5,6 +5,7 @@ import { KdpSyncLog } from '../models/KdpSyncLog';
 import { Like } from 'typeorm';
 import { mockBooks } from '../utils/mock-kdp-data';
 import { authMiddleware } from '../middleware/auth';
+import { kdpSyncScheduler } from '../services/kdp-sync-scheduler';
 
 const router = Router();
 const USE_MOCK_DATA = process.env.USE_MOCK_DATA === 'true';
@@ -151,18 +152,19 @@ router.post('/sync', authMiddleware, async (req: AuthRequest, res: Response) => 
   try {
     const userId = req.userId!;
 
-    console.log(`🔄 KDP sync requested for user ${userId}`);
-    console.log('⚠️  KDP API not yet implemented - returning success');
+    console.log(`🔄 Manual KDP sync requested for user ${userId}`);
 
-    // TODO: Implement KDP API sync
-    // For now, just return success to avoid errors
+    // Trigger manual sync using kdpSyncScheduler
+    const result = await kdpSyncScheduler.syncUser(userId);
+
+    console.log(`✅ Manual sync completed: ${result.books} books, ${result.stats} stats`);
+
     res.json({
       success: true,
       data: {
-        syncedCount: 0,
-        created: 0,
-        updated: 0,
-        message: 'KDP API sync not yet implemented'
+        books: result.books,
+        stats: result.stats,
+        message: 'KDP data synchronized successfully'
       }
     });
   } catch (error: any) {
