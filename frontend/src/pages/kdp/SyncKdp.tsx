@@ -11,7 +11,7 @@ export default function SyncKdp() {
       setError(null);
       setResult(null);
 
-      const response = await fetch('/api/kdp/sync', {
+      const response = await fetch('/api/kdp/books/sync', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
