@@ -5,7 +5,7 @@ import { User } from '../entities/User';
 import { amazonApiService } from '../services/amazonApi';
 import { createUserAmazonApiService } from '../services/UserAmazonApiFactory';
 import { authMiddleware } from '../middleware/auth';
-import { requireAmazonAuth, AuthRequest } from '../middleware/requireAmazonAuth';
+import { requireAmazonAuth, requireAmazonTokens, AuthRequest } from '../middleware/requireAmazonAuth';
 
 const router = Router();
 
@@ -89,7 +89,7 @@ router.get('/', authMiddleware, requireAmazonAuth, async (req: AuthRequest, res:
 // GET /api/campaigns/profiles - Lista profili Amazon dell'utente
 // IMPORTANTE: Deve essere PRIMA di /:id altrimenti Express matcha "profiles" come :id
 // ================================================
-router.get('/profiles', authMiddleware, requireAmazonAuth, async (req: AuthRequest, res: Response) => {
+router.get('/profiles', authMiddleware, requireAmazonTokens, async (req: AuthRequest, res: Response) => {
   try {
     console.log(`🔍 Fetching Amazon profiles for user ${req.userId}...`);
 
@@ -122,7 +122,7 @@ router.get('/profiles', authMiddleware, requireAmazonAuth, async (req: AuthReque
 // ================================================
 // POST /api/campaigns/select-profile - Salva profilo selezionato dall'utente
 // ================================================
-router.post('/select-profile', authMiddleware, requireAmazonAuth, async (req: AuthRequest, res: Response) => {
+router.post('/select-profile', authMiddleware, requireAmazonTokens, async (req: AuthRequest, res: Response) => {
   try {
     const { profileId, countryCode, currencyCode } = req.body;
 
