@@ -6,6 +6,7 @@ import KdpLayout from './components/KdpLayout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
+import SyncCampaigns from './pages/SyncCampaigns';
 // Temporarily disabled - import Campaigns from './pages/Campaigns';
 import Logs from './pages/Logs';
 import Help from './pages/Help';
@@ -29,6 +30,7 @@ function App() {
           <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/sync-campaigns" element={<SyncCampaigns />} />
             <Route path="/settings" element={<Settings />} />
             {/* Temporarily disabled - <Route path="/campaigns" element={<Campaigns />} /> */}
             <Route path="/logs" element={<Logs />} />
