@@ -4,7 +4,7 @@ import cookieParser from 'cookie-parser';
 import path from 'path';
 import automationRoutes from './routes/automation';
 import booksRoutes from './routes/books';
-// import campaignsRoutes from './routes/campaigns';
+import campaignsRoutes from './routes/campaigns';
 import logsRoutes from './routes/logs';
 import kdpBooksRoutes from './routes/kdp-books';
 import kdpAnalyticsRoutes from './routes/kdp-analytics';
@@ -80,7 +80,7 @@ app.use('/api', migrateRoutes);
 
 app.use('/api/automation', automationRoutes);
 app.use('/api/books', booksRoutes);
-// app.use('/api/campaigns', campaignsRoutes);
+app.use('/api/campaigns', campaignsRoutes);
 app.use('/api/logs', logsRoutes);
 app.use('/api/settings', settingsRoutes);
 
