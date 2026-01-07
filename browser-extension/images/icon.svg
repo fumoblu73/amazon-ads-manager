@@ -1,0 +1,22 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="60" fill="#FF9900"/>
+
+  <!-- Amazon arrow smile -->
+  <path d="M 30 75 Q 64 95 98 75" stroke="#232F3E" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <circle cx="98" cy="75" r="4" fill="#232F3E"/>
+
+  <!-- Sync arrows -->
+  <g transform="translate(64, 40)">
+    <!-- Top arrow (clockwise) -->
+    <path d="M -15 -10 A 15 15 0 1 1 15 -10" stroke="white" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <path d="M 15 -10 L 10 -15 L 15 -5" fill="white"/>
+
+    <!-- Bottom arrow (counter-clockwise) -->
+    <path d="M 15 10 A 15 15 0 1 1 -15 10" stroke="white" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <path d="M -15 10 L -10 15 L -15 5" fill="white"/>
+  </g>
+
+  <!-- KDP text -->
+  <text x="64" y="105" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#232F3E" text-anchor="middle">KDP</text>
+</svg>
