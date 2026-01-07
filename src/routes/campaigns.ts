@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { AppDataSource } from '../config/database';
 import { Campaign } from '../models/Campaign';
+import { User } from '../entities/User';
 import { amazonApiService } from '../services/amazonApi';
 import { createUserAmazonApiService } from '../services/UserAmazonApiFactory';
 import { authMiddleware } from '../middleware/auth';
@@ -113,6 +114,50 @@ router.get('/profiles', authMiddleware, requireAmazonAuth, async (req: AuthReque
     res.status(500).json({
       success: false,
       error: 'Errore nel recupero dei profili',
+      details: error.message
+    });
+  }
+});
+
+// ================================================
+// POST /api/campaigns/select-profile - Salva profilo selezionato dall'utente
+// ================================================
+router.post('/select-profile', authMiddleware, requireAmazonAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { profileId, countryCode, currencyCode } = req.body;
+
+    if (!profileId) {
+      return res.status(400).json({
+        success: false,
+        error: 'profileId is required'
+      });
+    }
+
+    console.log(`💾 Saving profile ${profileId} for user ${req.userId}...`);
+
+    const userRepository = AppDataSource.getRepository(User);
+    await userRepository.update(req.userId!, {
+      profileId: parseInt(profileId),
+      countryCode: countryCode || null,
+      currencyCode: currencyCode || null
+    });
+
+    console.log(`✅ Profile ${profileId} saved successfully`);
+
+    res.json({
+      success: true,
+      message: 'Profile selected successfully',
+      data: {
+        profileId: parseInt(profileId),
+        countryCode,
+        currencyCode
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Error POST /api/campaigns/select-profile:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to save profile',
       details: error.message
     });
   }
