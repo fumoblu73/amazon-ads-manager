@@ -27,14 +27,33 @@ async function detectMarketplace() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const url = tab?.url || '';
 
-  if (url.includes('amazon.com')) return 'US';
+  // Check for KDP locale in URL path first (e.g., kdp.amazon.com/it_IT/)
+  if (url.includes('/it_IT/')) return 'IT';
+  if (url.includes('/en_GB/')) return 'UK';
+  if (url.includes('/de_DE/')) return 'DE';
+  if (url.includes('/fr_FR/')) return 'FR';
+  if (url.includes('/es_ES/')) return 'ES';
+  if (url.includes('/ja_JP/')) return 'JP';
+  if (url.includes('/en_CA/')) return 'CA';
+  if (url.includes('/en_AU/')) return 'AU';
+  if (url.includes('/en_IN/')) return 'IN';
+  if (url.includes('/pt_BR/')) return 'BR';
+  if (url.includes('/es_MX/')) return 'MX';
+  if (url.includes('/en_US/')) return 'US';
+
+  // Fallback to domain detection (for non-KDP pages)
   if (url.includes('amazon.it')) return 'IT';
   if (url.includes('amazon.co.uk')) return 'UK';
   if (url.includes('amazon.de')) return 'DE';
   if (url.includes('amazon.fr')) return 'FR';
   if (url.includes('amazon.es')) return 'ES';
+  if (url.includes('amazon.co.jp')) return 'JP';
   if (url.includes('amazon.ca')) return 'CA';
   if (url.includes('amazon.com.au')) return 'AU';
+  if (url.includes('amazon.in')) return 'IN';
+  if (url.includes('amazon.com.br')) return 'BR';
+  if (url.includes('amazon.com.mx')) return 'MX';
+  if (url.includes('amazon.com')) return 'US';
 
   return 'US';
 }
