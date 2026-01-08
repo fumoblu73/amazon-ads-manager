@@ -183,41 +183,75 @@ export class KdpScraperService {
       const pageTitle = await page.title();
       console.log(`📑 Page title: ${pageTitle}`);
 
+      // Wait extra time for SPA to load content
+      console.log('⏳ Waiting 5 seconds for SPA content to load...');
+      await page.waitForTimeout(5000);
+
       // Try to find any table or container
       const hasElements = await page.evaluate(() => {
+        // Get all tables and their info
+        const tables = Array.from(document.querySelectorAll('table'));
+        const tableInfo = tables.slice(0, 5).map((table, i) => ({
+          index: i,
+          id: table.id || 'no-id',
+          className: table.className || 'no-class',
+          rows: table.querySelectorAll('tr').length,
+          firstCellText: table.querySelector('td, th')?.textContent?.substring(0, 50) || 'empty'
+        }));
+
         return {
-          tables: document.querySelectorAll('table').length,
+          tables: tables.length,
           divs: document.querySelectorAll('div').length,
           mainContent: document.querySelector('main')?.className || 'no-main',
-          bodyClass: document.body.className || 'no-body-class'
+          bodyClass: document.body.className || 'no-body-class',
+          tableInfo: tableInfo
         };
       });
       console.log(`🔍 Page elements:`, JSON.stringify(hasElements, null, 2));
 
-      // Attendi che la tabella bookshelf sia caricata
-      await page.waitForSelector('.bookshelf-table, #bookshelf-container', { timeout: 30000 });
+      // Try to find bookshelf without strict selector - just get all tables
+      console.log('📋 Attempting to scrape from any available table...');
 
-      // Estrai dati libri dalla pagina
+      // Estrai dati libri dalla pagina - prova con selettori multipli
       const books = await page.evaluate(() => {
-        const bookRows = document.querySelectorAll('.bookshelf-table tr, .book-row');
         const booksData: any[] = [];
 
-        bookRows.forEach((row) => {
-          const titleEl = row.querySelector('.title-text, .book-title');
-          const asinEl = row.querySelector('.asin, [data-asin]');
-          const authorEl = row.querySelector('.author, .book-author');
-          const formatEl = row.querySelector('.format, .book-format');
+        // Try multiple possible selectors for book rows
+        const possibleSelectors = [
+          'table tr',  // Any table row
+          '[data-book-id]', // Books with data attribute
+          '.book-row',
+          '.bookshelf-table tr',
+          'tr[data-asin]',
+          '[class*="book"]',
+          '[id*="book"]'
+        ];
 
-          if (titleEl && asinEl) {
-            booksData.push({
-              title: titleEl.textContent?.trim(),
-              asin: asinEl.textContent?.trim() || asinEl.getAttribute('data-asin'),
-              author: authorEl?.textContent?.trim(),
-              format: formatEl?.textContent?.trim() || 'eBook',
-              marketplace: 'US' // Verrà sovrascritto dal parametro
+        for (const selector of possibleSelectors) {
+          const elements = document.querySelectorAll(selector);
+          console.log(`Trying selector "${selector}": found ${elements.length} elements`);
+
+          if (elements.length > 0 && elements.length < 100) { // Reasonable number
+            elements.forEach((el: any) => {
+              // Look for text that might be a title
+              const text = el.textContent?.trim() || '';
+              const hasAsin = el.getAttribute('data-asin') ||
+                            el.querySelector('[data-asin]')?.getAttribute('data-asin');
+
+              // Only add if it looks like a book (has some text and maybe an ASIN)
+              if (text.length > 10 && text.length < 200) {
+                booksData.push({
+                  title: text.substring(0, 100),
+                  asin: hasAsin || 'unknown',
+                  found_with: selector,
+                  element_html: el.outerHTML?.substring(0, 200)
+                });
+              }
             });
+
+            if (booksData.length > 0) break; // Found books, stop trying
           }
-        });
+        }
 
         return booksData;
       });
