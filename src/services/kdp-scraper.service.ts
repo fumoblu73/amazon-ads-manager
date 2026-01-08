@@ -89,7 +89,7 @@ export class KdpScraperService {
       const booksCount = await this.saveBooks(userId, books);
 
       // Scrape sales report (ultimi 30 giorni)
-      const stats = await this.scrapeSalesReport(page, 30);
+      const stats = await this.scrapeSalesReport(page, 30, user.kdpMarketplace || 'US');
 
       // Salva statistiche
       const statsCount = await this.saveStats(userId, stats);
@@ -212,46 +212,83 @@ export class KdpScraperService {
       // Try to find bookshelf without strict selector - just get all tables
       console.log('📋 Attempting to scrape from any available table...');
 
-      // Estrai dati libri dalla pagina - prova con selettori multipli
+      // Estrai dati libri dalla pagina usando la tabella refreshedbookshelftable
       const books = await page.evaluate(() => {
         const booksData: any[] = [];
 
-        // Try multiple possible selectors for book rows
-        const possibleSelectors = [
-          'table tr',  // Any table row
-          '[data-book-id]', // Books with data attribute
-          '.book-row',
-          '.bookshelf-table tr',
-          'tr[data-asin]',
-          '[class*="book"]',
-          '[id*="book"]'
-        ];
+        // Cerca la tabella principale del bookshelf
+        const mainTable = document.querySelector('table.refreshedbookshelftable');
 
-        for (const selector of possibleSelectors) {
-          const elements = document.querySelectorAll(selector);
-          console.log(`Trying selector "${selector}": found ${elements.length} elements`);
+        if (!mainTable) {
+          console.log('❌ Main bookshelf table not found');
+          return [];
+        }
 
-          if (elements.length > 0 && elements.length < 100) { // Reasonable number
-            elements.forEach((el: any) => {
-              // Look for text that might be a title
-              const text = el.textContent?.trim() || '';
-              const hasAsin = el.getAttribute('data-asin') ||
-                            el.querySelector('[data-asin]')?.getAttribute('data-asin');
+        console.log('✅ Found main bookshelf table');
 
-              // Only add if it looks like a book (has some text and maybe an ASIN)
-              if (text.length > 10 && text.length < 200) {
-                booksData.push({
-                  title: text.substring(0, 100),
-                  asin: hasAsin || 'unknown',
-                  found_with: selector,
-                  element_html: el.outerHTML?.substring(0, 200)
-                });
+        // Estrai tutte le righe della tabella (escludi header)
+        const rows = mainTable.querySelectorAll('tbody > tr');
+        console.log(`Found ${rows.length} rows in bookshelf table`);
+
+        rows.forEach((row: Element, index: number) => {
+          try {
+            // Cerca il titolo del libro - può essere in un link o div
+            const titleElement = row.querySelector('a[href*="/title/edit"], .title-text, td:nth-child(2) a, td a');
+            const title = titleElement?.textContent?.trim() || '';
+
+            // Cerca ASIN/ISBN - può essere in un attributo o nel testo
+            const asinElement = row.querySelector('[data-asin], [data-isbn]');
+            let asin = asinElement?.getAttribute('data-asin') ||
+                      asinElement?.getAttribute('data-isbn') ||
+                      '';
+
+            // Se non trovato, cerca nell'URL del link di edit
+            if (!asin && titleElement) {
+              const href = titleElement.getAttribute('href') || '';
+              const asinMatch = href.match(/\/title\/edit\/([A-Z0-9]+)/);
+              if (asinMatch) {
+                asin = asinMatch[1];
+              }
+            }
+
+            // Cerca altre informazioni (author, format, status)
+            const allCells = row.querySelectorAll('td');
+            const cellTexts = Array.from(allCells).map(cell => cell.textContent?.trim() || '');
+
+            // Cerca formato (eBook, Paperback, Hardcover)
+            let format = '';
+            cellTexts.forEach(text => {
+              if (text.match(/eBook|Paperback|Hardcover|Copertina/i)) {
+                format = text;
               }
             });
 
-            if (booksData.length > 0) break; // Found books, stop trying
+            // Cerca status (Live, Draft, In Review, etc.)
+            let status = '';
+            const statusElement = row.querySelector('.status, [class*="status"]');
+            if (statusElement) {
+              status = statusElement.textContent?.trim() || '';
+            }
+
+            // Solo aggiungi se abbiamo almeno un titolo
+            if (title && title.length > 3) {
+              booksData.push({
+                title: title,
+                asin: asin || `temp-${index}`,
+                format: format || 'Unknown',
+                status: status || 'Unknown',
+                author: '', // KDP doesn't always show author in bookshelf
+                rowIndex: index,
+                cellCount: allCells.length,
+                rawText: cellTexts.join(' | ').substring(0, 200)
+              });
+
+              console.log(`📚 Book ${index + 1}: ${title} (${asin})`);
+            }
+          } catch (error) {
+            console.error(`Error parsing row ${index}:`, error);
           }
-        }
+        });
 
         return booksData;
       });
@@ -268,43 +305,93 @@ export class KdpScraperService {
   /**
    * Scrape sales report da KDP
    */
-  private async scrapeSalesReport(page: Page, days: number): Promise<any[]> {
+  private async scrapeSalesReport(page: Page, days: number, marketplace: string = 'US'): Promise<any[]> {
     try {
       console.log(`📊 Scraping sales report for last ${days} days`);
 
-      await page.goto('https://kdp.amazon.com/en_US/reports', { waitUntil: 'networkidle2' });
+      // Map marketplace to locale
+      const marketplaceLocaleMap: Record<string, string> = {
+        'US': 'en_US',
+        'UK': 'en_GB',
+        'DE': 'de_DE',
+        'FR': 'fr_FR',
+        'ES': 'es_ES',
+        'IT': 'it_IT',
+        'JP': 'ja_JP',
+        'CA': 'en_CA',
+        'AU': 'en_AU',
+        'IN': 'en_IN',
+        'BR': 'pt_BR',
+        'MX': 'es_MX'
+      };
+
+      const locale = marketplaceLocaleMap[marketplace.toUpperCase()] || 'en_US';
+      const reportsUrl = `https://kdp.amazon.com/${locale}/reports`;
+
+      console.log(`📊 Navigating to reports: ${reportsUrl}`);
+      await page.goto(reportsUrl, { waitUntil: 'networkidle2', timeout: 60000 });
 
       // Take screenshot for debugging
       const screenshotPath = `/tmp/kdp-reports-${Date.now()}.png`;
       await page.screenshot({ path: screenshotPath, fullPage: true });
       console.log(`📸 Screenshot saved: ${screenshotPath}`);
 
-      // Attendi caricamento report
-      await page.waitForSelector('#sales-dashboard, .report-container', { timeout: 30000 });
+      // Wait for page to load
+      console.log('⏳ Waiting 5 seconds for reports page to load...');
+      await page.waitForTimeout(5000);
 
-      // Estrai dati di vendita
+      // Check what's on the page
+      const pageInfo = await page.evaluate(() => {
+        return {
+          title: document.title,
+          hasTables: document.querySelectorAll('table').length,
+          hasCharts: document.querySelectorAll('canvas, svg').length,
+          bodyText: document.body.textContent?.substring(0, 500)
+        };
+      });
+      console.log('📄 Reports page info:', JSON.stringify(pageInfo, null, 2));
+
+      // Estrai dati di vendita dalla pagina reports
       const salesData = await page.evaluate(() => {
-        const rows = document.querySelectorAll('.report-row, tr[data-date]');
         const stats: any[] = [];
 
-        rows.forEach((row) => {
-          const dateEl = row.querySelector('.date, [data-date]');
-          const royaltyEl = row.querySelector('.royalty, .earnings');
-          const unitsEl = row.querySelector('.units, .sales');
+        // Try to find sales data in various formats
+        // KDP reports can be in tables, charts, or data attributes
 
-          if (dateEl) {
-            stats.push({
-              date: dateEl.textContent?.trim() || dateEl.getAttribute('data-date'),
-              grossRoyalties: parseFloat(royaltyEl?.textContent?.replace(/[^0-9.]/g, '') || '0'),
-              paidUnits: parseInt(unitsEl?.textContent?.replace(/[^0-9]/g, '') || '0')
-            });
-          }
+        // Try table format first
+        const tables = document.querySelectorAll('table');
+        tables.forEach(table => {
+          const rows = table.querySelectorAll('tbody tr');
+          rows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            if (cells.length >= 2) {
+              const cellTexts = Array.from(cells).map(c => c.textContent?.trim() || '');
+
+              // Look for date pattern (various formats)
+              const datePattern = /\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{4}-\d{2}-\d{2}/;
+              const dateCell = cellTexts.find(text => datePattern.test(text));
+
+              if (dateCell) {
+                // Try to extract numeric values
+                const numbers = cellTexts
+                  .map(text => text.replace(/[^0-9.,]/g, ''))
+                  .filter(text => text.length > 0)
+                  .map(text => parseFloat(text.replace(',', '.')));
+
+                stats.push({
+                  date: dateCell,
+                  rawData: cellTexts,
+                  numbers: numbers
+                });
+              }
+            }
+          });
         });
 
         return stats;
       });
 
-      console.log(`✅ Found ${salesData.length} sales records`);
+      console.log(`✅ Found ${salesData.length} potential sales records`);
 
       return salesData;
     } catch (error) {
