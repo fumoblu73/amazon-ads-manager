@@ -147,11 +147,33 @@ export class KdpScraperService {
    */
   private async scrapeBookshelf(page: Page, marketplace: string): Promise<any[]> {
     try {
-      const kdpUrl = `https://kdp.amazon.com/${marketplace.toLowerCase()}_${marketplace}/bookshelf`;
+      // Map marketplace code to correct KDP locale
+      const marketplaceLocaleMap: Record<string, string> = {
+        'US': 'en_US',
+        'UK': 'en_GB',
+        'DE': 'de_DE',
+        'FR': 'fr_FR',
+        'ES': 'es_ES',
+        'IT': 'it_IT',
+        'JP': 'ja_JP',
+        'CA': 'en_CA',
+        'AU': 'en_AU',
+        'IN': 'en_IN',
+        'BR': 'pt_BR',
+        'MX': 'es_MX'
+      };
 
-      console.log(`📚 Navigating to ${kdpUrl}`);
+      const locale = marketplaceLocaleMap[marketplace.toUpperCase()] || 'en_US';
+      const kdpUrl = `https://kdp.amazon.com/${locale}/bookshelf`;
+
+      console.log(`📚 Navigating to ${kdpUrl} (marketplace: ${marketplace})`);
 
       await page.goto(kdpUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+
+      // Take screenshot for debugging
+      const screenshotPath = `/tmp/kdp-bookshelf-${Date.now()}.png`;
+      await page.screenshot({ path: screenshotPath, fullPage: true });
+      console.log(`📸 Screenshot saved: ${screenshotPath}`);
 
       // Attendi che la tabella bookshelf sia caricata
       await page.waitForSelector('.bookshelf-table, #bookshelf-container', { timeout: 30000 });
@@ -198,6 +220,11 @@ export class KdpScraperService {
       console.log(`📊 Scraping sales report for last ${days} days`);
 
       await page.goto('https://kdp.amazon.com/en_US/reports', { waitUntil: 'networkidle2' });
+
+      // Take screenshot for debugging
+      const screenshotPath = `/tmp/kdp-reports-${Date.now()}.png`;
+      await page.screenshot({ path: screenshotPath, fullPage: true });
+      console.log(`📸 Screenshot saved: ${screenshotPath}`);
 
       // Attendi caricamento report
       await page.waitForSelector('#sales-dashboard, .report-container', { timeout: 30000 });
