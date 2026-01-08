@@ -175,6 +175,25 @@ export class KdpScraperService {
       await page.screenshot({ path: screenshotPath, fullPage: true });
       console.log(`📸 Screenshot saved: ${screenshotPath}`);
 
+      // Log page HTML for debugging selectors
+      const bodyHTML = await page.evaluate(() => document.body.innerHTML);
+      console.log(`📄 Page HTML (first 2000 chars):\n${bodyHTML.substring(0, 2000)}`);
+
+      // Check what's actually on the page
+      const pageTitle = await page.title();
+      console.log(`📑 Page title: ${pageTitle}`);
+
+      // Try to find any table or container
+      const hasElements = await page.evaluate(() => {
+        return {
+          tables: document.querySelectorAll('table').length,
+          divs: document.querySelectorAll('div').length,
+          mainContent: document.querySelector('main')?.className || 'no-main',
+          bodyClass: document.body.className || 'no-body-class'
+        };
+      });
+      console.log(`🔍 Page elements:`, JSON.stringify(hasElements, null, 2));
+
       // Attendi che la tabella bookshelf sia caricata
       await page.waitForSelector('.bookshelf-table, #bookshelf-container', { timeout: 30000 });
 
