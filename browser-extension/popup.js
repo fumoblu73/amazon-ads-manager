@@ -90,29 +90,46 @@ async function syncKdpCookies() {
 
     showStatus(`✅ Trovati ${cookies.length} cookie. Invio al server...`, 'info');
 
-    // Recupera JWT token dal cookie del server
-    console.log(`Looking for extension_token cookie on ${API_URL}`);
+    // Recupera JWT token da chrome.storage (salvato dall'app)
+    console.log('Looking for JWT token in chrome.storage...');
 
-    const authCookies = await chrome.cookies.getAll({
-      url: API_URL,
-      name: 'extension_token'
-    });
-
-    console.log(`Found ${authCookies.length} auth cookies:`, authCookies);
-
-    const jwtToken = authCookies.length > 0 ? authCookies[0].value : null;
+    const storageData = await chrome.storage.local.get(['jwtToken']);
+    let jwtToken = storageData.jwtToken;
 
     if (!jwtToken) {
-      // Try to get all cookies from the app domain to see what's there
-      const allAppCookies = await chrome.cookies.getAll({ url: API_URL });
-      console.log(`All cookies on ${API_URL}:`, allAppCookies.map(c => c.name));
+      console.log('No JWT token in storage, trying to get from cookie...');
 
-      showStatus('❌ Non sei autenticato. Fai login prima su ' + API_URL, 'error');
+      // Fallback: prova a leggere dal cookie (potrebbe non funzionare cross-domain)
+      const authCookies = await chrome.cookies.getAll({
+        url: API_URL,
+        name: 'extension_token'
+      });
+
+      if (authCookies.length > 0) {
+        jwtToken = authCookies[0].value;
+        // Salva in storage per il futuro
+        await chrome.storage.local.set({ jwtToken });
+        console.log('✅ Found token in cookie and saved to storage');
+      }
+    } else {
+      console.log('✅ Found JWT token in storage');
+    }
+
+    if (!jwtToken) {
+      showStatus('❌ Non sei autenticato. Apri l\'app e fai login, poi riprova.', 'error');
+
+      // Mostra pulsante per aprire l'app
+      setTimeout(() => {
+        if (confirm('Vuoi aprire l\'app per autenticarti?')) {
+          chrome.tabs.create({ url: API_URL });
+        }
+      }, 500);
+
       setLoading(false);
       return;
     }
 
-    console.log('✅ Found JWT token, proceeding with sync...');
+    console.log('✅ JWT token ready, proceeding with sync...');
 
     // Invia cookie al backend con JWT token
     const response = await fetch(`${API_URL}/api/kdp-sync/cookies`, {
@@ -163,25 +180,18 @@ async function checkSyncStatus() {
   try {
     setLoading(true);
 
-    // Recupera JWT token
-    console.log(`[Status Check] Looking for extension_token on ${API_URL}`);
-    const authCookies = await chrome.cookies.getAll({
-      url: API_URL,
-      name: 'extension_token'
-    });
-
-    console.log(`[Status Check] Found ${authCookies.length} auth cookies`);
-
-    const jwtToken = authCookies.length > 0 ? authCookies[0].value : null;
+    // Recupera JWT token da chrome.storage
+    console.log('[Status Check] Looking for JWT token in storage...');
+    const storageData = await chrome.storage.local.get(['jwtToken']);
+    const jwtToken = storageData.jwtToken;
 
     if (!jwtToken) {
-      const allAppCookies = await chrome.cookies.getAll({ url: API_URL });
-      console.log(`[Status Check] All cookies on ${API_URL}:`, allAppCookies.map(c => c.name));
-
-      showStatus('❌ Non sei autenticato. Fai login prima su ' + API_URL, 'error');
+      showStatus('❌ Non sei autenticato. Apri l\'app e fai login, poi riprova.', 'error');
       setLoading(false);
       return;
     }
+
+    console.log('[Status Check] ✅ Found JWT token');
 
     const response = await fetch(`${API_URL}/api/kdp-sync/status`, {
       method: 'GET',
