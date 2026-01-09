@@ -74,6 +74,19 @@ export class KdpScraperService {
       const cookies: Cookie[] = JSON.parse(cookiesJson);
 
       console.log(`🔄 Starting KDP sync for user ${userId} on ${user.kdpMarketplace || 'US'} marketplace`);
+      console.log(`🍪 Total cookies: ${cookies.length}`);
+
+      // Log critical authentication cookies
+      const authCookies = ['session-id', 'session-token', 'ubid-main', 'x-main', 'at-main'];
+      const foundAuthCookies = cookies.filter(c => authCookies.includes(c.name)).map(c => c.name);
+      console.log(`🔑 Auth cookies found: ${foundAuthCookies.join(', ') || 'NONE!'}`);
+
+      // Check for expired cookies
+      const now = Date.now() / 1000;
+      const expiredCount = cookies.filter(c => c.expires && c.expires < now).length;
+      if (expiredCount > 0) {
+        console.log(`⚠️ WARNING: ${expiredCount} cookies are expired!`);
+      }
 
       // Map marketplace to kdp.amazon.com domain (KDP uses .com for all marketplaces)
       const kdpDomain = 'https://kdp.amazon.com';
@@ -195,18 +208,29 @@ export class KdpScraperService {
 
       await page.goto(kdpUrl, { waitUntil: 'networkidle2', timeout: 60000 });
 
+      // Check what's actually on the page
+      const pageTitle = await page.title();
+      console.log(`📑 Page title: ${pageTitle}`);
+
+      // Check if we got redirected to login
+      const currentUrl = page.url();
+      if (currentUrl.includes('signin') || currentUrl.includes('login') || pageTitle.includes('Sign-In') || pageTitle.includes('Sign In')) {
+        console.log(`❌ AUTHENTICATION FAILED - Redirected to login page!`);
+        console.log(`   Current URL: ${currentUrl}`);
+        console.log(`   Page title: ${pageTitle}`);
+        throw new Error('Authentication failed - cookies are invalid or expired');
+      }
+
+      console.log(`✅ Successfully authenticated - on KDP bookshelf`);
+
       // Take screenshot for debugging
       const screenshotPath = `/tmp/kdp-bookshelf-${Date.now()}.png`;
       await page.screenshot({ path: screenshotPath, fullPage: true });
       console.log(`📸 Screenshot saved: ${screenshotPath}`);
 
-      // Log page HTML for debugging selectors
+      // Log page HTML for debugging selectors (only first 2000 chars)
       const bodyHTML = await page.evaluate(() => document.body.innerHTML);
       console.log(`📄 Page HTML (first 2000 chars):\n${bodyHTML.substring(0, 2000)}`);
-
-      // Check what's actually on the page
-      const pageTitle = await page.title();
-      console.log(`📑 Page title: ${pageTitle}`);
 
       // Wait extra time for SPA to load content
       console.log('⏳ Waiting 5 seconds for SPA content to load...');
