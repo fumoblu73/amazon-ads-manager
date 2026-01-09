@@ -279,76 +279,53 @@ export class KdpScraperService {
         const rows = mainTable.querySelectorAll('tbody > tr');
         console.log(`Found ${rows.length} rows in bookshelf table`);
 
+        // Helper per pulire il testo
+        const cleanText = (text: string) => {
+          return text
+            .replace(/\s+/g, ' ')  // Replace multiple spaces/newlines with single space
+            .replace(/\n/g, ' ')    // Remove newlines
+            .trim();
+        };
+
         rows.forEach((row: Element, index: number) => {
           try {
-            // Cerca il titolo del libro - può essere in un link o div
-            const titleElement = row.querySelector('a[href*="/title/edit"], .title-text, td:nth-child(2) a, td a');
-            const title = titleElement?.textContent?.trim() || '';
+            // L'ASIN è nell'ID della riga: <tr id="PB9GERBDQ90">
+            const asin = row.id || '';
 
-            // Cerca ASIN/ISBN - può essere in un attributo o nel testo
-            const asinElement = row.querySelector('[data-asin], [data-isbn]');
-            let asin = asinElement?.getAttribute('data-asin') ||
-                      asinElement?.getAttribute('data-isbn') ||
-                      '';
-
-            // Se non trovato, cerca nell'URL del link di edit
-            if (!asin && titleElement) {
-              const href = titleElement.getAttribute('href') || '';
-              const asinMatch = href.match(/\/title\/edit\/([A-Z0-9]+)/);
-              if (asinMatch) {
-                asin = asinMatch[1];
-              }
+            if (!asin || asin.length === 0) {
+              console.log(`⚠️ Row ${index} has no ID (ASIN)`);
+              return;
             }
 
-            // Cerca altre informazioni (author, format, status)
-            const allCells = row.querySelectorAll('td');
+            // Cerca il titolo usando il pattern dell'ID: span[id*="title-ASIN"]
+            const titleElement = row.querySelector(`span[id*="title-${asin}"]`);
+            const title = titleElement ? cleanText(titleElement.textContent || '') : '';
 
-            // Helper per pulire il testo
-            const cleanText = (text: string) => {
-              return text
-                .replace(/\s+/g, ' ')  // Replace multiple spaces/newlines with single space
-                .replace(/\n/g, ' ')    // Remove newlines
-                .trim();
-            };
+            // Cerca l'autore usando il pattern: span[id*="author-ASIN"]
+            const authorElement = row.querySelector(`span[id*="author-${asin}"]`);
+            let author = authorElement ? cleanText(authorElement.textContent || '') : '';
 
-            const cellTexts = Array.from(allCells).map(cell => cleanText(cell.textContent || ''));
-
-            // Cerca formato (eBook, Paperback, Hardcover) - cerca solo keywords
-            let format = 'Unknown';
-            for (const text of cellTexts) {
-              if (text.includes('eBook') || text.includes('Kindle')) {
-                format = 'eBook';
-                break;
-              } else if (text.includes('Paperback') || text.includes('Brossura')) {
-                format = 'Paperback';
-                break;
-              } else if (text.includes('Hardcover') || text.includes('Copertina rigida')) {
-                format = 'Hardcover';
-                break;
-              }
+            // Rimuovi il prefisso "da " se presente
+            if (author.startsWith('da ')) {
+              author = author.substring(3);
             }
 
-            // Cerca status (Live, Draft, In Review, etc.)
-            let status = 'Unknown';
-            const statusElement = row.querySelector('.status, [class*="status"]');
-            if (statusElement) {
-              status = cleanText(statusElement.textContent || '');
-              // Keep only first 50 chars
-              status = status.substring(0, 50);
-            }
+            // Cerca la serie usando il pattern: span[id*="series_title-ASIN"]
+            const seriesElement = row.querySelector(`span[id*="series_title-${asin}"]`);
+            const seriesName = seriesElement ? cleanText(seriesElement.textContent || '') : '';
 
             // Solo aggiungi se abbiamo almeno un titolo
             if (title && title.length > 3) {
               booksData.push({
-                title: cleanText(title).substring(0, 255), // Max 255 chars
-                asin: asin || `temp-${index}`,
-                format: format, // Already limited
-                status: status,
-                author: '', // KDP doesn't always show author in bookshelf
-                rowIndex: index
+                title: title.substring(0, 500), // Max 500 chars per schema
+                asin: asin.substring(0, 10),     // Max 10 chars per schema
+                author: author ? author.substring(0, 200) : null, // Max 200 chars per schema
+                seriesName: seriesName ? seriesName.substring(0, 200) : null
               });
 
-              console.log(`📚 Book ${index + 1}: ${cleanText(title).substring(0, 50)} (${asin})`);
+              console.log(`📚 Book ${index + 1}: "${title.substring(0, 50)}" by ${author || 'Unknown'} (${asin})`);
+            } else {
+              console.log(`⚠️ Row ${index} (${asin}) has no valid title`);
             }
           } catch (error) {
             console.error(`Error parsing row ${index}:`, error);
@@ -475,13 +452,14 @@ export class KdpScraperService {
     for (const bookData of books) {
       try {
         const existingBook = await bookRepository.findOne({
-          where: { userId, asin: bookData.asin }
+          where: { userId, asin: bookData.asin, marketplace: bookData.marketplace }
         });
 
         if (existingBook) {
           Object.assign(existingBook, {
             title: bookData.title,
             author: bookData.author || null,
+            seriesName: bookData.seriesName || null,
             marketplace: bookData.marketplace
           });
           await bookRepository.save(existingBook);
@@ -492,6 +470,7 @@ export class KdpScraperService {
             asin: bookData.asin,
             title: bookData.title,
             author: bookData.author || null,
+            seriesName: bookData.seriesName || null,
             marketplace: bookData.marketplace
           });
           await bookRepository.save(newBook);
