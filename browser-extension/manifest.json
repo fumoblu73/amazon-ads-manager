@@ -16,7 +16,18 @@
     "*://*.amazon.es/*",
     "*://*.amazon.ca/*",
     "*://*.amazon.com.au/*",
-    "https://amazon-ads-manager-qsio.onrender.com/*"
+    "https://amazon-ads-manager-qsio.onrender.com/*",
+    "http://localhost:3000/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://amazon-ads-manager-qsio.onrender.com/*",
+        "http://localhost:3000/*"
+      ],
+      "js": ["auth-helper.js"],
+      "run_at": "document_idle"
+    }
   ],
   "action": {
     "default_popup": "popup.html",
