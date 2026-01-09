@@ -12,50 +12,40 @@ const sampleBooks = [
     asin: 'B0ABC12345',
     title: 'The Mystery of the Lost Key',
     marketplace: 'US',
-    format: 'eBook',
     author: 'John Smith',
-    publicationDate: '2024-01-15',
-    kenpc: 250
+    publishDate: new Date('2024-01-15')
   },
   {
     userId: DEMO_USER_ID,
     asin: 'B0DEF67890',
     title: 'Digital Marketing Mastery',
     marketplace: 'US',
-    format: 'eBook',
     author: 'Jane Doe',
-    publicationDate: '2024-02-20',
-    kenpc: 180
+    publishDate: new Date('2024-02-20')
   },
   {
     userId: DEMO_USER_ID,
     asin: 'B0GHI11223',
     title: 'French Cooking Essentials',
     marketplace: 'FR',
-    format: 'Paperback',
     author: 'Pierre Dubois',
-    publicationDate: '2024-03-10',
-    kenpc: 0
+    publishDate: new Date('2024-03-10')
   },
   {
     userId: DEMO_USER_ID,
     asin: 'B0JKL44556',
     title: 'Sci-Fi Adventures',
     marketplace: 'UK',
-    format: 'eBook',
     author: 'Sarah Johnson',
-    publicationDate: '2023-12-05',
-    kenpc: 320
+    publishDate: new Date('2023-12-05')
   },
   {
     userId: DEMO_USER_ID,
     asin: 'B0MNO77889',
     title: 'Healthy Living Guide',
     marketplace: 'DE',
-    format: 'eBook',
     author: 'Hans Mueller',
-    publicationDate: '2024-01-28',
-    kenpc: 200
+    publishDate: new Date('2024-01-28')
   }
 ];
 
@@ -78,7 +68,7 @@ const generateDailyStats = () => {
       const baseSpending = 2 + Math.random() * 10;
       const paidUnits = Math.floor(Math.random() * 10) + 1;
       const freeUnits = Math.floor(Math.random() * 5);
-      const kenpReads = book.kenpc > 0 ? Math.floor(Math.random() * 5000) + 1000 : 0;
+      const kenpReads = Math.floor(Math.random() * 5000) + 1000;
 
       stats.push({
         userId: DEMO_USER_ID,
@@ -198,10 +188,7 @@ export const seedKdpData = async () => {
 
     // Insert books
     for (const bookData of sampleBooks) {
-      const book = bookRepository.create({
-        ...bookData,
-        lastSyncDate: new Date()
-      });
+      const book = bookRepository.create(bookData);
       await bookRepository.save(book);
     }
     console.log(`✅ Inserted ${sampleBooks.length} books`);

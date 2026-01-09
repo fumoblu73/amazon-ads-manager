@@ -8,44 +8,45 @@ import {
 } from 'typeorm';
 
 @Entity('kdp_books')
-@Index(['userId', 'asin'], { unique: true })
+@Index(['userId', 'asin', 'marketplace'], { unique: true })
 export class KdpBook {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
-  @Index()
+  @Column({ type: 'uuid', name: 'user_id' })
   userId: string;
 
-  @Column({ type: 'varchar', length: 50 })
-  @Index()
+  @Column({ type: 'varchar', length: 10 })
   asin: string;
 
   @Column({ type: 'varchar', length: 500 })
   title: string;
 
+  @Column({ type: 'varchar', length: 200, nullable: true })
+  author: string;
+
   @Column({ type: 'varchar', length: 10 })
   marketplace: string;
 
-  @Column({ type: 'varchar', length: 50, nullable: true })
-  format?: string;
+  @Column({ type: 'varchar', length: 200, nullable: true, name: 'series_name' })
+  seriesName: string;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
-  author?: string;
+  @Column({ type: 'integer', nullable: true, name: 'series_position' })
+  seriesPosition: number;
 
-  @Column({ type: 'date', nullable: true })
-  publicationDate?: string;
+  @Column({ type: 'date', nullable: true, name: 'publish_date' })
+  publishDate: Date;
 
-  @Column({ type: 'int', nullable: true, default: 0 })
-  kenpc?: number;
+  @Column({ type: 'text', nullable: true, name: 'cover_url' })
+  coverUrl: string;
 
-  @Column({ type: 'timestamp', nullable: true })
-  lastSyncDate?: Date;
+  @Column({ type: 'uuid', nullable: true, name: 'linked_campaign_id' })
+  linkedCampaignId: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }
 
@@ -55,20 +56,23 @@ export interface CreateKdpBookInput {
   asin: string;
   title: string;
   marketplace: string;
-  format?: string;
   author?: string;
-  publicationDate?: string;
-  kenpc?: number;
+  seriesName?: string;
+  seriesPosition?: number;
+  publishDate?: Date;
+  coverUrl?: string;
+  linkedCampaignId?: string;
 }
 
 export interface UpdateKdpBookInput {
   title?: string;
   marketplace?: string;
-  format?: string;
   author?: string;
-  publicationDate?: string;
-  kenpc?: number;
-  lastSyncDate?: Date;
+  seriesName?: string;
+  seriesPosition?: number;
+  publishDate?: Date;
+  coverUrl?: string;
+  linkedCampaignId?: string;
 }
 
 export interface BookshelfFilters {

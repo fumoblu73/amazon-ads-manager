@@ -31,7 +31,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 
     const books = await bookRepository.find({
       where: whereConditions,
-      order: { lastSyncDate: 'DESC' }
+      order: { updatedAt: 'DESC' }
     });
 
     // TODO: In futuro, creare una entità separata BsrHistory per trackare BSR nel tempo
@@ -42,7 +42,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       marketplace: book.marketplace,
       currentBsr: Math.floor(Math.random() * 100000) + 1000, // Mock data
       category: 'Kindle Store > Fiction',
-      lastUpdated: book.lastSyncDate || book.updatedAt,
+      lastUpdated: book.updatedAt,
       history: [] // TODO: Implement BSR history tracking
     }));
 
@@ -101,7 +101,7 @@ router.get('/:asin', authMiddleware, async (req: AuthRequest, res: Response) => 
           bsr: Math.floor(Math.random() * 100000) + 1000
         })).reverse()
       ],
-      lastUpdated: book.lastSyncDate || book.updatedAt
+      lastUpdated: book.updatedAt
     };
 
     res.json({
