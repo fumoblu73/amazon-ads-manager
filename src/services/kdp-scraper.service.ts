@@ -302,37 +302,53 @@ export class KdpScraperService {
 
             // Cerca altre informazioni (author, format, status)
             const allCells = row.querySelectorAll('td');
-            const cellTexts = Array.from(allCells).map(cell => cell.textContent?.trim() || '');
 
-            // Cerca formato (eBook, Paperback, Hardcover)
-            let format = '';
-            cellTexts.forEach(text => {
-              if (text.match(/eBook|Paperback|Hardcover|Copertina/i)) {
-                format = text;
+            // Helper per pulire il testo
+            const cleanText = (text: string) => {
+              return text
+                .replace(/\s+/g, ' ')  // Replace multiple spaces/newlines with single space
+                .replace(/\n/g, ' ')    // Remove newlines
+                .trim();
+            };
+
+            const cellTexts = Array.from(allCells).map(cell => cleanText(cell.textContent || ''));
+
+            // Cerca formato (eBook, Paperback, Hardcover) - cerca solo keywords
+            let format = 'Unknown';
+            for (const text of cellTexts) {
+              if (text.includes('eBook') || text.includes('Kindle')) {
+                format = 'eBook';
+                break;
+              } else if (text.includes('Paperback') || text.includes('Brossura')) {
+                format = 'Paperback';
+                break;
+              } else if (text.includes('Hardcover') || text.includes('Copertina rigida')) {
+                format = 'Hardcover';
+                break;
               }
-            });
+            }
 
             // Cerca status (Live, Draft, In Review, etc.)
-            let status = '';
+            let status = 'Unknown';
             const statusElement = row.querySelector('.status, [class*="status"]');
             if (statusElement) {
-              status = statusElement.textContent?.trim() || '';
+              status = cleanText(statusElement.textContent || '');
+              // Keep only first 50 chars
+              status = status.substring(0, 50);
             }
 
             // Solo aggiungi se abbiamo almeno un titolo
             if (title && title.length > 3) {
               booksData.push({
-                title: title,
+                title: cleanText(title).substring(0, 255), // Max 255 chars
                 asin: asin || `temp-${index}`,
-                format: format || 'Unknown',
-                status: status || 'Unknown',
+                format: format, // Already limited
+                status: status,
                 author: '', // KDP doesn't always show author in bookshelf
-                rowIndex: index,
-                cellCount: allCells.length,
-                rawText: cellTexts.join(' | ').substring(0, 200)
+                rowIndex: index
               });
 
-              console.log(`📚 Book ${index + 1}: ${title} (${asin})`);
+              console.log(`📚 Book ${index + 1}: ${cleanText(title).substring(0, 50)} (${asin})`);
             }
           } catch (error) {
             console.error(`Error parsing row ${index}:`, error);
@@ -465,16 +481,18 @@ export class KdpScraperService {
         if (existingBook) {
           Object.assign(existingBook, {
             title: bookData.title,
-            author: bookData.author,
-            format: bookData.format,
-            lastSyncDate: new Date()
+            author: bookData.author || null,
+            marketplace: bookData.marketplace
           });
           await bookRepository.save(existingBook);
         } else {
+          // Only save fields that exist in the entity
           const newBook = bookRepository.create({
             userId,
-            ...bookData,
-            lastSyncDate: new Date()
+            asin: bookData.asin,
+            title: bookData.title,
+            author: bookData.author || null,
+            marketplace: bookData.marketplace
           });
           await bookRepository.save(newBook);
           saved++;
