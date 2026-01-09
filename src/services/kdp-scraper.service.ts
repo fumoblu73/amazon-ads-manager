@@ -264,20 +264,18 @@ export class KdpScraperService {
       // Estrai dati libri dalla pagina usando la tabella refreshedbookshelftable
       const books = await page.evaluate(() => {
         const booksData: any[] = [];
+        const debugInfo: any[] = [];
 
         // Cerca la tabella principale del bookshelf
         const mainTable = document.querySelector('table.refreshedbookshelftable');
 
         if (!mainTable) {
-          console.log('❌ Main bookshelf table not found');
-          return [];
+          return { books: [], debug: ['❌ Main bookshelf table not found'] };
         }
-
-        console.log('✅ Found main bookshelf table');
 
         // Estrai tutte le righe della tabella (escludi header)
         const rows = mainTable.querySelectorAll('tbody > tr');
-        console.log(`Found ${rows.length} rows in bookshelf table`);
+        debugInfo.push(`✅ Found ${rows.length} rows in main table`);
 
         // Helper per pulire il testo
         const cleanText = (text: string) => {
@@ -293,13 +291,17 @@ export class KdpScraperService {
             const asin = row.id || '';
 
             if (!asin || asin.length === 0) {
-              console.log(`⚠️ Row ${index} has no ID (ASIN)`);
+              debugInfo.push(`⚠️ Row ${index} has no ID`);
               return;
             }
+
+            debugInfo.push(`Processing row ${index}, ASIN: ${asin}`);
 
             // Cerca il titolo usando il pattern dell'ID: span[id*="title-ASIN"]
             const titleElement = row.querySelector(`span[id*="title-${asin}"]`);
             const title = titleElement ? cleanText(titleElement.textContent || '') : '';
+
+            debugInfo.push(`  Title element found: ${!!titleElement}, Title: "${title.substring(0, 30)}"`);
 
             // Cerca l'autore usando il pattern: span[id*="author-ASIN"]
             const authorElement = row.querySelector(`span[id*="author-${asin}"]`);
@@ -309,6 +311,8 @@ export class KdpScraperService {
             if (author.startsWith('da ')) {
               author = author.substring(3);
             }
+
+            debugInfo.push(`  Author: "${author}"`);
 
             // Cerca la serie usando il pattern: span[id*="series_title-ASIN"]
             const seriesElement = row.querySelector(`span[id*="series_title-${asin}"]`);
@@ -323,21 +327,30 @@ export class KdpScraperService {
                 seriesName: seriesName ? seriesName.substring(0, 200) : null
               });
 
-              console.log(`📚 Book ${index + 1}: "${title.substring(0, 50)}" by ${author || 'Unknown'} (${asin})`);
+              debugInfo.push(`  ✅ Added book: "${title.substring(0, 30)}"`);
             } else {
-              console.log(`⚠️ Row ${index} (${asin}) has no valid title`);
+              debugInfo.push(`  ❌ Skipped (no valid title)`);
             }
-          } catch (error) {
-            console.error(`Error parsing row ${index}:`, error);
+          } catch (error: any) {
+            debugInfo.push(`  ❌ Error: ${error.message}`);
           }
         });
 
-        return booksData;
+        return { books: booksData, debug: debugInfo };
       });
 
-      console.log(`✅ Found ${books.length} books in bookshelf`);
+      // Log debug info
+      const result = books as any;
+      if (result.debug) {
+        console.log('📝 Debug info from page.evaluate:');
+        result.debug.forEach((msg: string) => console.log(`   ${msg}`));
+      }
 
-      return books.map(book => ({ ...book, marketplace }));
+      const booksList = result.books || books;
+
+      console.log(`✅ Found ${booksList.length} books in bookshelf`);
+
+      return booksList.map(book => ({ ...book, marketplace }));
     } catch (error) {
       console.error('Bookshelf scraping error:', error);
       return [];
