@@ -98,6 +98,12 @@ export class KdpScraperService {
       // Imposta cookie nel browser (naviga prima a KDP)
       await this.setCookies(page, cookies, kdpDomain);
 
+      // Cancella tutti i libri esistenti per questo utente (per avere dati sempre freschi)
+      console.log('🗑️ Clearing existing books for fresh sync...');
+      const bookRepository = AppDataSource.getRepository(KdpBook);
+      const deleteResult = await bookRepository.delete({ userId });
+      console.log(`✅ Deleted ${deleteResult.affected || 0} existing books`);
+
       // Scrape bookshelf
       const books = await this.scrapeBookshelf(page, user.kdpMarketplace || 'US');
 
@@ -472,33 +478,19 @@ export class KdpScraperService {
     const bookRepository = AppDataSource.getRepository(KdpBook);
     let saved = 0;
 
+    // Since we delete all books before sync, we only need to create new ones
     for (const bookData of books) {
       try {
-        const existingBook = await bookRepository.findOne({
-          where: { userId, asin: bookData.asin, marketplace: bookData.marketplace }
+        const newBook = bookRepository.create({
+          userId,
+          asin: bookData.asin,
+          title: bookData.title,
+          author: bookData.author || null,
+          seriesName: bookData.seriesName || null,
+          marketplace: bookData.marketplace
         });
-
-        if (existingBook) {
-          Object.assign(existingBook, {
-            title: bookData.title,
-            author: bookData.author || null,
-            seriesName: bookData.seriesName || null,
-            marketplace: bookData.marketplace
-          });
-          await bookRepository.save(existingBook);
-        } else {
-          // Only save fields that exist in the entity
-          const newBook = bookRepository.create({
-            userId,
-            asin: bookData.asin,
-            title: bookData.title,
-            author: bookData.author || null,
-            seriesName: bookData.seriesName || null,
-            marketplace: bookData.marketplace
-          });
-          await bookRepository.save(newBook);
-          saved++;
-        }
+        await bookRepository.save(newBook);
+        saved++;
       } catch (error) {
         console.error(`Error saving book ${bookData.asin}:`, error);
       }
