@@ -75,7 +75,11 @@ async function syncKdpCookies() {
     // Rileva marketplace
     const marketplace = await detectMarketplace();
 
-    // Recupera tutti i cookie Amazon
+    console.log(`Detecting cookies for marketplace ${marketplace}`);
+
+    // IMPORTANT: KDP usa sempre kdp.amazon.com per tutti i marketplace
+    // I cookie di autenticazione sono su .amazon.com anche per utenti internazionali
+    // Recupera tutti i cookie da .amazon.com (il dominio usato da KDP)
     const cookies = await chrome.cookies.getAll({ domain: '.amazon.com' });
 
     if (cookies.length === 0) {
