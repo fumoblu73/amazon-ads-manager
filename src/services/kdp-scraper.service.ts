@@ -75,12 +75,15 @@ export class KdpScraperService {
 
       console.log(`🔄 Starting KDP sync for user ${userId} on ${user.kdpMarketplace || 'US'} marketplace`);
 
+      // Map marketplace to kdp.amazon.com domain (KDP uses .com for all marketplaces)
+      const kdpDomain = 'https://kdp.amazon.com';
+
       // Inizializza browser
       const browser = await this.initBrowser();
       const page = await browser.newPage();
 
-      // Imposta cookie nel browser
-      await this.setCookies(page, cookies);
+      // Imposta cookie nel browser (naviga prima a KDP)
+      await this.setCookies(page, cookies, kdpDomain);
 
       // Scrape bookshelf
       const books = await this.scrapeBookshelf(page, user.kdpMarketplace || 'US');
@@ -128,18 +131,40 @@ export class KdpScraperService {
   /**
    * Imposta cookie in Puppeteer page
    */
-  private async setCookies(page: Page, cookies: Cookie[]): Promise<void> {
-    for (const cookie of cookies) {
-      await page.setCookie({
-        name: cookie.name,
-        value: cookie.value,
-        domain: cookie.domain,
-        path: cookie.path || '/',
-        expires: cookie.expires,
-        httpOnly: cookie.httpOnly,
-        secure: cookie.secure
-      });
+  private async setCookies(page: Page, cookies: Cookie[], targetDomain?: string): Promise<void> {
+    // Se abbiamo cookie e un target domain, naviga prima al dominio
+    if (targetDomain && cookies.length > 0) {
+      console.log(`🌐 Navigating to ${targetDomain} to set cookies...`);
+      try {
+        await page.goto(targetDomain, { waitUntil: 'domcontentloaded', timeout: 10000 });
+      } catch (error) {
+        console.log('⚠️ Initial navigation failed, continuing with cookie setup...');
+      }
     }
+
+    console.log(`🍪 Setting ${cookies.length} cookies...`);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const cookie of cookies) {
+      try {
+        await page.setCookie({
+          name: cookie.name,
+          value: cookie.value,
+          domain: cookie.domain,
+          path: cookie.path || '/',
+          expires: cookie.expires,
+          httpOnly: cookie.httpOnly,
+          secure: cookie.secure
+        });
+        successCount++;
+      } catch (error: any) {
+        failCount++;
+        console.log(`⚠️ Failed to set cookie ${cookie.name}: ${error.message}`);
+      }
+    }
+
+    console.log(`✅ Set ${successCount} cookies successfully, ${failCount} failed`);
   }
 
   /**
