@@ -298,14 +298,21 @@ export class KdpScraperService {
             debugInfo.push(`Processing row ${index}, ASIN: ${asin}`);
 
             // Cerca il titolo usando il pattern dell'ID: span[id*="title-ASIN"]
-            const titleElement = row.querySelector(`span[id*="title-${asin}"]`);
-            const title = titleElement ? cleanText(titleElement.textContent || '') : '';
+            const titleElement = row.querySelector(`span[id*="title-${asin}"]`) as HTMLElement | null;
+            let title = '';
+            if (titleElement) {
+              // innerText include testo visibile anche da child nodes
+              title = cleanText(titleElement.innerText || titleElement.textContent || '');
+            }
 
-            debugInfo.push(`  Title element found: ${!!titleElement}, Title: "${title.substring(0, 30)}"`);
+            debugInfo.push(`  Title element found: ${!!titleElement}, innerText length: ${titleElement?.innerText?.length || 0}, textContent length: ${titleElement?.textContent?.length || 0}, Final Title: "${title.substring(0, 30)}"`);
 
             // Cerca l'autore usando il pattern: span[id*="author-ASIN"]
-            const authorElement = row.querySelector(`span[id*="author-${asin}"]`);
-            let author = authorElement ? cleanText(authorElement.textContent || '') : '';
+            const authorElement = row.querySelector(`span[id*="author-${asin}"]`) as HTMLElement | null;
+            let author = '';
+            if (authorElement) {
+              author = cleanText(authorElement.innerText || authorElement.textContent || '');
+            }
 
             // Rimuovi il prefisso "da " se presente
             if (author.startsWith('da ')) {
@@ -315,8 +322,11 @@ export class KdpScraperService {
             debugInfo.push(`  Author: "${author}"`);
 
             // Cerca la serie usando il pattern: span[id*="series_title-ASIN"]
-            const seriesElement = row.querySelector(`span[id*="series_title-${asin}"]`);
-            const seriesName = seriesElement ? cleanText(seriesElement.textContent || '') : '';
+            const seriesElement = row.querySelector(`span[id*="series_title-${asin}"]`) as HTMLElement | null;
+            let seriesName = '';
+            if (seriesElement) {
+              seriesName = cleanText(seriesElement.innerText || seriesElement.textContent || '');
+            }
 
             // Solo aggiungi se abbiamo almeno un titolo
             if (title && title.length > 3) {
