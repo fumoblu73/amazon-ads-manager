@@ -46,7 +46,7 @@ export default function Layout() {
         {/* Logo */}
         <div className="mb-4 w-full">
           <img
-            src="/logo.svg"
+            src="/logoADS.png"
             alt="Amazon Ads Manager"
             className="w-full object-contain"
           />
