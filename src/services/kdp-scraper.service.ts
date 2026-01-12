@@ -272,9 +272,10 @@ export class KdpScraperService {
       const processedAsins = new Set<string>();
       let currentPage = 1;
       let hasNextPage = true;
+      let consecutiveEmptyPages = 0; // Track empty pages to prevent infinite loops
 
-      // Loop through all pages
-      while (hasNextPage) {
+      // Loop through all pages (max 10 pages to prevent infinite loops)
+      while (hasNextPage && currentPage <= 10) {
         console.log(`📄 Scraping page ${currentPage}...`);
 
         // Estrai dati libri dalla pagina corrente usando la tabella refreshedbookshelftable
@@ -410,6 +411,20 @@ export class KdpScraperService {
         const booksList = result.books || [];
         console.log(`✅ Found ${booksList.length} new books on page ${currentPage}`);
 
+        // Track consecutive empty pages to prevent infinite loops
+        if (booksList.length === 0) {
+          consecutiveEmptyPages++;
+          console.log(`⚠️ Empty page detected (${consecutiveEmptyPages} consecutive)`);
+
+          // If we've seen 2 consecutive empty pages, stop pagination
+          if (consecutiveEmptyPages >= 2) {
+            console.log('🛑 Stopping pagination: 2 consecutive empty pages detected');
+            hasNextPage = false;
+          }
+        } else {
+          consecutiveEmptyPages = 0; // Reset counter when we find books
+        }
+
         // Add books from this page to total
         booksList.forEach((book: any) => {
           allBooks.push(book);
@@ -417,7 +432,7 @@ export class KdpScraperService {
         });
 
         // Check if there's a next page
-        hasNextPage = result.hasNext || false;
+        hasNextPage = hasNextPage && (result.hasNext || false);
 
         if (hasNextPage) {
           console.log('⏭️ Clicking next page button...');
