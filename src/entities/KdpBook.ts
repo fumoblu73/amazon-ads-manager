@@ -17,7 +17,7 @@ export class KdpBook {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @Column({ type: 'varchar', length: 10 })
+  @Column({ type: 'varchar', length: 15 })
   asin: string;
 
   @Column({ type: 'varchar', length: 500 })
