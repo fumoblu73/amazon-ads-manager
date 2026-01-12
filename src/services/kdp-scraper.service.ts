@@ -303,30 +303,28 @@ export class KdpScraperService {
 
             debugInfo.push(`Processing row ${index}, ASIN: ${asin}`);
 
-            // Cerca il titolo - prova diversi selettori
-            // 1. Prova con il selettore specifico
-            let titleElement = row.querySelector(`span[id*="title-${asin}"]`) as HTMLElement | null;
-
-            // 2. Se non funziona, prova con la classe title-link-label
-            if (!titleElement || !titleElement.textContent?.trim()) {
-              titleElement = row.querySelector('.title-link-label') as HTMLElement | null;
-            }
-
-            // 3. Se ancora niente, prova con qualsiasi span che contiene "title" nell'ID
-            if (!titleElement || !titleElement.textContent?.trim()) {
-              titleElement = row.querySelector('span[id*="title"]') as HTMLElement | null;
-            }
-
+            // Strategia diversa: cerca tutti gli elementi con testo significativo nella riga
             let title = '';
-            if (titleElement) {
-              // Prova a prendere il testo da un child element se lo span parent è vuoto
-              const childWithText = titleElement.querySelector('[class*="title"]') as HTMLElement | null;
-              const rawText = childWithText?.innerText || titleElement.innerText || titleElement.textContent || '';
 
-              title = cleanText(rawText);
-              debugInfo.push(`  Title found in: ${childWithText ? 'child element' : 'direct'}, length: ${rawText.length}, cleaned: "${title.substring(0, 40)}"`);
-            } else {
-              debugInfo.push(`  Title element NOT found`);
+            // Prova 1: Cerca nel metadata column qualsiasi testo con più di 20 caratteri puliti
+            const metadataCol = row.querySelector('.bookshelf-itemset-metadata-column');
+            if (metadataCol) {
+              // Prendi tutti gli elementi con classe 'mt-text-content' o 'title-link-label'
+              const textElements = metadataCol.querySelectorAll('.mt-text-content, .title-link-label, .a-text-bold');
+
+              for (const el of Array.from(textElements)) {
+                const text = cleanText((el as HTMLElement).innerText || el.textContent || '');
+                if (text.length > 20 && !text.startsWith('da ')) {
+                  // Questo potrebbe essere il titolo
+                  title = text;
+                  debugInfo.push(`  Found potential title (${text.length} chars): "${text.substring(0, 40)}"`);
+                  break;
+                }
+              }
+            }
+
+            if (!title) {
+              debugInfo.push(`  No valid title found in metadata column`);
             }
 
             // Cerca l'autore usando il pattern: span[id*="author-ASIN"]
