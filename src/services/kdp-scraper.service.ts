@@ -306,12 +306,20 @@ export class KdpScraperService {
             // Cerca il titolo usando il pattern dell'ID: span[id*="title-ASIN"]
             const titleElement = row.querySelector(`span[id*="title-${asin}"]`) as HTMLElement | null;
             let title = '';
+            let rawText = '';
             if (titleElement) {
-              // innerText include testo visibile anche da child nodes
-              title = cleanText(titleElement.innerText || titleElement.textContent || '');
+              rawText = titleElement.innerText || titleElement.textContent || '';
+              // Mostra i primi caratteri raw (con codici ASCII per debug)
+              const rawPreview = rawText.substring(0, 50).split('').map(c =>
+                c.charCodeAt(0) > 32 && c.charCodeAt(0) < 127 ? c : `[${c.charCodeAt(0)}]`
+              ).join('');
+
+              debugInfo.push(`  Raw text preview: "${rawPreview}"`);
+
+              title = cleanText(rawText);
             }
 
-            debugInfo.push(`  Title element found: ${!!titleElement}, innerText length: ${titleElement?.innerText?.length || 0}, textContent length: ${titleElement?.textContent?.length || 0}, Final Title: "${title.substring(0, 30)}"`);
+            debugInfo.push(`  Title element found: ${!!titleElement}, raw length: ${rawText.length}, cleaned length: ${title.length}, Final Title: "${title.substring(0, 30)}"`);
 
             // Cerca l'autore usando il pattern: span[id*="author-ASIN"]
             const authorElement = row.querySelector(`span[id*="author-${asin}"]`) as HTMLElement | null;
