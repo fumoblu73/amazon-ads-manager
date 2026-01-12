@@ -303,23 +303,31 @@ export class KdpScraperService {
 
             debugInfo.push(`Processing row ${index}, ASIN: ${asin}`);
 
-            // Cerca il titolo usando il pattern dell'ID: span[id*="title-ASIN"]
-            const titleElement = row.querySelector(`span[id*="title-${asin}"]`) as HTMLElement | null;
-            let title = '';
-            let rawText = '';
-            if (titleElement) {
-              rawText = titleElement.innerText || titleElement.textContent || '';
-              // Mostra i primi caratteri raw (con codici ASCII per debug)
-              const rawPreview = rawText.substring(0, 50).split('').map(c =>
-                c.charCodeAt(0) > 32 && c.charCodeAt(0) < 127 ? c : `[${c.charCodeAt(0)}]`
-              ).join('');
+            // Cerca il titolo - prova diversi selettori
+            // 1. Prova con il selettore specifico
+            let titleElement = row.querySelector(`span[id*="title-${asin}"]`) as HTMLElement | null;
 
-              debugInfo.push(`  Raw text preview: "${rawPreview}"`);
-
-              title = cleanText(rawText);
+            // 2. Se non funziona, prova con la classe title-link-label
+            if (!titleElement || !titleElement.textContent?.trim()) {
+              titleElement = row.querySelector('.title-link-label') as HTMLElement | null;
             }
 
-            debugInfo.push(`  Title element found: ${!!titleElement}, raw length: ${rawText.length}, cleaned length: ${title.length}, Final Title: "${title.substring(0, 30)}"`);
+            // 3. Se ancora niente, prova con qualsiasi span che contiene "title" nell'ID
+            if (!titleElement || !titleElement.textContent?.trim()) {
+              titleElement = row.querySelector('span[id*="title"]') as HTMLElement | null;
+            }
+
+            let title = '';
+            if (titleElement) {
+              // Prova a prendere il testo da un child element se lo span parent è vuoto
+              const childWithText = titleElement.querySelector('[class*="title"]') as HTMLElement | null;
+              const rawText = childWithText?.innerText || titleElement.innerText || titleElement.textContent || '';
+
+              title = cleanText(rawText);
+              debugInfo.push(`  Title found in: ${childWithText ? 'child element' : 'direct'}, length: ${rawText.length}, cleaned: "${title.substring(0, 40)}"`);
+            } else {
+              debugInfo.push(`  Title element NOT found`);
+            }
 
             // Cerca l'autore usando il pattern: span[id*="author-ASIN"]
             const authorElement = row.querySelector(`span[id*="author-${asin}"]`) as HTMLElement | null;
