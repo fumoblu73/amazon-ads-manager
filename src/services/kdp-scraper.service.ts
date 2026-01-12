@@ -387,15 +387,15 @@ export class KdpScraperService {
             }
           });
 
-          // Check if there's a "Next" button/link
-          // Common KDP pagination patterns: li.a-last > a, a[aria-label="Next"], button containing "Next"
-          const nextButton = document.querySelector('li.a-last:not(.a-disabled) > a') as HTMLElement | null;
-          const hasNext = nextButton !== null;
+          // Check if there's a "Next" button/link that is NOT disabled
+          // The Next button is in li.a-last, but we need to check if li itself has a-disabled class
+          const nextLi = document.querySelector('li.a-last') as HTMLElement | null;
+          const hasNext = nextLi !== null && !nextLi.classList.contains('a-disabled');
 
           if (hasNext) {
-            debugInfo.push(`🔍 Found next page button`);
+            debugInfo.push(`🔍 Found active next page button`);
           } else {
-            debugInfo.push(`📄 No more pages (this is the last page)`);
+            debugInfo.push(`📄 No more pages (Next button is disabled or not found)`);
           }
 
           return { books: booksData, debug: debugInfo, hasNext };
