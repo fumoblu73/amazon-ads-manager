@@ -305,21 +305,34 @@ export class KdpScraperService {
 
           rows.forEach((row: Element, index: number) => {
             try {
-              // L'ASIN è nell'ID della riga: <tr id="PB9GERBDQ90">
-              const asin = row.id || '';
+              const rowId = row.id || '';
+
+              // Extract the real ASIN from "Codice ASIN: XXXXX" text
+              // Look for span with id containing "price-asin-"
+              const asinElement = row.querySelector('span[id*="price-asin-"]') as HTMLElement | null;
+              let asin = '';
+
+              if (asinElement) {
+                const asinText = cleanText(asinElement.innerText || asinElement.textContent || '');
+                // Extract ASIN from "Codice ASIN: B0FB5DWK88" or "ASIN: B0FB5DWK88"
+                const asinMatch = asinText.match(/(?:Codice\s+)?ASIN:\s*([A-Z0-9]{10})/i);
+                if (asinMatch) {
+                  asin = asinMatch[1];
+                }
+              }
 
               if (!asin || asin.length === 0) {
-                debugInfo.push(`⚠️ Row ${index} has no ID`);
+                debugInfo.push(`⚠️ Row ${index} (ID: ${rowId}) has no valid ASIN`);
                 return;
               }
 
-              // Skip if we already processed this ASIN (multiple rows for same book with different formats)
+              // Skip if we already processed this ASIN (duplicate check across pages)
               if (processedAsins.has(asin)) {
                 debugInfo.push(`⏭️ Row ${index}, ASIN: ${asin} - Already processed, skipping`);
                 return;
               }
 
-              debugInfo.push(`Processing row ${index}, ASIN: ${asin}`);
+              debugInfo.push(`Processing row ${index}, Row ID: ${rowId}, ASIN: ${asin}`);
 
               // Strategia diversa: cerca tutti gli elementi con testo significativo nella riga
               let title = '';
@@ -345,8 +358,8 @@ export class KdpScraperService {
                 debugInfo.push(`  No valid title found in metadata column`);
               }
 
-              // Cerca l'autore usando il pattern: span[id*="author-ASIN"]
-              const authorElement = row.querySelector(`span[id*="author-${asin}"]`) as HTMLElement | null;
+              // Cerca l'autore usando il pattern: span[id*="author-"] (usa rowId invece di ASIN)
+              const authorElement = row.querySelector(`span[id*="author-${rowId}"]`) as HTMLElement | null;
               let author = '';
               if (authorElement) {
                 author = cleanText(authorElement.innerText || authorElement.textContent || '');
@@ -359,8 +372,8 @@ export class KdpScraperService {
 
               debugInfo.push(`  Author: "${author}"`);
 
-              // Cerca la serie usando il pattern: span[id*="series_title-ASIN"]
-              const seriesElement = row.querySelector(`span[id*="series_title-${asin}"]`) as HTMLElement | null;
+              // Cerca la serie usando il pattern: span[id*="series_title-"] (usa rowId invece di ASIN)
+              const seriesElement = row.querySelector(`span[id*="series_title-${rowId}"]`) as HTMLElement | null;
               let seriesName = '';
               if (seriesElement) {
                 seriesName = cleanText(seriesElement.innerText || seriesElement.textContent || '');
