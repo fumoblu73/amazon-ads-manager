@@ -387,18 +387,25 @@ export class KdpScraperService {
             }
           });
 
-          // Check if there's a "Next" button/link that is NOT disabled
-          // The Next button is in li.a-last, but we need to check if li itself has a-disabled class
-          const nextLi = document.querySelector('li.a-last') as HTMLElement | null;
-          const hasNext = nextLi !== null && !nextLi.classList.contains('a-disabled');
+          // Check pagination: look for page numbers instead of Next button
+          // Find all pagination links (they have page numbers as text)
+          const paginationLinks = Array.from(document.querySelectorAll('.a-pagination li'));
+          const pageNumbers: number[] = [];
 
-          if (hasNext) {
-            debugInfo.push(`🔍 Found active next page button`);
-          } else {
-            debugInfo.push(`📄 No more pages (Next button is disabled or not found)`);
-          }
+          paginationLinks.forEach((li: Element) => {
+            const link = li.querySelector('a');
+            if (link && link.textContent) {
+              const pageNum = parseInt(link.textContent.trim());
+              if (!isNaN(pageNum)) {
+                pageNumbers.push(pageNum);
+              }
+            }
+          });
 
-          return { books: booksData, debug: debugInfo, hasNext };
+          const maxPage = pageNumbers.length > 0 ? Math.max(...pageNumbers) : 1;
+          debugInfo.push(`📄 Found ${pageNumbers.length} page numbers: [${pageNumbers.join(', ')}], max: ${maxPage}`);
+
+          return { books: booksData, debug: debugInfo, maxPage };
         }, Array.from(processedAsins));
 
         // Log debug info
@@ -431,19 +438,40 @@ export class KdpScraperService {
           processedAsins.add(book.asin);
         });
 
-        // Check if there's a next page
-        hasNextPage = hasNextPage && (result.hasNext || false);
+        // Check if there are more pages based on page numbers found
+        const maxPage = result.maxPage || 1;
+        const nextPageNum = currentPage + 1;
+        hasNextPage = hasNextPage && nextPageNum <= maxPage;
 
         if (hasNextPage) {
-          console.log('⏭️ Clicking next page button...');
+          console.log(`⏭️ Navigating to page ${nextPageNum}...`);
 
-          // Click the next button
-          await page.click('li.a-last:not(.a-disabled) > a');
+          try {
+            // Click on the specific page number link instead of Next arrow
+            const clicked = await page.evaluate((pageNum: number) => {
+              const links = Array.from(document.querySelectorAll('.a-pagination li a'));
+              for (const link of links) {
+                if (link.textContent && link.textContent.trim() === pageNum.toString()) {
+                  (link as HTMLElement).click();
+                  return true;
+                }
+              }
+              return false;
+            }, nextPageNum);
 
-          // Wait for page to load
-          await page.waitForTimeout(3000);
-
-          currentPage++;
+            if (clicked) {
+              console.log(`✅ Clicked page ${nextPageNum} link`);
+              // Wait for page to load
+              await page.waitForTimeout(3000);
+              currentPage++;
+            } else {
+              console.log(`❌ Could not find page ${nextPageNum} link, stopping`);
+              hasNextPage = false;
+            }
+          } catch (error) {
+            console.error('Error clicking page link:', error);
+            hasNextPage = false;
+          }
         } else {
           console.log('✅ No more pages to scrape');
         }
