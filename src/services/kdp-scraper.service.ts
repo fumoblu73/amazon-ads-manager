@@ -352,12 +352,12 @@ export class KdpScraperService {
             if (title && title.length > 3) {
               booksData.push({
                 title: title.substring(0, 500), // Max 500 chars per schema
-                asin: asin.substring(0, 10),     // Max 10 chars per schema
+                asin: asin.substring(0, 15),     // Max 15 chars per schema
                 author: author ? author.substring(0, 200) : null, // Max 200 chars per schema
                 seriesName: seriesName ? seriesName.substring(0, 200) : null
               });
 
-              debugInfo.push(`  ✅ Added book: "${title.substring(0, 30)}"`);
+              debugInfo.push(`  ✅ Added book: "${title.substring(0, 30)}" (ASIN: ${asin})`);
             } else {
               debugInfo.push(`  ❌ Skipped (no valid title)`);
             }
