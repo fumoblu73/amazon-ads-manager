@@ -271,6 +271,7 @@ export class KdpScraperService {
       const books = await page.evaluate(() => {
         const booksData: any[] = [];
         const debugInfo: any[] = [];
+        const processedAsins = new Set<string>(); // Track processed ASINs to avoid duplicates
 
         // Cerca la tabella principale del bookshelf
         const mainTable = document.querySelector('table.refreshedbookshelftable');
@@ -298,6 +299,12 @@ export class KdpScraperService {
 
             if (!asin || asin.length === 0) {
               debugInfo.push(`⚠️ Row ${index} has no ID`);
+              return;
+            }
+
+            // Skip if we already processed this ASIN (multiple rows for same book with different formats)
+            if (processedAsins.has(asin)) {
+              debugInfo.push(`⏭️ Row ${index}, ASIN: ${asin} - Already processed, skipping`);
               return;
             }
 
@@ -356,6 +363,9 @@ export class KdpScraperService {
                 author: author ? author.substring(0, 200) : null, // Max 200 chars per schema
                 seriesName: seriesName ? seriesName.substring(0, 200) : null
               });
+
+              // Mark this ASIN as processed to skip duplicate format rows
+              processedAsins.add(asin);
 
               debugInfo.push(`  ✅ Added book: "${title.substring(0, 30)}" (ASIN: ${asin})`);
             } else {
