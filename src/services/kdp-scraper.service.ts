@@ -267,130 +267,176 @@ export class KdpScraperService {
       // Try to find bookshelf without strict selector - just get all tables
       console.log('📋 Attempting to scrape from any available table...');
 
-      // Estrai dati libri dalla pagina usando la tabella refreshedbookshelftable
-      const books = await page.evaluate(() => {
-        const booksData: any[] = [];
-        const debugInfo: any[] = [];
-        const processedAsins = new Set<string>(); // Track processed ASINs to avoid duplicates
+      // Track all books and processed ASINs across all pages
+      const allBooks: any[] = [];
+      const processedAsins = new Set<string>();
+      let currentPage = 1;
+      let hasNextPage = true;
 
-        // Cerca la tabella principale del bookshelf
-        const mainTable = document.querySelector('table.refreshedbookshelftable');
+      // Loop through all pages
+      while (hasNextPage) {
+        console.log(`📄 Scraping page ${currentPage}...`);
 
-        if (!mainTable) {
-          return { books: [], debug: ['❌ Main bookshelf table not found'] };
-        }
+        // Estrai dati libri dalla pagina corrente usando la tabella refreshedbookshelftable
+        const books = await page.evaluate((processedAsinsArray: string[]) => {
+          const booksData: any[] = [];
+          const debugInfo: any[] = [];
+          const processedAsins = new Set<string>(processedAsinsArray); // Restore Set from array
 
-        // Estrai tutte le righe della tabella (escludi header)
-        const rows = mainTable.querySelectorAll('tbody > tr');
-        debugInfo.push(`✅ Found ${rows.length} rows in main table`);
+          // Cerca la tabella principale del bookshelf
+          const mainTable = document.querySelector('table.refreshedbookshelftable');
 
-        // Helper per pulire il testo
-        const cleanText = (text: string) => {
-          return text
-            .replace(/\s+/g, ' ')  // Replace multiple spaces/newlines with single space
-            .replace(/\n/g, ' ')    // Remove newlines
-            .trim();
-        };
+          if (!mainTable) {
+            return { books: [], debug: ['❌ Main bookshelf table not found'], hasNext: false };
+          }
 
-        rows.forEach((row: Element, index: number) => {
-          try {
-            // L'ASIN è nell'ID della riga: <tr id="PB9GERBDQ90">
-            const asin = row.id || '';
+          // Estrai tutte le righe della tabella (escludi header)
+          const rows = mainTable.querySelectorAll('tbody > tr');
+          debugInfo.push(`✅ Found ${rows.length} rows in main table`);
 
-            if (!asin || asin.length === 0) {
-              debugInfo.push(`⚠️ Row ${index} has no ID`);
-              return;
-            }
+          // Helper per pulire il testo
+          const cleanText = (text: string) => {
+            return text
+              .replace(/\s+/g, ' ')  // Replace multiple spaces/newlines with single space
+              .replace(/\n/g, ' ')    // Remove newlines
+              .trim();
+          };
 
-            // Skip if we already processed this ASIN (multiple rows for same book with different formats)
-            if (processedAsins.has(asin)) {
-              debugInfo.push(`⏭️ Row ${index}, ASIN: ${asin} - Already processed, skipping`);
-              return;
-            }
+          rows.forEach((row: Element, index: number) => {
+            try {
+              // L'ASIN è nell'ID della riga: <tr id="PB9GERBDQ90">
+              const asin = row.id || '';
 
-            debugInfo.push(`Processing row ${index}, ASIN: ${asin}`);
+              if (!asin || asin.length === 0) {
+                debugInfo.push(`⚠️ Row ${index} has no ID`);
+                return;
+              }
 
-            // Strategia diversa: cerca tutti gli elementi con testo significativo nella riga
-            let title = '';
+              // Skip if we already processed this ASIN (multiple rows for same book with different formats)
+              if (processedAsins.has(asin)) {
+                debugInfo.push(`⏭️ Row ${index}, ASIN: ${asin} - Already processed, skipping`);
+                return;
+              }
 
-            // Prova 1: Cerca nel metadata column qualsiasi testo con più di 20 caratteri puliti
-            const metadataCol = row.querySelector('.bookshelf-itemset-metadata-column');
-            if (metadataCol) {
-              // Prendi tutti gli elementi con classe 'mt-text-content' o 'title-link-label'
-              const textElements = metadataCol.querySelectorAll('.mt-text-content, .title-link-label, .a-text-bold');
+              debugInfo.push(`Processing row ${index}, ASIN: ${asin}`);
 
-              for (const el of Array.from(textElements)) {
-                const text = cleanText((el as HTMLElement).innerText || el.textContent || '');
-                if (text.length > 20 && !text.startsWith('da ')) {
-                  // Questo potrebbe essere il titolo
-                  title = text;
-                  debugInfo.push(`  Found potential title (${text.length} chars): "${text.substring(0, 40)}"`);
-                  break;
+              // Strategia diversa: cerca tutti gli elementi con testo significativo nella riga
+              let title = '';
+
+              // Prova 1: Cerca nel metadata column qualsiasi testo con più di 20 caratteri puliti
+              const metadataCol = row.querySelector('.bookshelf-itemset-metadata-column');
+              if (metadataCol) {
+                // Prendi tutti gli elementi con classe 'mt-text-content' o 'title-link-label'
+                const textElements = metadataCol.querySelectorAll('.mt-text-content, .title-link-label, .a-text-bold');
+
+                for (const el of Array.from(textElements)) {
+                  const text = cleanText((el as HTMLElement).innerText || el.textContent || '');
+                  if (text.length > 20 && !text.startsWith('da ')) {
+                    // Questo potrebbe essere il titolo
+                    title = text;
+                    debugInfo.push(`  Found potential title (${text.length} chars): "${text.substring(0, 40)}"`);
+                    break;
+                  }
                 }
               }
+
+              if (!title) {
+                debugInfo.push(`  No valid title found in metadata column`);
+              }
+
+              // Cerca l'autore usando il pattern: span[id*="author-ASIN"]
+              const authorElement = row.querySelector(`span[id*="author-${asin}"]`) as HTMLElement | null;
+              let author = '';
+              if (authorElement) {
+                author = cleanText(authorElement.innerText || authorElement.textContent || '');
+              }
+
+              // Rimuovi il prefisso "da " se presente
+              if (author.startsWith('da ')) {
+                author = author.substring(3);
+              }
+
+              debugInfo.push(`  Author: "${author}"`);
+
+              // Cerca la serie usando il pattern: span[id*="series_title-ASIN"]
+              const seriesElement = row.querySelector(`span[id*="series_title-${asin}"]`) as HTMLElement | null;
+              let seriesName = '';
+              if (seriesElement) {
+                seriesName = cleanText(seriesElement.innerText || seriesElement.textContent || '');
+              }
+
+              // Solo aggiungi se abbiamo almeno un titolo
+              if (title && title.length > 3) {
+                booksData.push({
+                  title: title.substring(0, 500), // Max 500 chars per schema
+                  asin: asin.substring(0, 15),     // Max 15 chars per schema
+                  author: author ? author.substring(0, 200) : null, // Max 200 chars per schema
+                  seriesName: seriesName ? seriesName.substring(0, 200) : null
+                });
+
+                // Mark this ASIN as processed to skip duplicate format rows
+                processedAsins.add(asin);
+
+                debugInfo.push(`  ✅ Added book: "${title.substring(0, 30)}" (ASIN: ${asin})`);
+              } else {
+                debugInfo.push(`  ❌ Skipped (no valid title)`);
+              }
+            } catch (error: any) {
+              debugInfo.push(`  ❌ Error: ${error.message}`);
             }
+          });
 
-            if (!title) {
-              debugInfo.push(`  No valid title found in metadata column`);
-            }
+          // Check if there's a "Next" button/link
+          // Common KDP pagination patterns: li.a-last > a, a[aria-label="Next"], button containing "Next"
+          const nextButton = document.querySelector('li.a-last:not(.a-disabled) > a') as HTMLElement | null;
+          const hasNext = nextButton !== null;
 
-            // Cerca l'autore usando il pattern: span[id*="author-ASIN"]
-            const authorElement = row.querySelector(`span[id*="author-${asin}"]`) as HTMLElement | null;
-            let author = '';
-            if (authorElement) {
-              author = cleanText(authorElement.innerText || authorElement.textContent || '');
-            }
-
-            // Rimuovi il prefisso "da " se presente
-            if (author.startsWith('da ')) {
-              author = author.substring(3);
-            }
-
-            debugInfo.push(`  Author: "${author}"`);
-
-            // Cerca la serie usando il pattern: span[id*="series_title-ASIN"]
-            const seriesElement = row.querySelector(`span[id*="series_title-${asin}"]`) as HTMLElement | null;
-            let seriesName = '';
-            if (seriesElement) {
-              seriesName = cleanText(seriesElement.innerText || seriesElement.textContent || '');
-            }
-
-            // Solo aggiungi se abbiamo almeno un titolo
-            if (title && title.length > 3) {
-              booksData.push({
-                title: title.substring(0, 500), // Max 500 chars per schema
-                asin: asin.substring(0, 15),     // Max 15 chars per schema
-                author: author ? author.substring(0, 200) : null, // Max 200 chars per schema
-                seriesName: seriesName ? seriesName.substring(0, 200) : null
-              });
-
-              // Mark this ASIN as processed to skip duplicate format rows
-              processedAsins.add(asin);
-
-              debugInfo.push(`  ✅ Added book: "${title.substring(0, 30)}" (ASIN: ${asin})`);
-            } else {
-              debugInfo.push(`  ❌ Skipped (no valid title)`);
-            }
-          } catch (error: any) {
-            debugInfo.push(`  ❌ Error: ${error.message}`);
+          if (hasNext) {
+            debugInfo.push(`🔍 Found next page button`);
+          } else {
+            debugInfo.push(`📄 No more pages (this is the last page)`);
           }
+
+          return { books: booksData, debug: debugInfo, hasNext };
+        }, Array.from(processedAsins));
+
+        // Log debug info
+        const result = books as any;
+        if (result.debug) {
+          console.log('📝 Debug info from page.evaluate:');
+          result.debug.forEach((msg: string) => console.log(`   ${msg}`));
+        }
+
+        const booksList = result.books || [];
+        console.log(`✅ Found ${booksList.length} new books on page ${currentPage}`);
+
+        // Add books from this page to total
+        booksList.forEach((book: any) => {
+          allBooks.push(book);
+          processedAsins.add(book.asin);
         });
 
-        return { books: booksData, debug: debugInfo };
-      });
+        // Check if there's a next page
+        hasNextPage = result.hasNext || false;
 
-      // Log debug info
-      const result = books as any;
-      if (result.debug) {
-        console.log('📝 Debug info from page.evaluate:');
-        result.debug.forEach((msg: string) => console.log(`   ${msg}`));
+        if (hasNextPage) {
+          console.log('⏭️ Clicking next page button...');
+
+          // Click the next button
+          await page.click('li.a-last:not(.a-disabled) > a');
+
+          // Wait for page to load
+          await page.waitForTimeout(3000);
+
+          currentPage++;
+        } else {
+          console.log('✅ No more pages to scrape');
+        }
       }
 
-      const booksList = result.books || books;
+      console.log(`✅ Total books found across all pages: ${allBooks.length}`);
 
-      console.log(`✅ Found ${booksList.length} books in bookshelf`);
-
-      return booksList.map(book => ({ ...book, marketplace }));
+      return allBooks.map(book => ({ ...book, marketplace }));
     } catch (error) {
       console.error('Bookshelf scraping error:', error);
       return [];
