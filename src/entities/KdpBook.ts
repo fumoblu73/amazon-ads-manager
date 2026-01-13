@@ -29,6 +29,9 @@ export class KdpBook {
   @Column({ type: 'varchar', length: 10 })
   marketplace: string;
 
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  format: string;
+
   @Column({ type: 'varchar', length: 200, nullable: true, name: 'series_name' })
   seriesName: string;
 
@@ -40,6 +43,12 @@ export class KdpBook {
 
   @Column({ type: 'text', nullable: true, name: 'cover_url' })
   coverUrl: string;
+
+  @Column({ type: 'integer', nullable: true, name: 'bsr_rank' })
+  bsrRank: number;
+
+  @Column({ type: 'varchar', length: 100, nullable: true, name: 'bsr_category' })
+  bsrCategory: string;
 
   @Column({ type: 'uuid', nullable: true, name: 'linked_campaign_id' })
   linkedCampaignId: string;
