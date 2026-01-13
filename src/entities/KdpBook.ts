@@ -38,8 +38,8 @@ export class KdpBook {
   @Column({ type: 'integer', nullable: true, name: 'series_position' })
   seriesPosition: number;
 
-  @Column({ type: 'date', nullable: true, name: 'publish_date' })
-  publishDate: Date;
+  @Column({ type: 'varchar', length: 100, nullable: true, name: 'publish_date' })
+  publishDate: string;
 
   @Column({ type: 'varchar', length: 50, nullable: true })
   price: string;

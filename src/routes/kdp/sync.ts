@@ -88,7 +88,7 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
           book.author = bookData.author || book.author;
           book.seriesName = bookData.seriesName || book.seriesName;
           book.seriesPosition = bookData.seriesPosition || book.seriesPosition;
-          book.publishDate = bookData.publishDate ? new Date(bookData.publishDate) : book.publishDate;
+          book.publishDate = bookData.publishDate || book.publishDate;
           book.coverUrl = bookData.coverUrl || book.coverUrl;
         } else {
           // Crea un nuovo libro
@@ -100,7 +100,7 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
             marketplace: bookData.marketplace,
             seriesName: bookData.seriesName,
             seriesPosition: bookData.seriesPosition,
-            publishDate: bookData.publishDate ? new Date(bookData.publishDate) : undefined,
+            publishDate: bookData.publishDate,
             coverUrl: bookData.coverUrl
           });
         }
