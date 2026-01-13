@@ -92,10 +92,18 @@ router.get('/status', authMiddleware, async (req: AuthRequest, res: Response) =>
       });
     }
 
-    // Calcola se i cookie sono scaduti (> 7 giorni)
-    const cookiesExpired = user.kdpCookiesUpdatedAt
-      ? (new Date().getTime() - user.kdpCookiesUpdatedAt.getTime()) > (7 * 24 * 60 * 60 * 1000)
-      : true;
+    // Calcola età dei cookie in giorni
+    const now = new Date().getTime();
+    const cookieAge = user.kdpCookiesUpdatedAt
+      ? Math.floor((now - user.kdpCookiesUpdatedAt.getTime()) / (1000 * 60 * 60 * 24))
+      : null;
+
+    // Cookie scadono dopo 7 giorni
+    const COOKIE_MAX_AGE = 7;
+    const COOKIE_WARNING_AGE = 5; // Avvisa 2 giorni prima
+
+    const cookiesExpired = cookieAge !== null ? cookieAge >= COOKIE_MAX_AGE : true;
+    const needsRefresh = cookieAge !== null ? cookieAge >= COOKIE_WARNING_AGE : true;
 
     res.json({
       success: true,
@@ -104,8 +112,10 @@ router.get('/status', authMiddleware, async (req: AuthRequest, res: Response) =>
         cookiesUpdatedAt: user.kdpCookiesUpdatedAt,
         lastSyncAt: user.kdpLastSyncAt,
         marketplace: user.kdpMarketplace,
+        cookieAge: cookieAge,
         cookiesExpired,
-        needsRefresh: cookiesExpired || !user.kdpCookiesUpdatedAt
+        needsRefresh,
+        daysUntilExpiration: cookieAge !== null ? Math.max(0, COOKIE_MAX_AGE - cookieAge) : 0
       }
     });
   } catch (error: any) {
