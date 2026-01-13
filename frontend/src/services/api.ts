@@ -239,6 +239,22 @@ export const kdpBooksApi = {
     });
     return response.data;
   },
+
+  getCookieStatus: async (token: string) => {
+    const response = await apiClient.get<ApiResponse<{
+      syncEnabled: boolean;
+      cookiesUpdatedAt: string | null;
+      lastSyncAt: string | null;
+      marketplace: string;
+      cookieAge: number | null;
+      cookiesExpired: boolean;
+      needsRefresh: boolean;
+      daysUntilExpiration: number;
+    }>>('/api/kdp-sync/status', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
 };
 
 // ================================================

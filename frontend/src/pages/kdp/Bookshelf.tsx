@@ -4,11 +4,20 @@ import DataTable from '../../components/kdp/DataTable';
 import type { Column } from '../../components/kdp/DataTable';
 import type { KdpBook, BookshelfFilters } from '../../types';
 
+interface CookieStatus {
+  syncEnabled: boolean;
+  cookieAge: number | null;
+  cookiesExpired: boolean;
+  needsRefresh: boolean;
+  daysUntilExpiration: number;
+}
+
 export default function Bookshelf() {
   const [books, setBooks] = useState<KdpBook[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [cookieStatus, setCookieStatus] = useState<CookieStatus | null>(null);
   const [filters, setFilters] = useState<BookshelfFilters>({
     status: 'all',
     page: 1,
@@ -17,6 +26,7 @@ export default function Bookshelf() {
 
   useEffect(() => {
     loadBooks();
+    checkCookieStatus();
   }, [filters]);
 
   const loadBooks = async () => {
@@ -33,6 +43,18 @@ export default function Bookshelf() {
     }
   };
 
+  const checkCookieStatus = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await kdpBooksApi.getCookieStatus(token);
+      setCookieStatus(response.data || null);
+    } catch (err) {
+      console.error('Failed to check cookie status:', err);
+    }
+  };
+
   const handleSync = async () => {
     try {
       setSyncing(true);
@@ -44,6 +66,7 @@ export default function Bookshelf() {
       await kdpBooksApi.sync(token);
       alert('Books synced successfully!');
       loadBooks();
+      checkCookieStatus(); // Refresh cookie status after sync
     } catch (err: any) {
       alert(`Sync failed: ${err.message}`);
     } finally {
@@ -195,6 +218,44 @@ export default function Bookshelf() {
           )}
         </button>
       </div>
+
+      {/* Cookie Status Banner */}
+      {cookieStatus && cookieStatus.cookiesExpired && (
+        <div className="bg-red-900/30 border border-red-700 rounded-xl p-4 flex items-start gap-3">
+          <svg className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div className="flex-1">
+            <h3 className="text-red-400 font-semibold mb-1">KDP Cookie scaduti</h3>
+            <p className="text-red-300 text-sm mb-3">
+              I cookie di autenticazione KDP sono scaduti. Il sync automatico non funzionerà fino a quando non li aggiorni.
+            </p>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-red-400">Come aggiornare:</span>
+              <ol className="text-red-300 list-decimal list-inside">
+                <li>Apri kdp.amazon.com nel browser</li>
+                <li>Clicca sull'estensione Chrome</li>
+                <li>Clicca "Sincronizza con KDP"</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cookieStatus && !cookieStatus.cookiesExpired && cookieStatus.needsRefresh && (
+        <div className="bg-yellow-900/30 border border-yellow-700 rounded-xl p-4 flex items-start gap-3">
+          <svg className="w-6 h-6 text-yellow-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div className="flex-1">
+            <h3 className="text-yellow-400 font-semibold mb-1">Cookie KDP in scadenza</h3>
+            <p className="text-yellow-300 text-sm">
+              I cookie KDP scadranno tra <span className="font-bold">{cookieStatus.daysUntilExpiration} giorn{cookieStatus.daysUntilExpiration === 1 ? 'o' : 'i'}</span>.
+              Ti consigliamo di aggiornarli usando l'estensione Chrome per evitare interruzioni nel sync automatico.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-gray-900 border border-gray-700 rounded-xl p-4">
