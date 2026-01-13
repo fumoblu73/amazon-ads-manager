@@ -636,7 +636,11 @@ export class KdpScraperService {
           title: bookData.title,
           author: bookData.author || null,
           seriesName: bookData.seriesName || null,
-          marketplace: bookData.marketplace
+          marketplace: bookData.marketplace,
+          format: bookData.format || null,
+          price: bookData.price || null,
+          publishDate: bookData.publishDate || null,
+          coverUrl: bookData.coverUrl || null
         });
         await bookRepository.save(newBook);
         saved++;
