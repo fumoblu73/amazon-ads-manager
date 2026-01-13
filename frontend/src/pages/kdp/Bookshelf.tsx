@@ -53,12 +53,57 @@ export default function Bookshelf() {
 
   const columns: Column<KdpBook>[] = [
     {
+      key: 'cover',
+      header: 'Cover',
+      accessor: (book) => book.coverUrl || '',
+      sortable: false,
+      render: (value, book) => (
+        <div className="w-12 h-16 flex items-center justify-center">
+          {value ? (
+            <img
+              src={value}
+              alt={book.title}
+              className="w-full h-full object-cover rounded shadow-lg"
+              onError={(e) => {
+                // Fallback to placeholder if image fails to load
+                (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA0OCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDgiIGhlaWdodD0iNjQiIGZpbGw9IiMzNzQxNTEiLz48cGF0aCBkPSJNMjQgMjhDMjYuNzYxNCAyOCAyOSAyNS43NjE0IDI5IDIzQzI5IDIwLjIzODYgMjYuNzYxNCAxOCAyNCAxOEMyMS4yMzg2IDE4IDE5IDIwLjIzODYgMTkgMjNDMTkgMjUuNzYxNCAyMS4yMzg2IDI4IDI0IDI4WiIgZmlsbD0iIzlDQTNCRiIvPjxwYXRoIGQ9Ik0zNiA0MEwzMCAzNEwyNCA0MEwxOCAzNEwxMiA0NkgzNlY0MFoiIGZpbGw9IiM5Q0EzQkYiLz48L3N2Zz4=';
+              }}
+            />
+          ) : (
+            <div className="w-full h-full bg-gray-800 rounded flex items-center justify-center">
+              <svg className="w-6 h-6 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+              </svg>
+            </div>
+          )}
+        </div>
+      )
+    },
+    {
       key: 'asin',
       header: 'ASIN',
       accessor: (book) => book.asin,
       sortable: true,
       render: (value) => (
-        <span className="font-mono text-orange-500">{value}</span>
+        <a
+          href={`https://www.amazon.com/dp/${value}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-mono text-orange-500 hover:text-orange-400 hover:underline"
+        >
+          {value}
+        </a>
+      )
+    },
+    {
+      key: 'format',
+      header: 'Format',
+      accessor: (book) => book.format || 'N/A',
+      sortable: true,
+      render: (value) => (
+        <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-500/20 text-blue-500">
+          {value}
+        </span>
       )
     },
     {
@@ -77,51 +122,28 @@ export default function Bookshelf() {
       sortable: true
     },
     {
-      key: 'marketplace',
-      header: 'Marketplace',
-      accessor: (book) => book.marketplace,
-      sortable: true,
-      render: (value) => (
-        <span className="px-2 py-1 text-xs font-medium rounded-full bg-purple-500/20 text-purple-500">
-          {value}
-        </span>
-      )
-    },
-    {
-      key: 'format',
-      header: 'Format',
-      accessor: (book) => book.format || 'N/A',
-      sortable: true,
-      render: (value) => (
-        <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-500/20 text-blue-500">
-          {value}
-        </span>
-      )
-    },
-    {
-      key: 'publicationDate',
+      key: 'publishDate',
       header: 'Publication Date',
-      accessor: (book) => book.publicationDate ? new Date(book.publicationDate).toLocaleDateString() : 'N/A',
+      accessor: (book) => book.publishDate ? new Date(book.publishDate).toLocaleDateString() : 'N/A',
       sortable: true
     },
     {
-      key: 'kenpc',
-      header: 'KENPC',
-      accessor: (book) => book.kenpc || 0,
+      key: 'bsr',
+      header: 'BSR (Amazon.com)',
+      accessor: (book) => book.bsrRank || null,
       sortable: true,
-      render: (value) => (value || 0).toLocaleString()
-    },
-    {
-      key: 'lastSyncDate',
-      header: 'Last Sync',
-      accessor: (book) => book.lastSyncDate ? new Date(book.lastSyncDate).toLocaleDateString() : 'Never',
-      sortable: true
-    },
-    {
-      key: 'createdAt',
-      header: 'Added',
-      accessor: (book) => new Date(book.createdAt).toLocaleDateString(),
-      sortable: true
+      render: (value, book) => (
+        value ? (
+          <div className="text-sm">
+            <div className="font-semibold text-green-500">#{value.toLocaleString()}</div>
+            {book.bsrCategory && (
+              <div className="text-xs text-gray-400 truncate max-w-xs">{book.bsrCategory}</div>
+            )}
+          </div>
+        ) : (
+          <span className="text-gray-500 text-sm">N/A</span>
+        )
+      )
     }
   ];
 

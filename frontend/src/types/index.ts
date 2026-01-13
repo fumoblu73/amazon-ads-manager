@@ -116,7 +116,10 @@ export interface KdpBook {
   marketplace: string;
   format?: string;
   author?: string;
-  publicationDate?: string;
+  publishDate?: string;
+  coverUrl?: string;
+  bsrRank?: number;
+  bsrCategory?: string;
   kenpc?: number;
   lastSyncDate?: string;
   createdAt: string;

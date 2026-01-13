@@ -379,13 +379,23 @@ export class KdpScraperService {
                 seriesName = cleanText(seriesElement.innerText || seriesElement.textContent || '');
               }
 
+              // Cerca il formato: span[id*="status-format-"]
+              const formatElement = row.querySelector(`span[id*="status-format-${rowId}"]`) as HTMLElement | null;
+              let format = '';
+              if (formatElement) {
+                format = cleanText(formatElement.innerText || formatElement.textContent || '');
+              }
+
+              debugInfo.push(`  Format: "${format}"`);
+
               // Solo aggiungi se abbiamo almeno un titolo
               if (title && title.length > 3) {
                 booksData.push({
                   title: title.substring(0, 500), // Max 500 chars per schema
                   asin: asin.substring(0, 15),     // Max 15 chars per schema
                   author: author ? author.substring(0, 200) : null, // Max 200 chars per schema
-                  seriesName: seriesName ? seriesName.substring(0, 200) : null
+                  seriesName: seriesName ? seriesName.substring(0, 200) : null,
+                  format: format ? format.substring(0, 50) : null
                 });
 
                 // Mark this ASIN as processed to skip duplicate format rows
