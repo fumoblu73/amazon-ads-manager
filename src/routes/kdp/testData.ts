@@ -28,7 +28,7 @@ router.post('/create-sample', async (req: AuthRequest, res: Response): Promise<v
       marketplace: 'IT',
       seriesName: 'Serie Test',
       seriesPosition: 1,
-      publishDate: new Date('2024-01-01')
+      publishDate: '1 gennaio 2024'
     });
 
     await bookRepo.save(testBook);

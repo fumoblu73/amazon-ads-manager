@@ -13,7 +13,7 @@ const sampleBooks = [
     title: 'The Mystery of the Lost Key',
     marketplace: 'US',
     author: 'John Smith',
-    publishDate: new Date('2024-01-15')
+    publishDate: '15 gennaio 2024'
   },
   {
     userId: DEMO_USER_ID,
@@ -21,7 +21,7 @@ const sampleBooks = [
     title: 'Digital Marketing Mastery',
     marketplace: 'US',
     author: 'Jane Doe',
-    publishDate: new Date('2024-02-20')
+    publishDate: '20 febbraio 2024'
   },
   {
     userId: DEMO_USER_ID,
@@ -29,7 +29,7 @@ const sampleBooks = [
     title: 'French Cooking Essentials',
     marketplace: 'FR',
     author: 'Pierre Dubois',
-    publishDate: new Date('2024-03-10')
+    publishDate: '10 marzo 2024'
   },
   {
     userId: DEMO_USER_ID,
@@ -37,7 +37,7 @@ const sampleBooks = [
     title: 'Sci-Fi Adventures',
     marketplace: 'UK',
     author: 'Sarah Johnson',
-    publishDate: new Date('2023-12-05')
+    publishDate: '5 dicembre 2023'
   },
   {
     userId: DEMO_USER_ID,
@@ -45,7 +45,7 @@ const sampleBooks = [
     title: 'Healthy Living Guide',
     marketplace: 'DE',
     author: 'Hans Mueller',
-    publishDate: new Date('2024-01-28')
+    publishDate: '28 gennaio 2024'
   }
 ];
 
