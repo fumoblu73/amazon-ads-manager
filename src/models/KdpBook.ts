@@ -40,6 +40,9 @@ export class KdpBook {
   @Column({ type: 'date', nullable: true, name: 'publish_date' })
   publishDate: Date;
 
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  price: string;
+
   @Column({ type: 'text', nullable: true, name: 'cover_url' })
   coverUrl: string;
 
@@ -70,6 +73,7 @@ export interface CreateKdpBookInput {
   seriesName?: string;
   seriesPosition?: number;
   publishDate?: Date;
+  price?: string;
   coverUrl?: string;
   bsrRank?: number;
   bsrCategory?: string;

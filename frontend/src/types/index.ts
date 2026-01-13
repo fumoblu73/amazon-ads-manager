@@ -117,6 +117,7 @@ export interface KdpBook {
   format?: string;
   author?: string;
   publishDate?: string;
+  price?: string;
   coverUrl?: string;
   bsrRank?: number;
   bsrCategory?: string;

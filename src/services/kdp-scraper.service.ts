@@ -307,14 +307,24 @@ export class KdpScraperService {
             try {
               const rowId = row.id || '';
 
-              // Extract the real ASIN from "Codice ASIN: XXXXX" text
-              // Look for span with id containing "price-asin-"
-              const asinElement = row.querySelector('span[id*="price-asin-"]') as HTMLElement | null;
+              // FILTER: Only process Paperback rows (Versione cartacea)
+              // Check format first to skip non-paperback rows early
+              const formatElement = row.querySelector(`span[id*="print-status-format-${rowId}"]`) as HTMLElement | null;
+              const format = formatElement ? cleanText(formatElement.innerText || formatElement.textContent || '') : '';
+
+              if (!format || format !== 'Versione cartacea') {
+                debugInfo.push(`⏭️ Row ${index} skipped - not Paperback (format: "${format}")`);
+                return;
+              }
+
+              debugInfo.push(`📖 Processing Paperback row ${index}, Row ID: ${rowId}`);
+
+              // Extract PAPERBACK ASIN from "Codice ASIN: XXXXX"
+              const asinElement = row.querySelector(`span[id*="print-price-asin-${rowId}"]`) as HTMLElement | null;
               let asin = '';
 
               if (asinElement) {
                 const asinText = cleanText(asinElement.innerText || asinElement.textContent || '');
-                // Extract ASIN from "Codice ASIN: B0FB5DWK88" or "ASIN: B0FB5DWK88"
                 const asinMatch = asinText.match(/(?:Codice\s+)?ASIN:\s*([A-Z0-9]{10})/i);
                 if (asinMatch) {
                   asin = asinMatch[1];
@@ -322,91 +332,94 @@ export class KdpScraperService {
               }
 
               if (!asin || asin.length === 0) {
-                debugInfo.push(`⚠️ Row ${index} (ID: ${rowId}) has no valid ASIN`);
+                debugInfo.push(`⚠️ Row ${index} (ID: ${rowId}) has no valid Paperback ASIN`);
                 return;
               }
 
-              // Skip if we already processed this ASIN (duplicate check across pages)
+              // Skip if we already processed this ASIN
               if (processedAsins.has(asin)) {
                 debugInfo.push(`⏭️ Row ${index}, ASIN: ${asin} - Already processed, skipping`);
                 return;
               }
 
-              debugInfo.push(`Processing row ${index}, Row ID: ${rowId}, ASIN: ${asin}`);
-
-              // Strategia diversa: cerca tutti gli elementi con testo significativo nella riga
+              // Extract TITLE from metadata column
               let title = '';
-
-              // Prova 1: Cerca nel metadata column qualsiasi testo con più di 20 caratteri puliti
               const metadataCol = row.querySelector('.bookshelf-itemset-metadata-column');
               if (metadataCol) {
-                // Prendi tutti gli elementi con classe 'mt-text-content' o 'title-link-label'
                 const textElements = metadataCol.querySelectorAll('.mt-text-content, .title-link-label, .a-text-bold');
-
                 for (const el of Array.from(textElements)) {
                   const text = cleanText((el as HTMLElement).innerText || el.textContent || '');
                   if (text.length > 20 && !text.startsWith('da ')) {
-                    // Questo potrebbe essere il titolo
                     title = text;
-                    debugInfo.push(`  Found potential title (${text.length} chars): "${text.substring(0, 40)}"`);
                     break;
                   }
                 }
               }
 
               if (!title) {
-                debugInfo.push(`  No valid title found in metadata column`);
+                debugInfo.push(`⚠️ No title found for ASIN ${asin}`);
+                return;
               }
 
-              // Cerca l'autore usando il pattern: span[id*="author-"] (usa rowId invece di ASIN)
+              // Extract AUTHOR
               const authorElement = row.querySelector(`span[id*="author-${rowId}"]`) as HTMLElement | null;
               let author = '';
               if (authorElement) {
                 author = cleanText(authorElement.innerText || authorElement.textContent || '');
+                if (author.startsWith('da ')) {
+                  author = author.substring(3);
+                }
               }
 
-              // Rimuovi il prefisso "da " se presente
-              if (author.startsWith('da ')) {
-                author = author.substring(3);
-              }
-
-              debugInfo.push(`  Author: "${author}"`);
-
-              // Cerca la serie usando il pattern: span[id*="series_title-"] (usa rowId invece di ASIN)
+              // Extract SERIES
               const seriesElement = row.querySelector(`span[id*="series_title-${rowId}"]`) as HTMLElement | null;
-              let seriesName = '';
-              if (seriesElement) {
-                seriesName = cleanText(seriesElement.innerText || seriesElement.textContent || '');
+              const seriesName = seriesElement ? cleanText(seriesElement.innerText || seriesElement.textContent || '') : '';
+
+              // Extract PRICE from print-price-list-price link
+              const priceElement = row.querySelector(`a[id*="print-price-list-price-${rowId}"]`) as HTMLElement | null;
+              const price = priceElement ? cleanText(priceElement.innerText || priceElement.textContent || '') : '';
+
+              // Extract PUBLISH DATE from print-status-release-date
+              const dateElement = row.querySelector(`span[id*="print-status-release-date-${rowId}"]`) as HTMLElement | null;
+              let publishDate = '';
+              if (dateElement) {
+                const dateText = cleanText(dateElement.innerText || dateElement.textContent || '');
+                // Extract date from "Data di invio: 29 maggio 2025"
+                const dateMatch = dateText.match(/Data di invio:\s*(.+)/i);
+                if (dateMatch) {
+                  publishDate = dateMatch[1];
+                }
               }
 
-              // Cerca il formato: span[id*="status-format-"]
-              const formatElement = row.querySelector(`span[id*="status-format-${rowId}"]`) as HTMLElement | null;
-              let format = '';
-              if (formatElement) {
-                format = cleanText(formatElement.innerText || formatElement.textContent || '');
-              }
+              // Extract COVER URL from cover column
+              const coverElement = row.querySelector(`td[id*="${rowId}-cover"] img`) as HTMLImageElement | null;
+              const coverUrl = coverElement ? coverElement.src : '';
 
-              debugInfo.push(`  Format: "${format}"`);
+              debugInfo.push(`  Title: "${title.substring(0, 40)}"`);
+              debugInfo.push(`  ASIN: ${asin}`);
+              debugInfo.push(`  Author: "${author}"`);
+              debugInfo.push(`  Price: "${price}"`);
+              debugInfo.push(`  Publish Date: "${publishDate}"`);
+              debugInfo.push(`  Cover URL: ${coverUrl ? 'Found' : 'Not found'}`);
 
-              // Solo aggiungi se abbiamo almeno un titolo
-              if (title && title.length > 3) {
-                booksData.push({
-                  title: title.substring(0, 500), // Max 500 chars per schema
-                  asin: asin.substring(0, 15),     // Max 15 chars per schema
-                  author: author ? author.substring(0, 200) : null, // Max 200 chars per schema
-                  seriesName: seriesName ? seriesName.substring(0, 200) : null,
-                  format: format ? format.substring(0, 50) : null
-                });
+              // Add book data
+              booksData.push({
+                title: title.substring(0, 500),
+                asin: asin.substring(0, 15),
+                author: author ? author.substring(0, 200) : null,
+                seriesName: seriesName ? seriesName.substring(0, 200) : null,
+                format: 'Paperback',  // Always Paperback since we filtered for it
+                price: price ? price.substring(0, 50) : null,
+                publishDate: publishDate || null,
+                coverUrl: coverUrl || null
+              });
 
-                // Mark this ASIN as processed to skip duplicate format rows
-                processedAsins.add(asin);
+              // Mark as processed
+              processedAsins.add(asin);
 
-                debugInfo.push(`  ✅ Added book: "${title.substring(0, 30)}" (ASIN: ${asin})`);
-              } else {
-                debugInfo.push(`  ❌ Skipped (no valid title)`);
-              }
+              debugInfo.push(`  ✅ Added Paperback: "${title.substring(0, 30)}" (ASIN: ${asin})`);
             } catch (error: any) {
-              debugInfo.push(`  ❌ Error: ${error.message}`);
+              debugInfo.push(`  ❌ Error processing row: ${error.message}`);
             }
           });
 

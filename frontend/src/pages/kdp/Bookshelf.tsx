@@ -124,8 +124,17 @@ export default function Bookshelf() {
     {
       key: 'publishDate',
       header: 'Publication Date',
-      accessor: (book) => book.publishDate ? new Date(book.publishDate).toLocaleDateString() : 'N/A',
+      accessor: (book) => book.publishDate || 'N/A',
       sortable: true
+    },
+    {
+      key: 'price',
+      header: 'Price',
+      accessor: (book) => book.price || 'N/A',
+      sortable: true,
+      render: (value) => (
+        <span className="font-semibold text-orange-500">{value}</span>
+      )
     },
     {
       key: 'bsr',
