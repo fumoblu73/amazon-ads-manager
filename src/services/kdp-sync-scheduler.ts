@@ -3,6 +3,7 @@ import { AppDataSource } from '../config/database';
 import { User } from '../entities/User';
 import { Not, IsNull, MoreThan } from 'typeorm';
 import { kdpScraperService } from './kdp-scraper.service';
+import { kdpReportsScraperService } from './kdp-reports-scraper.service';
 
 export class KdpSyncScheduler {
   private isRunning = false;
@@ -56,9 +57,17 @@ export class KdpSyncScheduler {
       try {
         console.log(`🔄 Syncing user ${user.email} (${user.kdpMarketplace})`);
 
-        const result = await kdpScraperService.syncUserData(user.id);
+        // 1. Sync bookshelf (libri metadata)
+        console.log('📚 Step 1/2: Syncing bookshelf...');
+        const bookResult = await kdpScraperService.syncUserData(user.id);
+        console.log(`✅ Bookshelf: ${bookResult.books} books`);
 
-        console.log(`✅ User ${user.email} synced: ${result.books} books, ${result.stats} stats`);
+        // 2. Sync sales & royalties (dati vendite e guadagni)
+        console.log('💰 Step 2/2: Syncing sales & royalties...');
+        const salesResult = await kdpReportsScraperService.syncSalesAndRoyalties(user.id, false);
+        console.log(`✅ Sales: ${salesResult.salesRecords} sales, ${salesResult.royaltiesRecords} royalties`);
+
+        console.log(`✅ User ${user.email} fully synced`);
       } catch (error: any) {
         console.error(`❌ Failed to sync user ${user.email}:`, error.message);
       }
@@ -69,6 +78,7 @@ export class KdpSyncScheduler {
 
     // Chiudi browser alla fine
     await kdpScraperService.closeBrowser();
+    await kdpReportsScraperService.closeBrowser();
 
     console.log('✅ Scheduled KDP sync completed');
   }
@@ -77,7 +87,24 @@ export class KdpSyncScheduler {
    * Forza sync manuale per un utente
    */
   async syncUser(userId: string): Promise<{ books: number; stats: number }> {
-    return await kdpScraperService.syncUserData(userId);
+    // Sync bookshelf
+    const bookResult = await kdpScraperService.syncUserData(userId);
+
+    // Sync sales & royalties
+    const salesResult = await kdpReportsScraperService.syncSalesAndRoyalties(userId, false);
+
+    return {
+      books: bookResult.books,
+      stats: salesResult.salesRecords + salesResult.royaltiesRecords
+    };
+  }
+
+  /**
+   * Import dati storici da CSV per un utente
+   */
+  async importHistoricalData(userId: string): Promise<number> {
+    const result = await kdpReportsScraperService.syncSalesAndRoyalties(userId, true);
+    return result.historicalMonths;
   }
 }
 

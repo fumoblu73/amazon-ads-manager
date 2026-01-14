@@ -178,6 +178,37 @@ router.post('/sync', authMiddleware, async (req: AuthRequest, res: Response) => 
 });
 
 // ================================================
+// POST /api/kdp/sync-historical - Importa dati storici da CSV
+// ================================================
+router.post('/sync-historical', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+
+    console.log(`📅 Historical data import requested for user ${userId}`);
+
+    // Trigger historical import
+    const monthsImported = await kdpSyncScheduler.importHistoricalData(userId);
+
+    console.log(`✅ Historical import completed: ${monthsImported} months`);
+
+    res.json({
+      success: true,
+      data: {
+        monthsImported,
+        message: `Successfully imported ${monthsImported} months of historical data`
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Errore POST /api/kdp/sync-historical:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Errore nell\'import dei dati storici',
+      details: error.message
+    });
+  }
+});
+
+// ================================================
 // POST /api/kdp/books - Crea libro manualmente
 // ================================================
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
