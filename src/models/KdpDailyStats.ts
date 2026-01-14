@@ -8,8 +8,9 @@ import {
 } from 'typeorm';
 
 @Entity('kdp_daily_stats')
-@Index(['userId', 'date'], { unique: true })
+@Index(['userId', 'date', 'asin'], { unique: true })
 @Index(['date'])
+@Index(['asin'])
 export class KdpDailyStats {
   @PrimaryGeneratedColumn('uuid')
   id: string;

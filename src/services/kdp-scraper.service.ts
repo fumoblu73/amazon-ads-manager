@@ -220,11 +220,15 @@ export class KdpScraperService {
 
       // Check if we got redirected to login
       const currentUrl = page.url();
-      if (currentUrl.includes('signin') || currentUrl.includes('login') || pageTitle.includes('Sign-In') || pageTitle.includes('Sign In')) {
+      if (currentUrl.includes('signin') || currentUrl.includes('login') || currentUrl.includes('ap/signin') || pageTitle.includes('Sign-In') || pageTitle.includes('Sign In') || pageTitle.includes('Amazon Sign-In')) {
         console.log(`❌ AUTHENTICATION FAILED - Redirected to login page!`);
         console.log(`   Current URL: ${currentUrl}`);
         console.log(`   Page title: ${pageTitle}`);
-        throw new Error('Authentication failed - cookies are invalid or expired');
+        console.log(`   🔑 HINT: Cookies may be expired or IP blocked. Try:`);
+        console.log(`      1. Logout and login again on kdp.amazon.com`);
+        console.log(`      2. Re-sync cookies from Chrome extension`);
+        console.log(`      3. Wait 5 minutes before retrying (Amazon rate limit)`);
+        throw new Error('Authentication failed - cookies are invalid, expired, or IP blocked by Amazon. Please re-sync your cookies.');
       }
 
       console.log(`✅ Successfully authenticated - on KDP bookshelf`);
@@ -307,12 +311,21 @@ export class KdpScraperService {
             try {
               const rowId = row.id || '';
 
-              // FILTER: Only process Paperback rows (Versione cartacea)
+              // FILTER: Only process Paperback rows
               // Check format first to skip non-paperback rows early
               const formatElement = row.querySelector(`span[id*="print-status-format-${rowId}"]`) as HTMLElement | null;
               const format = formatElement ? cleanText(formatElement.innerText || formatElement.textContent || '') : '';
 
-              if (!format || format !== 'Versione cartacea') {
+              // Support multiple languages: English, Italian, etc.
+              const isPaperback = format && (
+                format === 'Paperback' ||           // English
+                format === 'Versione cartacea' ||   // Italian
+                format === 'Tapa blanda' ||         // Spanish
+                format === 'Broché' ||              // French
+                format === 'Taschenbuch'            // German
+              );
+
+              if (!isPaperback) {
                 debugInfo.push(`⏭️ Row ${index} skipped - not Paperback (format: "${format}")`);
                 return;
               }

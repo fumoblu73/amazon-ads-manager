@@ -219,6 +219,17 @@ export const kdpBooksApi = {
     return response.data;
   },
 
+  syncHistorical: async (token: string) => {
+    const response = await apiClient.post<ApiResponse<{ monthsImported: number; message: string }>>(
+      '/api/kdp/books/sync-historical',
+      {},
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+    return response.data;
+  },
+
   create: async (book: Omit<KdpBook, 'id' | 'userId' | 'createdAt' | 'updatedAt'>, token: string) => {
     const response = await apiClient.post<ApiResponse<KdpBook>>('/api/kdp/books', book, {
       headers: { Authorization: `Bearer ${token}` },
