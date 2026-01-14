@@ -429,8 +429,10 @@ export class KdpScraperService {
               const price = priceElement ? cleanText(priceElement.innerText || priceElement.textContent || '') : '';
 
               // Extract PUBLISH DATE from print-status-release-date
+              debugInfo.push(`🔍 Row ${index} - Attempting to find date element for rowId: ${rowId}`);
               const dateElement = row.querySelector(`span[id*="print-status-release-date-${rowId}"]`) as HTMLElement | null;
               let publishDate = '';
+              debugInfo.push(`🔍 Row ${index} - Date element ${dateElement ? 'FOUND' : 'NOT FOUND'}`);
               if (dateElement) {
                 // Debug: log raw content before cleaning
                 const rawInnerText = dateElement.innerText || '';
