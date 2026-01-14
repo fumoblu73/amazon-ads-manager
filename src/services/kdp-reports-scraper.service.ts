@@ -30,7 +30,23 @@ export class KdpReportsScraperService {
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-accelerated-2d-canvas',
-        '--disable-gpu'
+        '--disable-gpu',
+        // Memory optimization for Render Free tier (512MB limit)
+        '--single-process',                    // Run in single process (saves ~100MB)
+        '--disable-extensions',                 // Don't load extensions
+        '--disable-background-networking',      // Disable background network requests
+        '--disable-default-apps',               // Don't load default apps
+        '--disable-sync',                       // Disable sync
+        '--disable-translate',                  // Disable translate
+        '--hide-scrollbars',                    // Hide scrollbars
+        '--mute-audio',                         // Mute audio
+        '--disable-plugins',                    // Disable plugins
+        '--disable-webgl',                      // Disable WebGL
+        '--disable-threaded-animation',         // Disable threaded animation
+        '--disable-threaded-scrolling',         // Disable threaded scrolling
+        '--disable-web-security',               // Disable web security (for scraping)
+        '--disable-site-isolation-trials',      // Disable site isolation
+        '--disable-blink-features=AutomationControlled'  // Anti-detection
       ]
     });
 
@@ -91,6 +107,18 @@ export class KdpReportsScraperService {
       // Inizializza browser
       const browser = await this.initBrowser();
       const page = await browser.newPage();
+
+      // Memory optimization: Block unnecessary resources (images, fonts, stylesheets)
+      await page.setRequestInterception(true);
+      page.on('request', (req) => {
+        const resourceType = req.resourceType();
+        // Block images, fonts, stylesheets, media to save memory
+        if (['image', 'font', 'stylesheet', 'media'].includes(resourceType)) {
+          req.abort();
+        } else {
+          req.continue();
+        }
+      });
 
       // Setup API interception
       await this.setupApiInterception(page);

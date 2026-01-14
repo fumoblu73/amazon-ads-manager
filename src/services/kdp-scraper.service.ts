@@ -27,7 +27,22 @@ export class KdpScraperService {
         '--disable-gpu',
         // Anti-detection: nasconde che è headless
         '--disable-blink-features=AutomationControlled',
-        '--disable-features=IsolateOrigins,site-per-process'
+        '--disable-features=IsolateOrigins,site-per-process',
+        // Memory optimization for Render Free tier (512MB limit)
+        '--single-process',                    // Run in single process (saves ~100MB)
+        '--disable-extensions',                 // Don't load extensions
+        '--disable-background-networking',      // Disable background network requests
+        '--disable-default-apps',               // Don't load default apps
+        '--disable-sync',                       // Disable sync
+        '--disable-translate',                  // Disable translate
+        '--hide-scrollbars',                    // Hide scrollbars
+        '--mute-audio',                         // Mute audio
+        '--disable-plugins',                    // Disable plugins
+        '--disable-webgl',                      // Disable WebGL
+        '--disable-threaded-animation',         // Disable threaded animation
+        '--disable-threaded-scrolling',         // Disable threaded scrolling
+        '--disable-web-security',               // Disable web security (for scraping)
+        '--disable-site-isolation-trials'       // Disable site isolation
       ]
     });
 
@@ -98,11 +113,23 @@ export class KdpScraperService {
       const browser = await this.initBrowser();
       const page = await browser.newPage();
 
+      // Memory optimization: Block unnecessary resources (images, fonts, stylesheets)
+      await page.setRequestInterception(true);
+      page.on('request', (req) => {
+        const resourceType = req.resourceType();
+        // Block images, fonts, stylesheets to save memory
+        if (['image', 'font', 'stylesheet', 'media'].includes(resourceType)) {
+          req.abort();
+        } else {
+          req.continue();
+        }
+      });
+
       // Imposta user-agent realistico per evitare bot detection
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
-      // Imposta viewport realistico
-      await page.setViewport({ width: 1920, height: 1080 });
+      // Imposta viewport realistico (ridotto per salvare memoria)
+      await page.setViewport({ width: 1366, height: 768 });
 
       // Imposta cookie nel browser (naviga prima a KDP)
       await this.setCookies(page, cookies, kdpDomain);
