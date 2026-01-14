@@ -435,13 +435,13 @@ export class KdpScraperService {
                 // Debug: log raw content before cleaning
                 const rawInnerText = dateElement.innerText || '';
                 const rawTextContent = dateElement.textContent || '';
-                console.log(`🗓️ DEBUG Row ${index} - innerText: "${rawInnerText}", textContent: "${rawTextContent}"`);
+                debugInfo.push(`🗓️ DEBUG Row ${index} - innerText: "${rawInnerText}", textContent: "${rawTextContent}"`);
 
                 const dateText = cleanText(rawInnerText || rawTextContent);
-                console.log(`🗓️ Row ${index} - After cleanText: "${dateText}"`);
+                debugInfo.push(`🗓️ Row ${index} - After cleanText: "${dateText}"`);
 
                 if (!dateText) {
-                  console.log(`⚠️ Row ${index} - Date element found but empty after cleaning`);
+                  debugInfo.push(`⚠️ Row ${index} - Date element found but empty after cleaning`);
                 } else {
                   // Extract date from various formats:
                   // Italian: "Data di invio: 29 maggio 2025"
@@ -449,17 +449,18 @@ export class KdpScraperService {
                   const dateMatch = dateText.match(/(?:Data di invio|Submission date):\s*(.+)/i);
                   if (dateMatch) {
                     const rawDate = dateMatch[1]; // "29 maggio 2025" or "May 29, 2025"
-                    console.log(`🗓️ Row ${index} - Extracted raw date: "${rawDate}"`);
+                    debugInfo.push(`🗓️ Row ${index} - Extracted raw date: "${rawDate}"`);
 
                     // Convert to ISO format (YYYY-MM-DD)
-                    publishDate = this.parsePublishDate(rawDate);
-                    console.log(`🗓️ Row ${index} - Parsed to ISO: "${publishDate}"`);
+                    // Note: parsePublishDate is not available in browser context, store raw and parse later
+                    publishDate = rawDate; // Store raw for now
+                    debugInfo.push(`🗓️ Row ${index} - Raw date stored: "${publishDate}"`);
                   } else {
-                    console.log(`⚠️ Row ${index} - No date match found in: "${dateText}"`);
+                    debugInfo.push(`⚠️ Row ${index} - No date match found in: "${dateText}"`);
                   }
                 }
               } else {
-                console.log(`⚠️ Row ${index} - No date element found with selector: span[id*="print-status-release-date-${rowId}"]`);
+                debugInfo.push(`⚠️ Row ${index} - No date element found with selector: span[id*="print-status-release-date-${rowId}"]`);
               }
 
               // Extract COVER URL from cover column
@@ -539,8 +540,15 @@ export class KdpScraperService {
           consecutiveEmptyPages = 0; // Reset counter when we find books
         }
 
-        // Add books from this page to total
+        // Add books from this page to total, parsing dates in Node.js context
         booksList.forEach((book: any) => {
+          // Parse publish date if it exists (from raw format to ISO)
+          if (book.publishDate && book.publishDate.trim()) {
+            const parsedDate = this.parsePublishDate(book.publishDate);
+            console.log(`   🗓️ Parsing date for ${book.asin}: "${book.publishDate}" → "${parsedDate}"`);
+            book.publishDate = parsedDate;
+          }
+
           allBooks.push(book);
           processedAsins.add(book.asin);
         });
