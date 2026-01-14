@@ -12,7 +12,7 @@ const router = Router();
 router.post('/cookies', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
-    const { cookies, marketplace } = req.body;
+    const { cookies, kdpreportsCookies, marketplace } = req.body;
 
     if (!cookies || !Array.isArray(cookies)) {
       return res.status(400).json({
@@ -39,16 +39,34 @@ router.post('/cookies', authMiddleware, async (req: AuthRequest, res: Response) 
     const cookiesJson = JSON.stringify(kdpCookies);
     const encryptedCookies = encryptCookies(cookiesJson);
 
+    // Processa cookie di kdpreports.amazon.com (per le statistiche vendite)
+    let encryptedReportsCookies: string | null = null;
+    let reportsCookiesCount = 0;
+
+    if (kdpreportsCookies && Array.isArray(kdpreportsCookies) && kdpreportsCookies.length > 0) {
+      console.log(`📊 Received ${kdpreportsCookies.length} kdpreports cookies`);
+
+      // Salva tutti i cookie di kdpreports (non filtrarli, potrebbero servire tutti)
+      const reportsCookiesJson = JSON.stringify(kdpreportsCookies);
+      encryptedReportsCookies = encryptCookies(reportsCookiesJson);
+      reportsCookiesCount = kdpreportsCookies.length;
+
+      console.log(`✅ Encrypted ${reportsCookiesCount} kdpreports cookies`);
+    } else {
+      console.log(`⚠️ No kdpreports cookies received - sales data scraping may not work`);
+    }
+
     // Salva nel database
     const userRepository = AppDataSource.getRepository(User);
     await userRepository.update(userId, {
       kdpCookiesEncrypted: encryptedCookies,
+      kdpReportsCookiesEncrypted: encryptedReportsCookies,
       kdpCookiesUpdatedAt: new Date(),
       kdpMarketplace: marketplace || 'US',
       kdpSyncEnabled: true
     });
 
-    console.log(`✅ KDP cookies saved for user ${userId}`);
+    console.log(`✅ KDP cookies saved for user ${userId} (${kdpCookies.length} KDP + ${reportsCookiesCount} Reports)`);
 
     // Opzionale: Avvia sync immediato
     // await kdpScraperService.syncUserData(userId);
@@ -58,8 +76,10 @@ router.post('/cookies', authMiddleware, async (req: AuthRequest, res: Response) 
       message: 'KDP cookies synchronized successfully',
       data: {
         cookiesCount: kdpCookies.length,
+        reportsCookiesCount: reportsCookiesCount,
         marketplace: marketplace || 'US',
-        syncEnabled: true
+        syncEnabled: true,
+        hasReportsCookies: reportsCookiesCount > 0
       }
     });
   } catch (error: any) {
@@ -138,6 +158,7 @@ router.delete('/cookies', authMiddleware, async (req: AuthRequest, res: Response
 
     await userRepository.update(userId, {
       kdpCookiesEncrypted: null,
+      kdpReportsCookiesEncrypted: null,
       kdpCookiesUpdatedAt: null,
       kdpSyncEnabled: false
     });
