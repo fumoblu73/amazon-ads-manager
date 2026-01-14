@@ -24,7 +24,10 @@ export class KdpScraperService {
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-accelerated-2d-canvas',
-        '--disable-gpu'
+        '--disable-gpu',
+        // Anti-detection: nasconde che è headless
+        '--disable-blink-features=AutomationControlled',
+        '--disable-features=IsolateOrigins,site-per-process'
       ]
     });
 
@@ -94,6 +97,12 @@ export class KdpScraperService {
       // Inizializza browser
       const browser = await this.initBrowser();
       const page = await browser.newPage();
+
+      // Imposta user-agent realistico per evitare bot detection
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
+      // Imposta viewport realistico
+      await page.setViewport({ width: 1920, height: 1080 });
 
       // Imposta cookie nel browser (naviga prima a KDP)
       await this.setCookies(page, cookies, kdpDomain);
