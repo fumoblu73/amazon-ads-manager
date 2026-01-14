@@ -82,13 +82,25 @@ async function syncKdpCookies() {
     // Recupera tutti i cookie da .amazon.com (il dominio usato da KDP)
     const cookies = await chrome.cookies.getAll({ domain: '.amazon.com' });
 
+    // NUOVO: Recupera cookie specifici di kdpreports.amazon.com per le statistiche
+    const kdpreportsCookies = await chrome.cookies.getAll({
+      url: 'https://kdpreports.amazon.com'
+    });
+
+    console.log(`Found ${cookies.length} .amazon.com cookies, ${kdpreportsCookies.length} kdpreports cookies`);
+
     if (cookies.length === 0) {
       showStatus('❌ Nessun cookie trovato. Assicurati di essere loggato su KDP.', 'error');
       setLoading(false);
       return;
     }
 
-    showStatus(`✅ Trovati ${cookies.length} cookie. Invio al server...`, 'info');
+    // Mostra info sui cookie kdpreports
+    const kdpreportsMsg = kdpreportsCookies.length > 0
+      ? `✅ Trovati ${cookies.length} cookie KDP + ${kdpreportsCookies.length} cookie Reports.`
+      : `⚠️ Trovati ${cookies.length} cookie KDP. Per i dati di vendita, visita prima kdpreports.amazon.com`;
+
+    showStatus(`${kdpreportsMsg} Invio al server...`, 'info');
 
     // Recupera JWT token da chrome.storage (salvato dall'app)
     console.log('Looking for JWT token in chrome.storage...');
@@ -140,6 +152,16 @@ async function syncKdpCookies() {
       },
       body: JSON.stringify({
         cookies: cookies.map(c => ({
+          name: c.name,
+          value: c.value,
+          domain: c.domain,
+          path: c.path,
+          expires: c.expirationDate,
+          httpOnly: c.httpOnly,
+          secure: c.secure
+        })),
+        // NUOVO: Invia anche i cookie di kdpreports per le statistiche
+        kdpreportsCookies: kdpreportsCookies.map(c => ({
           name: c.name,
           value: c.value,
           domain: c.domain,

@@ -47,6 +47,9 @@ export class User {
   @Column({ type: 'text', name: 'kdp_cookies_encrypted', nullable: true })
   kdpCookiesEncrypted: string | null; // JSON criptato dei cookie KDP
 
+  @Column({ type: 'text', name: 'kdp_reports_cookies_encrypted', nullable: true })
+  kdpReportsCookiesEncrypted: string | null; // JSON criptato dei cookie kdpreports.amazon.com
+
   @Column({ type: 'varchar', length: 50, name: 'kdp_marketplace', nullable: true })
   kdpMarketplace: string | null; // US, UK, DE, FR, ES, IT, etc.
 
