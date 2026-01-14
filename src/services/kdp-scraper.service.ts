@@ -476,15 +476,25 @@ export class KdpScraperService {
                 } else {
                   // Extract date from various formats:
                   // Italian: "Data di invio: 29 maggio 2025"
-                  // English: "Submission date: May 29, 2025"
-                  const dateMatch = dateText.match(/(?:Data di invio|Submission date):\s*(.+)/i);
-                  if (dateMatch) {
-                    const rawDate = dateMatch[1]; // "29 maggio 2025" or "May 29, 2025"
-                    debugInfo.push(`🗓️ Row ${index} - Extracted raw date: "${rawDate}"`);
+                  // English with colon: "Submission date: May 29, 2025"
+                  // English without colon: "Submitted on May 25, 2021"
+                  let rawDate = '';
 
-                    // Convert to ISO format (YYYY-MM-DD)
-                    // Note: parsePublishDate is not available in browser context, store raw and parse later
-                    publishDate = rawDate; // Store raw for now
+                  // Try pattern with colon first (Italian/formal English)
+                  const colonMatch = dateText.match(/(?:Data di invio|Submission date):\s*(.+)/i);
+                  if (colonMatch) {
+                    rawDate = colonMatch[1];
+                  } else {
+                    // Try "Submitted on" pattern (common English format)
+                    const submittedOnMatch = dateText.match(/Submitted on\s+(.+)/i);
+                    if (submittedOnMatch) {
+                      rawDate = submittedOnMatch[1];
+                    }
+                  }
+
+                  if (rawDate) {
+                    debugInfo.push(`🗓️ Row ${index} - Extracted raw date: "${rawDate}"`);
+                    publishDate = rawDate;
                     debugInfo.push(`🗓️ Row ${index} - Raw date stored: "${publishDate}"`);
                   } else {
                     debugInfo.push(`⚠️ Row ${index} - No date match found in: "${dateText}"`);
