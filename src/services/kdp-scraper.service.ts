@@ -343,16 +343,10 @@ export class KdpScraperService {
               .trim();
           };
 
+          let firstPaperbackDumped = false;
           rows.forEach((row: Element, index: number) => {
             try {
               const rowId = row.id || '';
-
-              // DEBUG: Log first row's HTML to inspect structure (only for row 0)
-              if (index === 0) {
-                const rowHTML = (row as HTMLElement).innerHTML || '';
-                debugInfo.push(`🔍 DEBUG: First row HTML (truncated to 3000 chars):`);
-                debugInfo.push(rowHTML.substring(0, 3000));
-              }
 
               // FILTER: Only process Paperback rows
               // Check format first to skip non-paperback rows early
@@ -374,6 +368,23 @@ export class KdpScraperService {
               }
 
               debugInfo.push(`📖 Processing Paperback row ${index}, Row ID: ${rowId}`);
+
+              // DEBUG: Dump HTML of first valid Paperback row to inspect date structure
+              if (!firstPaperbackDumped) {
+                firstPaperbackDumped = true;
+                debugInfo.push(`========== FIRST PAPERBACK ROW HTML START ==========`);
+                const rowHTML = (row as HTMLElement).innerHTML || '';
+                // Split into chunks of 500 chars for better log readability
+                const chunk1 = rowHTML.substring(0, 500);
+                const chunk2 = rowHTML.substring(500, 1000);
+                const chunk3 = rowHTML.substring(1000, 1500);
+                const chunk4 = rowHTML.substring(1500, 2000);
+                debugInfo.push(`[HTML CHUNK 1]: ${chunk1}`);
+                debugInfo.push(`[HTML CHUNK 2]: ${chunk2}`);
+                debugInfo.push(`[HTML CHUNK 3]: ${chunk3}`);
+                debugInfo.push(`[HTML CHUNK 4]: ${chunk4}`);
+                debugInfo.push(`========== FIRST PAPERBACK ROW HTML END ==========`);
+              }
 
               // Extract PAPERBACK ASIN from "Codice ASIN: XXXXX"
               const asinElement = row.querySelector(`span[id*="print-price-asin-${rowId}"]`) as HTMLElement | null;
@@ -437,6 +448,17 @@ export class KdpScraperService {
 
               // Extract PUBLISH DATE from print-status-release-date
               debugInfo.push(`🔍 Row ${index} - Attempting to find date element for rowId: ${rowId}`);
+
+              // DEBUG: Find ALL elements with "date" or "release" in their ID (first 3 paperback rows)
+              if (index <= 5) {
+                const allDateElements = row.querySelectorAll('[id*="date"], [id*="release"], [id*="Date"], [id*="Release"]');
+                debugInfo.push(`🔍 Row ${index} - Found ${allDateElements.length} elements with date/release in ID:`);
+                allDateElements.forEach((el, i) => {
+                  const htmlEl = el as HTMLElement;
+                  debugInfo.push(`  [${i}] ID: "${el.id}", text: "${(htmlEl.innerText || htmlEl.textContent || '').substring(0, 100)}"`);
+                });
+              }
+
               const dateElement = row.querySelector(`span[id*="print-status-release-date-${rowId}"]`) as HTMLElement | null;
               let publishDate = '';
               debugInfo.push(`🔍 Row ${index} - Date element ${dateElement ? 'FOUND' : 'NOT FOUND'}`);
