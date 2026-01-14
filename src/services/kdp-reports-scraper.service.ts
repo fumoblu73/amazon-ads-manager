@@ -108,19 +108,7 @@ export class KdpReportsScraperService {
       const browser = await this.initBrowser();
       const page = await browser.newPage();
 
-      // Memory optimization: Block unnecessary resources (images, fonts, stylesheets)
-      await page.setRequestInterception(true);
-      page.on('request', (req) => {
-        const resourceType = req.resourceType();
-        // Block images, fonts, stylesheets, media to save memory
-        if (['image', 'font', 'stylesheet', 'media'].includes(resourceType)) {
-          req.abort();
-        } else {
-          req.continue();
-        }
-      });
-
-      // Setup API interception
+      // Setup combined interception (API + memory optimization)
       await this.setupApiInterception(page);
 
       // Imposta cookie
@@ -196,6 +184,13 @@ export class KdpReportsScraperService {
     await page.setRequestInterception(true);
 
     page.on('request', (request) => {
+      // Memory optimization: Block unnecessary resources
+      const resourceType = request.resourceType();
+      if (['image', 'font', 'stylesheet', 'media'].includes(resourceType)) {
+        request.abort();
+        return;
+      }
+
       // Log API calls to kdpreports
       const url = request.url();
       if (url.includes('kdpreports.amazon.com') && (url.includes('/api/') || url.includes('graphql'))) {

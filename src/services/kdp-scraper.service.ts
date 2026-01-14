@@ -433,15 +433,24 @@ export class KdpScraperService {
               let publishDate = '';
               if (dateElement) {
                 const dateText = cleanText(dateElement.innerText || dateElement.textContent || '');
+                console.log(`🗓️ Row ${index} - Raw date text: "${dateText}"`);
+
                 // Extract date from various formats:
                 // Italian: "Data di invio: 29 maggio 2025"
                 // English: "Submission date: May 29, 2025"
                 const dateMatch = dateText.match(/(?:Data di invio|Submission date):\s*(.+)/i);
                 if (dateMatch) {
                   const rawDate = dateMatch[1]; // "29 maggio 2025" or "May 29, 2025"
+                  console.log(`🗓️ Row ${index} - Extracted raw date: "${rawDate}"`);
+
                   // Convert to ISO format (YYYY-MM-DD)
                   publishDate = this.parsePublishDate(rawDate);
+                  console.log(`🗓️ Row ${index} - Parsed to ISO: "${publishDate}"`);
+                } else {
+                  console.log(`⚠️ Row ${index} - No date match found in: "${dateText}"`);
                 }
+              } else {
+                console.log(`⚠️ Row ${index} - No date element found`);
               }
 
               // Extract COVER URL from cover column
