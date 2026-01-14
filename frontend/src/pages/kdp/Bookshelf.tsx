@@ -147,7 +147,20 @@ export default function Bookshelf() {
     {
       key: 'publishDate',
       header: 'Publication Date',
-      accessor: (book) => book.publishDate || 'N/A',
+      accessor: (book) => {
+        if (!book.publishDate) return 'N/A';
+
+        // Converti ISO (YYYY-MM-DD) in formato europeo (DD/MM/YYYY)
+        const isoPattern = /^(\d{4})-(\d{2})-(\d{2})$/;
+        const match = book.publishDate.match(isoPattern);
+
+        if (match) {
+          const [_, year, month, day] = match;
+          return `${day}/${month}/${year}`;  // Formato europeo: 29/05/2025
+        }
+
+        return book.publishDate;  // Fallback per formati non ISO
+      },
       sortable: true
     },
     {

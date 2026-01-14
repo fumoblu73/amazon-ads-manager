@@ -406,10 +406,14 @@ export class KdpScraperService {
               let publishDate = '';
               if (dateElement) {
                 const dateText = cleanText(dateElement.innerText || dateElement.textContent || '');
-                // Extract date from "Data di invio: 29 maggio 2025"
-                const dateMatch = dateText.match(/Data di invio:\s*(.+)/i);
+                // Extract date from various formats:
+                // Italian: "Data di invio: 29 maggio 2025"
+                // English: "Submission date: May 29, 2025"
+                const dateMatch = dateText.match(/(?:Data di invio|Submission date):\s*(.+)/i);
                 if (dateMatch) {
-                  publishDate = dateMatch[1];
+                  const rawDate = dateMatch[1]; // "29 maggio 2025" or "May 29, 2025"
+                  // Convert to ISO format (YYYY-MM-DD)
+                  publishDate = this.parsePublishDate(rawDate);
                 }
               }
 
@@ -541,6 +545,90 @@ export class KdpScraperService {
     } catch (error) {
       console.error('Bookshelf scraping error:', error);
       return [];
+    }
+  }
+
+  /**
+   * Converte data di pubblicazione in formato ISO (YYYY-MM-DD)
+   * Supporta formati italiani e inglesi
+   */
+  private parsePublishDate(rawDate: string): string {
+    // Mappa mesi italiani → numero
+    const italianMonths: Record<string, string> = {
+      'gennaio': '01',
+      'febbraio': '02',
+      'marzo': '03',
+      'aprile': '04',
+      'maggio': '05',
+      'giugno': '06',
+      'luglio': '07',
+      'agosto': '08',
+      'settembre': '09',
+      'ottobre': '10',
+      'novembre': '11',
+      'dicembre': '12'
+    };
+
+    // Mappa mesi inglesi → numero
+    const englishMonths: Record<string, string> = {
+      'january': '01', 'jan': '01',
+      'february': '02', 'feb': '02',
+      'march': '03', 'mar': '03',
+      'april': '04', 'apr': '04',
+      'may': '05',
+      'june': '06', 'jun': '06',
+      'july': '07', 'jul': '07',
+      'august': '08', 'aug': '08',
+      'september': '09', 'sep': '09',
+      'october': '10', 'oct': '10',
+      'november': '11', 'nov': '11',
+      'december': '12', 'dec': '12'
+    };
+
+    try {
+      // Pattern: "29 maggio 2025" (italiano)
+      const italianPattern = /(\d{1,2})\s+([a-zàèéìòù]+)\s+(\d{4})/i;
+      const italianMatch = rawDate.match(italianPattern);
+
+      if (italianMatch) {
+        const day = italianMatch[1].padStart(2, '0');
+        const monthName = italianMatch[2].toLowerCase();
+        const year = italianMatch[3];
+        const month = italianMonths[monthName];
+
+        if (month) {
+          return `${year}-${month}-${day}`;
+        }
+      }
+
+      // Pattern: "May 29, 2025" (inglese)
+      const englishPattern = /([a-z]+)\s+(\d{1,2}),?\s+(\d{4})/i;
+      const englishMatch = rawDate.match(englishPattern);
+
+      if (englishMatch) {
+        const monthName = englishMatch[1].toLowerCase();
+        const day = englishMatch[2].padStart(2, '0');
+        const year = englishMatch[3];
+        const month = englishMonths[monthName];
+
+        if (month) {
+          return `${year}-${month}-${day}`;
+        }
+      }
+
+      // Pattern: "2025-05-29" (già ISO)
+      const isoPattern = /(\d{4})-(\d{2})-(\d{2})/;
+      if (isoPattern.test(rawDate)) {
+        return rawDate;
+      }
+
+      // Fallback: ritorna stringa originale se non riconosciuto
+      console.warn(`⚠️ Unable to parse date: "${rawDate}". Returning as-is.`);
+      return rawDate;
+
+    } catch (error) {
+      console.error(`❌ Error parsing date "${rawDate}":`, error);
+      return rawDate;
     }
   }
 
