@@ -347,6 +347,13 @@ export class KdpScraperService {
             try {
               const rowId = row.id || '';
 
+              // DEBUG: Log first row's HTML to inspect structure (only for row 0)
+              if (index === 0) {
+                const rowHTML = (row as HTMLElement).innerHTML || '';
+                debugInfo.push(`🔍 DEBUG: First row HTML (truncated to 3000 chars):`);
+                debugInfo.push(rowHTML.substring(0, 3000));
+              }
+
               // FILTER: Only process Paperback rows
               // Check format first to skip non-paperback rows early
               const formatElement = row.querySelector(`span[id*="print-status-format-${rowId}"]`) as HTMLElement | null;
