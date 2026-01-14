@@ -432,25 +432,34 @@ export class KdpScraperService {
               const dateElement = row.querySelector(`span[id*="print-status-release-date-${rowId}"]`) as HTMLElement | null;
               let publishDate = '';
               if (dateElement) {
-                const dateText = cleanText(dateElement.innerText || dateElement.textContent || '');
-                console.log(`🗓️ Row ${index} - Raw date text: "${dateText}"`);
+                // Debug: log raw content before cleaning
+                const rawInnerText = dateElement.innerText || '';
+                const rawTextContent = dateElement.textContent || '';
+                console.log(`🗓️ DEBUG Row ${index} - innerText: "${rawInnerText}", textContent: "${rawTextContent}"`);
 
-                // Extract date from various formats:
-                // Italian: "Data di invio: 29 maggio 2025"
-                // English: "Submission date: May 29, 2025"
-                const dateMatch = dateText.match(/(?:Data di invio|Submission date):\s*(.+)/i);
-                if (dateMatch) {
-                  const rawDate = dateMatch[1]; // "29 maggio 2025" or "May 29, 2025"
-                  console.log(`🗓️ Row ${index} - Extracted raw date: "${rawDate}"`);
+                const dateText = cleanText(rawInnerText || rawTextContent);
+                console.log(`🗓️ Row ${index} - After cleanText: "${dateText}"`);
 
-                  // Convert to ISO format (YYYY-MM-DD)
-                  publishDate = this.parsePublishDate(rawDate);
-                  console.log(`🗓️ Row ${index} - Parsed to ISO: "${publishDate}"`);
+                if (!dateText) {
+                  console.log(`⚠️ Row ${index} - Date element found but empty after cleaning`);
                 } else {
-                  console.log(`⚠️ Row ${index} - No date match found in: "${dateText}"`);
+                  // Extract date from various formats:
+                  // Italian: "Data di invio: 29 maggio 2025"
+                  // English: "Submission date: May 29, 2025"
+                  const dateMatch = dateText.match(/(?:Data di invio|Submission date):\s*(.+)/i);
+                  if (dateMatch) {
+                    const rawDate = dateMatch[1]; // "29 maggio 2025" or "May 29, 2025"
+                    console.log(`🗓️ Row ${index} - Extracted raw date: "${rawDate}"`);
+
+                    // Convert to ISO format (YYYY-MM-DD)
+                    publishDate = this.parsePublishDate(rawDate);
+                    console.log(`🗓️ Row ${index} - Parsed to ISO: "${publishDate}"`);
+                  } else {
+                    console.log(`⚠️ Row ${index} - No date match found in: "${dateText}"`);
+                  }
                 }
               } else {
-                console.log(`⚠️ Row ${index} - No date element found`);
+                console.log(`⚠️ Row ${index} - No date element found with selector: span[id*="print-status-release-date-${rowId}"]`);
               }
 
               // Extract COVER URL from cover column
