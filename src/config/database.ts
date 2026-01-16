@@ -26,7 +26,7 @@ const getDatabaseConfig = () => {
     return {
       type: 'postgres' as const,
       url: process.env.DATABASE_URL,
-      synchronize: process.env.NODE_ENV === 'development',
+      synchronize: true, // Abilitato per creare nuove tabelle automaticamente
       logging: process.env.NODE_ENV === 'development',
       entities: [User, AutomationLog, KeywordPerformance, Campaign, Book, KdpBook, KdpDailyStats, JournalEvent, KdpSyncLog, AutomationSettings, KdpSalesSnapshot, KdpBookModel, KdpDailyStatsModel, JournalEventModel, KdpSyncLogModel],
       migrations: ['src/migrations/**/*.ts'],

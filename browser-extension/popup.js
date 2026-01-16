@@ -345,8 +345,14 @@ async function syncSalesData() {
     });
 
     if (!serverResponse.ok) {
-      const error = await serverResponse.json();
-      throw new Error(error.error || 'Failed to send data');
+      // Check if response is JSON or HTML
+      const contentType = serverResponse.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const error = await serverResponse.json();
+        throw new Error(error.error || 'Failed to send data');
+      } else {
+        throw new Error(`Server error ${serverResponse.status}: ${serverResponse.statusText}`);
+      }
     }
 
     const result = await serverResponse.json();
