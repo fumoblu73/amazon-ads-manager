@@ -236,7 +236,7 @@ export class KdpReportsScraperService {
   }
 
   /**
-   * Imposta cookie nel browser
+   * Imposta cookie nel browser (metodo Publisher Champ)
    * @param page - Puppeteer page
    * @param amazonCookies - Cookie da .amazon.com (per autenticazione base)
    * @param reportsCookies - Cookie specifici da kdpreports.amazon.com (opzionali)
@@ -251,33 +251,54 @@ export class KdpReportsScraperService {
       console.log('⚠️ Initial navigation failed, continuing...');
     }
 
-    // Prima imposta i cookie di .amazon.com (autenticazione base)
-    console.log(`🍪 Setting ${amazonCookies.length} .amazon.com cookies...`);
+    // ========================================================
+    // IMPOSTA COOKIE COME PUBLISHER CHAMP
+    // Mantieni il dominio originale di ogni cookie
+    // ========================================================
+
+    // Prima imposta i cookie Amazon (con il loro dominio originale)
+    console.log(`🍪 Setting ${amazonCookies.length} Amazon cookies...`);
+    let amazonSet = 0;
     for (const cookie of amazonCookies) {
       try {
+        // Usa il dominio originale del cookie, o .amazon.com come fallback
+        let domain = cookie.domain || '.amazon.com';
+        // Assicurati che il dominio inizi con punto per essere valido per tutti i subdomain
+        if (!domain.startsWith('.') && !domain.includes('kdpreports')) {
+          domain = '.' + domain;
+        }
+
         await page.setCookie({
           name: cookie.name,
           value: cookie.value,
-          domain: '.amazon.com',
+          domain: domain,
           path: cookie.path || '/',
           expires: cookie.expires,
-          httpOnly: cookie.httpOnly,
-          secure: cookie.secure
+          httpOnly: cookie.httpOnly ?? false,
+          secure: cookie.secure ?? true
         });
+        amazonSet++;
       } catch (error: any) {
         // Ignora errori sui singoli cookie
       }
     }
+    console.log(`✅ Set ${amazonSet}/${amazonCookies.length} Amazon cookies`);
 
-    // Poi imposta i cookie specifici di kdpreports (se disponibili)
+    // Poi imposta i cookie specifici di kdpreports
     if (reportsCookies.length > 0) {
-      console.log(`📊 Setting ${reportsCookies.length} kdpreports-specific cookies...`);
+      console.log(`📊 Setting ${reportsCookies.length} kdpreports cookies...`);
+      let reportsSet = 0;
+
       for (const cookie of reportsCookies) {
         try {
-          // Usa il dominio originale del cookie o forza kdpreports.amazon.com
-          const domain = cookie.domain.includes('kdpreports')
-            ? cookie.domain
-            : 'kdpreports.amazon.com';
+          // Usa il dominio originale - importante per kdpreports!
+          let domain = cookie.domain || 'kdpreports.amazon.com';
+
+          // I cookie kdpreports possono avere diversi domini:
+          // - .kdpreports.amazon.com
+          // - kdpreports.amazon.com
+          // - .amazon.com (condivisi)
+          // Mantieni il dominio originale
 
           await page.setCookie({
             name: cookie.name,
@@ -285,18 +306,27 @@ export class KdpReportsScraperService {
             domain: domain,
             path: cookie.path || '/',
             expires: cookie.expires,
-            httpOnly: cookie.httpOnly,
-            secure: cookie.secure
+            httpOnly: cookie.httpOnly ?? false,
+            secure: cookie.secure ?? true
           });
+          reportsSet++;
         } catch (error: any) {
-          console.log(`⚠️ Failed to set kdpreports cookie ${cookie.name}`);
+          console.log(`⚠️ Failed to set cookie ${cookie.name}: ${error.message}`);
         }
       }
+      console.log(`✅ Set ${reportsSet}/${reportsCookies.length} kdpreports cookies`);
     } else {
-      console.log(`⚠️ No kdpreports-specific cookies to set`);
+      console.log(`⚠️ No kdpreports-specific cookies to set - authentication may fail!`);
     }
 
-    console.log(`✅ Cookies set: ${amazonCookies.length} amazon + ${reportsCookies.length} kdpreports`);
+    // Log dei cookie impostati per debug
+    const browserCookies = await page.cookies();
+    console.log(`🍪 Browser now has ${browserCookies.length} total cookies`);
+
+    // Verifica cookie chiave
+    const keyCookies = ['session-id', 'ubid-main', 'x-main', 'at-main', 'sess-at-main'];
+    const foundKeyCookies = browserCookies.filter(c => keyCookies.includes(c.name));
+    console.log(`🔑 Key auth cookies found: ${foundKeyCookies.map(c => c.name).join(', ')}`);
   }
 
   /**
@@ -323,11 +353,24 @@ export class KdpReportsScraperService {
 
       // Check authentication
       const currentUrl = page.url();
-      if (currentUrl.includes('signin') || currentUrl.includes('login')) {
-        throw new Error('Authentication failed - redirected to login');
+      const pageTitle = await page.title();
+
+      console.log(`📍 Current URL: ${currentUrl}`);
+      console.log(`📄 Page title: ${pageTitle}`);
+
+      if (currentUrl.includes('signin') || currentUrl.includes('login') ||
+          pageTitle.toLowerCase().includes('sign in') || pageTitle.toLowerCase().includes('sign-in')) {
+        // Log page content for debugging
+        const pageInfo = await page.evaluate(() => ({
+          title: document.title,
+          h1: document.querySelector('h1')?.textContent || '',
+          forms: document.querySelectorAll('form').length
+        }));
+        console.log(`❌ Auth failed - Page info:`, JSON.stringify(pageInfo));
+        throw new Error(`Authentication failed - redirected to login (${pageTitle})`);
       }
 
-      console.log('✅ Successfully authenticated');
+      console.log('✅ Successfully authenticated to KDP Reports');
 
       // Wait for React SPA to load
       console.log('⏳ Waiting for page content to load...');

@@ -1,11 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Amazon Ads Manager - KDP Sync",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Sincronizza i tuoi dati Amazon KDP con Amazon Ads Manager",
   "permissions": [
     "cookies",
-    "storage"
+    "storage",
+    "tabs",
+    "scripting"
   ],
   "host_permissions": [
     "*://*.amazon.com/*",
@@ -26,6 +28,13 @@
         "http://localhost:3000/*"
       ],
       "js": ["auth-helper.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://kdpreports.amazon.com/*"
+      ],
+      "js": ["kdpreports-scraper.js"],
       "run_at": "document_idle"
     }
   ],
