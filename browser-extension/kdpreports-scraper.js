@@ -22,12 +22,34 @@
     try {
       // Cerca nel body della pagina il pattern csrftoken
       const bodyHtml = document.documentElement.innerHTML;
+
+      // Pattern 1: csrftoken nel JSON
       const csrfMatch = bodyHtml.match(/"csrftoken"\s*:\s*\{\s*"token"\s*:\s*"([^"]+)"/);
       if (csrfMatch) {
         capturedData.csrfToken = csrfMatch[1];
-        console.log('[KDP Scraper] CSRF token found');
+        console.log('[KDP Scraper] CSRF token found (pattern 1)');
         return csrfMatch[1];
       }
+
+      // Pattern 2: csrf-token meta tag
+      const metaTag = document.querySelector('meta[name="csrf-token"]');
+      if (metaTag) {
+        const token = metaTag.getAttribute('content');
+        if (token) {
+          capturedData.csrfToken = token;
+          console.log('[KDP Scraper] CSRF token found (meta tag)');
+          return token;
+        }
+      }
+
+      // Pattern 3: window.__INITIAL_STATE__ o simile
+      const stateMatch = bodyHtml.match(/csrfToken['"]\s*:\s*['"]([^'"]+)['"]/i);
+      if (stateMatch) {
+        capturedData.csrfToken = stateMatch[1];
+        console.log('[KDP Scraper] CSRF token found (pattern 3)');
+        return stateMatch[1];
+      }
+
     } catch (e) {
       console.error('[KDP Scraper] Error extracting CSRF token:', e);
     }
