@@ -5,6 +5,7 @@ const API_URL = PRODUCTION_URL || 'http://localhost:3000';
 
 // Elementi DOM
 const syncButton = document.getElementById('syncButton');
+const syncSalesButton = document.getElementById('syncSalesButton');
 const checkStatusButton = document.getElementById('checkStatus');
 const statusDiv = document.getElementById('status');
 const loadingDiv = document.getElementById('loading');
@@ -19,6 +20,7 @@ function showStatus(message, type = 'info') {
 function setLoading(isLoading) {
   loadingDiv.className = isLoading ? 'loading active' : 'loading';
   syncButton.disabled = isLoading;
+  syncSalesButton.disabled = isLoading;
   checkStatusButton.disabled = isLoading;
 }
 
@@ -77,17 +79,51 @@ async function syncKdpCookies() {
 
     console.log(`Detecting cookies for marketplace ${marketplace}`);
 
-    // IMPORTANT: KDP usa sempre kdp.amazon.com per tutti i marketplace
-    // I cookie di autenticazione sono su .amazon.com anche per utenti internazionali
-    // Recupera tutti i cookie da .amazon.com (il dominio usato da KDP)
-    const cookies = await chrome.cookies.getAll({ domain: '.amazon.com' });
+    // ========================================================
+    // CATTURA COOKIE COME PUBLISHER CHAMP
+    // Cattura TUTTI i cookie Amazon da diversi domini/metodi
+    // ========================================================
 
-    // NUOVO: Recupera cookie specifici di kdpreports.amazon.com per le statistiche
-    const kdpreportsCookies = await chrome.cookies.getAll({
-      url: 'https://kdpreports.amazon.com'
+    // 1. Cookie da .amazon.com (autenticazione base KDP)
+    const dotAmazonCookies = await chrome.cookies.getAll({ domain: '.amazon.com' });
+
+    // 2. Cookie da amazon.com (senza punto)
+    const amazonCookies = await chrome.cookies.getAll({ domain: 'amazon.com' });
+
+    // 3. Cookie da .kdpreports.amazon.com (subdomain specifico)
+    const dotKdpreportsCookies = await chrome.cookies.getAll({ domain: '.kdpreports.amazon.com' });
+
+    // 4. Cookie da kdpreports.amazon.com (senza punto)
+    const kdpreportsDomainCookies = await chrome.cookies.getAll({ domain: 'kdpreports.amazon.com' });
+
+    // 5. Cookie tramite URL kdpreports (cattura anche httpOnly)
+    const kdpreportsUrlCookies = await chrome.cookies.getAll({ url: 'https://kdpreports.amazon.com' });
+
+    // 6. Cookie tramite URL kdp.amazon.com
+    const kdpUrlCookies = await chrome.cookies.getAll({ url: 'https://kdp.amazon.com' });
+
+    // Combina tutti i cookie KDP (rimuovi duplicati per nome)
+    const allKdpCookiesMap = new Map();
+    [...dotAmazonCookies, ...amazonCookies, ...kdpUrlCookies].forEach(c => {
+      allKdpCookiesMap.set(`${c.name}-${c.domain}`, c);
     });
+    const cookies = Array.from(allKdpCookiesMap.values());
 
-    console.log(`Found ${cookies.length} .amazon.com cookies, ${kdpreportsCookies.length} kdpreports cookies`);
+    // Combina tutti i cookie kdpreports (rimuovi duplicati per nome)
+    const allReportsCookiesMap = new Map();
+    [...dotKdpreportsCookies, ...kdpreportsDomainCookies, ...kdpreportsUrlCookies].forEach(c => {
+      allReportsCookiesMap.set(`${c.name}-${c.domain}`, c);
+    });
+    const kdpreportsCookies = Array.from(allReportsCookiesMap.values());
+
+    console.log(`Found cookies breakdown:`);
+    console.log(`  - .amazon.com: ${dotAmazonCookies.length}`);
+    console.log(`  - amazon.com: ${amazonCookies.length}`);
+    console.log(`  - .kdpreports.amazon.com: ${dotKdpreportsCookies.length}`);
+    console.log(`  - kdpreports.amazon.com: ${kdpreportsDomainCookies.length}`);
+    console.log(`  - URL kdpreports: ${kdpreportsUrlCookies.length}`);
+    console.log(`  - URL kdp: ${kdpUrlCookies.length}`);
+    console.log(`Total unique: ${cookies.length} KDP + ${kdpreportsCookies.length} Reports`);
 
     if (cookies.length === 0) {
       showStatus('❌ Nessun cookie trovato. Assicurati di essere loggato su KDP.', 'error');
@@ -97,10 +133,11 @@ async function syncKdpCookies() {
 
     // Mostra info sui cookie kdpreports
     const kdpreportsMsg = kdpreportsCookies.length > 0
-      ? `✅ Trovati ${cookies.length} cookie KDP + ${kdpreportsCookies.length} cookie Reports.`
-      : `⚠️ Trovati ${cookies.length} cookie KDP. Per i dati di vendita, visita prima kdpreports.amazon.com`;
+      ? `✅ ${cookies.length} cookie KDP + ${kdpreportsCookies.length} cookie Reports.`
+      : `⚠️ ${cookies.length} cookie KDP. Visita kdpreports.amazon.com per i dati vendite.`;
 
     showStatus(`${kdpreportsMsg} Invio al server...`, 'info');
+    console.log(`Sending to server: ${cookies.length} KDP cookies + ${kdpreportsCookies.length} Reports cookies`);
 
     // Recupera JWT token da chrome.storage (salvato dall'app)
     console.log('Looking for JWT token in chrome.storage...');
@@ -249,8 +286,106 @@ async function checkSyncStatus() {
   }
 }
 
+// ========================================================
+// SINCRONIZZAZIONE DATI VENDITE (Client-Side Scraping)
+// Come Publisher Champ: apre kdpreports, cattura API, invia dati
+// ========================================================
+
+async function syncSalesData() {
+  try {
+    setLoading(true);
+    showStatus('🔄 Avvio sincronizzazione vendite...', 'info');
+
+    // Verifica JWT token
+    const storageData = await chrome.storage.local.get(['jwtToken']);
+    const jwtToken = storageData.jwtToken;
+
+    if (!jwtToken) {
+      showStatus('❌ Non sei autenticato. Apri l\'app e fai login, poi riprova.', 'error');
+      setLoading(false);
+      return;
+    }
+
+    // Rileva marketplace
+    const marketplace = await detectMarketplace();
+
+    showStatus('📊 Apertura kdpreports.amazon.com...', 'info');
+
+    // Chiedi al background script di aprire kdpreports e fare scraping
+    const response = await chrome.runtime.sendMessage({
+      action: 'startClientScraping'
+    });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Scraping failed');
+    }
+
+    const scrapedData = response.data;
+    console.log('Scraped data:', scrapedData);
+
+    // Verifica che abbiamo dati
+    if (!scrapedData.overview && !scrapedData.orders) {
+      throw new Error('Nessun dato ricevuto da kdpreports');
+    }
+
+    showStatus('📤 Invio dati al server...', 'info');
+
+    // Invia dati al server
+    const serverResponse = await fetch(`${API_URL}/api/kdp-sync/sales-data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${jwtToken}`
+      },
+      body: JSON.stringify({
+        data: scrapedData,
+        marketplace: marketplace,
+        source: 'extension-client-scrape'
+      })
+    });
+
+    if (!serverResponse.ok) {
+      const error = await serverResponse.json();
+      throw new Error(error.error || 'Failed to send data');
+    }
+
+    const result = await serverResponse.json();
+
+    // Mostra riepilogo dati
+    const overview = scrapedData.overview?.overviewWidget || {};
+    const summary = [];
+    if (overview.totalRoyalties !== undefined) {
+      summary.push(`Royalties: $${overview.totalRoyalties.toFixed(2)}`);
+    }
+    if (overview.printOrders !== undefined) {
+      summary.push(`Print: ${overview.printOrders}`);
+    }
+    if (overview.digitalOrders !== undefined) {
+      summary.push(`Digital: ${overview.digitalOrders}`);
+    }
+
+    showStatus(
+      `✅ Dati vendite sincronizzati!\n${summary.join(' | ') || 'Dati ricevuti'}`,
+      'success'
+    );
+
+    // Salva timestamp
+    await chrome.storage.local.set({
+      lastSalesSync: new Date().toISOString(),
+      lastSalesData: scrapedData
+    });
+
+  } catch (error) {
+    console.error('Sales sync error:', error);
+    showStatus(`❌ Errore: ${error.message}`, 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
 // Event listeners
 syncButton.addEventListener('click', syncKdpCookies);
+syncSalesButton.addEventListener('click', syncSalesData);
 checkStatusButton.addEventListener('click', checkSyncStatus);
 
 // Controlla lo stato all'apertura del popup

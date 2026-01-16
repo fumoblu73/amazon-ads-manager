@@ -80,6 +80,12 @@
     .secondary:hover {
       background: #374151;
     }
+    .sales-btn {
+      background: #2563eb;
+    }
+    .sales-btn:hover {
+      background: #1d4ed8;
+    }
     .info-text {
       font-size: 12px;
       color: #666;
@@ -110,15 +116,16 @@
     <p>⏳ Sincronizzazione in corso...</p>
   </div>
 
-  <button id="syncButton">🔄 Sincronizza con KDP</button>
+  <button id="syncButton">🔄 Sincronizza Cookie KDP</button>
+  <button id="syncSalesButton" class="sales-btn">📈 Sincronizza Dati Vendite</button>
   <button id="checkStatus" class="secondary">📊 Verifica Stato</button>
 
   <div class="info-text">
     <strong>Come funziona:</strong><br>
     1. Accedi a <a href="https://kdp.amazon.com" target="_blank">kdp.amazon.com</a><br>
-    2. Per le statistiche vendite, visita anche <a href="https://kdpreports.amazon.com" target="_blank">kdpreports.amazon.com</a><br>
-    3. Clicca "Sincronizza con KDP"<br>
-    4. I tuoi dati verranno sincronizzati automaticamente
+    2. Clicca "Sincronizza Cookie KDP" per salvare la sessione<br>
+    3. Clicca "Sincronizza Dati Vendite" per importare le statistiche<br>
+    <em>(Si aprira' una scheda kdpreports che si chiudera' automaticamente)</em>
   </div>
 
   <script src="popup.js"></script>
