@@ -6,8 +6,8 @@ export class AutomationSettings {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'user_id' })
-  userId: string;
+  @Column({ name: 'user_id', nullable: true })
+  userId: string | null;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'user_id' })
