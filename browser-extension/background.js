@@ -33,7 +33,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (scrapeTabId && sender.tab?.id === scrapeTabId) {
       setTimeout(() => {
         chrome.tabs.sendMessage(scrapeTabId, { action: 'startScraping' });
-      }, 2000); // Aspetta che la pagina sia completamente caricata
+      }, 5000); // Aspetta 5 secondi che la pagina sia completamente caricata
     }
   }
 
@@ -118,9 +118,10 @@ async function startClientSideScraping() {
   });
 
   // Apri tab kdpreports (dashboard con dati)
+  // NOTA: active: true perche' Amazon richiede la tab in foreground per la sessione
   const tab = await chrome.tabs.create({
     url: 'https://kdpreports.amazon.com/#/dashboard',
-    active: false // Apri in background
+    active: true // Apri in foreground - necessario per autenticazione Amazon
   });
 
   scrapeTabId = tab.id;
