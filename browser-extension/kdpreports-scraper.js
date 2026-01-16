@@ -80,20 +80,56 @@
     });
   }
 
+  // Funzione per attendere che la pagina sia pronta
+  async function waitForPageReady(maxWait = 10000) {
+    const startTime = Date.now();
+    while (Date.now() - startTime < maxWait) {
+      // Check if we're on a login page
+      if (document.title.toLowerCase().includes('sign') ||
+          document.querySelector('form[name="signIn"]') ||
+          document.querySelector('#ap_email')) {
+        throw new Error('Login required - please login to kdpreports.amazon.com first');
+      }
+      // Check if CSRF token is available
+      if (extractCsrfToken()) {
+        return true;
+      }
+      await new Promise(r => setTimeout(r, 500));
+    }
+    return false;
+  }
+
   // Funzione per fare le chiamate API direttamente
   async function fetchKdpData() {
     console.log('[KDP Scraper] Starting manual data fetch...');
+    console.log('[KDP Scraper] Current URL:', window.location.href);
+    console.log('[KDP Scraper] Page title:', document.title);
+
+    // Attendi che la pagina sia pronta
+    console.log('[KDP Scraper] Waiting for page to be ready...');
+    try {
+      await waitForPageReady(15000);
+    } catch (e) {
+      console.error('[KDP Scraper] Page not ready:', e.message);
+      chrome.runtime.sendMessage({
+        action: 'kdpScrapeFailed',
+        error: e.message
+      });
+      return;
+    }
 
     // Estrai CSRF token
     const csrfToken = extractCsrfToken();
     if (!csrfToken) {
-      console.error('[KDP Scraper] Could not find CSRF token');
+      console.error('[KDP Scraper] Could not find CSRF token after waiting');
+      console.log('[KDP Scraper] Page HTML preview:', document.body?.innerHTML?.substring(0, 500));
       chrome.runtime.sendMessage({
         action: 'kdpScrapeFailed',
-        error: 'CSRF token not found'
+        error: 'CSRF token not found - page may not be fully loaded or user not logged in'
       });
       return;
     }
+    console.log('[KDP Scraper] CSRF token found, proceeding with API calls...');
 
     // Date per le query
     const now = new Date();
@@ -105,48 +141,65 @@
       'x-csrf-token': csrfToken
     };
 
+    // Helper per fare fetch sicuro con controllo content-type
+    async function safeFetch(url, options) {
+      const res = await fetch(url, options);
+      if (!res.ok) {
+        console.log(`[KDP Scraper] Request failed: ${res.status} ${res.statusText}`);
+        return null;
+      }
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.log(`[KDP Scraper] Non-JSON response: ${contentType}`);
+        // Check if it's a login page
+        const text = await res.text();
+        if (text.includes('signin') || text.includes('login') || text.includes('<!doctype')) {
+          console.log('[KDP Scraper] Detected login page - user not authenticated');
+          throw new Error('Not authenticated - please login to kdpreports.amazon.com first');
+        }
+        return null;
+      }
+      return res.json();
+    }
+
     try {
       // 1. Overview (THIS_MONTH)
       console.log('[KDP Scraper] Fetching overview...');
-      const overviewRes = await fetch(
+      capturedData.overview = await safeFetch(
         `${baseUrl}/overview?date=${encodeURIComponent(dateParam)}&viewOption=THIS_MONTH`,
         { headers, credentials: 'include' }
       );
-      if (overviewRes.ok) {
-        capturedData.overview = await overviewRes.json();
+      if (capturedData.overview) {
         console.log('[KDP Scraper] Overview:', capturedData.overview);
       }
 
       // 2. Orders (LAST_30_DAYS)
       console.log('[KDP Scraper] Fetching orders...');
-      const ordersRes = await fetch(
+      capturedData.orders = await safeFetch(
         `${baseUrl}/ORDERS?date=${encodeURIComponent(dateParam)}&viewOption=LAST_30_DAYS`,
         { headers, credentials: 'include' }
       );
-      if (ordersRes.ok) {
-        capturedData.orders = await ordersRes.json();
+      if (capturedData.orders) {
         console.log('[KDP Scraper] Orders:', capturedData.orders);
       }
 
       // 3. Marketplace distribution
       console.log('[KDP Scraper] Fetching marketplace distribution...');
-      const marketplaceRes = await fetch(
+      capturedData.marketplace = await safeFetch(
         `${baseUrl}/marketplaceDistributionOverview?date=${encodeURIComponent(dateParam)}&viewOption=THIS_MONTH`,
         { headers, credentials: 'include' }
       );
-      if (marketplaceRes.ok) {
-        capturedData.marketplace = await marketplaceRes.json();
+      if (capturedData.marketplace) {
         console.log('[KDP Scraper] Marketplace:', capturedData.marketplace);
       }
 
       // 4. Top titles
       console.log('[KDP Scraper] Fetching top titles...');
-      const topTitlesRes = await fetch(
+      capturedData.topTitles = await safeFetch(
         `${baseUrl}/topEarningTitles?date=${encodeURIComponent(dateParam)}&viewOption=THIS_MONTH`,
         { headers, credentials: 'include' }
       );
-      if (topTitlesRes.ok) {
-        capturedData.topTitles = await topTitlesRes.json();
+      if (capturedData.topTitles) {
         console.log('[KDP Scraper] Top titles:', capturedData.topTitles);
       }
 
