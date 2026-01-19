@@ -309,77 +309,21 @@ async function syncSalesData() {
     // Rileva marketplace
     const marketplace = await detectMarketplace();
 
-    showStatus('📊 Apertura kdpreports.amazon.com...', 'info');
+    showStatus('📊 Apertura kdpreports.amazon.com...\nI dati verranno inviati automaticamente.', 'info');
 
     // Chiedi al background script di aprire kdpreports e fare scraping
+    // Passa anche il JWT token così può inviare i dati automaticamente
     const response = await chrome.runtime.sendMessage({
-      action: 'startClientScraping'
+      action: 'startClientScraping',
+      jwtToken: jwtToken,
+      marketplace: marketplace
     });
 
-    if (!response.success) {
-      throw new Error(response.error || 'Scraping failed');
+    if (response.success) {
+      showStatus('✅ Sincronizzazione avviata!\nGuarda il badge dell\'estensione per lo stato.\n(✓ = successo, ! = errore)', 'success');
+    } else {
+      throw new Error(response.error || 'Failed to start scraping');
     }
-
-    const scrapedData = response.data;
-    console.log('Scraped data:', scrapedData);
-
-    // Verifica che abbiamo dati
-    if (!scrapedData.overview && !scrapedData.orders) {
-      throw new Error('Nessun dato ricevuto da kdpreports');
-    }
-
-    showStatus('📤 Invio dati al server...', 'info');
-
-    // Invia dati al server
-    const serverResponse = await fetch(`${API_URL}/api/kdp-sync/sales-data`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${jwtToken}`
-      },
-      body: JSON.stringify({
-        data: scrapedData,
-        marketplace: marketplace,
-        source: 'extension-client-scrape'
-      })
-    });
-
-    if (!serverResponse.ok) {
-      // Check if response is JSON or HTML
-      const contentType = serverResponse.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        const error = await serverResponse.json();
-        throw new Error(error.error || 'Failed to send data');
-      } else {
-        throw new Error(`Server error ${serverResponse.status}: ${serverResponse.statusText}`);
-      }
-    }
-
-    const result = await serverResponse.json();
-
-    // Mostra riepilogo dati
-    const overview = scrapedData.overview?.overviewWidget || {};
-    const summary = [];
-    if (overview.totalRoyalties !== undefined) {
-      summary.push(`Royalties: $${overview.totalRoyalties.toFixed(2)}`);
-    }
-    if (overview.printOrders !== undefined) {
-      summary.push(`Print: ${overview.printOrders}`);
-    }
-    if (overview.digitalOrders !== undefined) {
-      summary.push(`Digital: ${overview.digitalOrders}`);
-    }
-
-    showStatus(
-      `✅ Dati vendite sincronizzati!\n${summary.join(' | ') || 'Dati ricevuti'}`,
-      'success'
-    );
-
-    // Salva timestamp
-    await chrome.storage.local.set({
-      lastSalesSync: new Date().toISOString(),
-      lastSalesData: scrapedData
-    });
 
   } catch (error) {
     console.error('Sales sync error:', error);
