@@ -319,14 +319,25 @@
         console.log('[KDP Scraper] Overview received:', Object.keys(capturedData.overview));
       }
 
-      // 2. Orders (LAST_30_DAYS)
+      // 2. Orders - prova diversi endpoint
       console.log('[KDP Scraper] Fetching orders...');
+      // Prova prima l'endpoint ordersWidget
       capturedData.orders = await safeFetch(
-        `${baseUrl}/ORDERS?date=${encodeURIComponent(dateParam)}&viewOption=LAST_30_DAYS`,
+        `${baseUrl}/ordersWidget?date=${encodeURIComponent(dateParam)}&viewOption=LAST_30_DAYS`,
         { headers, credentials: 'include' }
       );
+      // Se non funziona, prova l'endpoint orders (minuscolo)
+      if (!capturedData.orders) {
+        console.log('[KDP Scraper] Trying alternative orders endpoint...');
+        capturedData.orders = await safeFetch(
+          `${baseUrl}/orders?date=${encodeURIComponent(dateParam)}&viewOption=LAST_30_DAYS`,
+          { headers, credentials: 'include' }
+        );
+      }
       if (capturedData.orders) {
         console.log('[KDP Scraper] Orders received:', Object.keys(capturedData.orders));
+      } else {
+        console.log('[KDP Scraper] Orders endpoint not available - continuing without daily orders data');
       }
 
       // 3. Marketplace distribution
@@ -353,17 +364,21 @@
       capturedData.timestamp = new Date().toISOString();
 
       console.log('[KDP Scraper] ========================================');
-      console.log('[KDP Scraper] All data fetched successfully!');
+      console.log('[KDP Scraper] All data fetched!');
       console.log('[KDP Scraper] Has overview:', !!capturedData.overview);
       console.log('[KDP Scraper] Has orders:', !!capturedData.orders);
       console.log('[KDP Scraper] Has marketplace:', !!capturedData.marketplace);
       console.log('[KDP Scraper] Has topTitles:', !!capturedData.topTitles);
+
+      // Considera successo se abbiamo almeno overview (dati principali)
+      const isSuccess = !!capturedData.overview;
+      console.log('[KDP Scraper] Sync success:', isSuccess);
       console.log('[KDP Scraper] ========================================');
 
       chrome.runtime.sendMessage({
         action: 'kdpDataComplete',
         data: capturedData,
-        success: !!(capturedData.overview && capturedData.orders)
+        success: isSuccess
       });
 
     } catch (error) {
