@@ -34,6 +34,7 @@ const apiClient = axios.create({
     'Content-Type': 'application/json',
   },
   timeout: 30000, // 30 seconds timeout
+  withCredentials: true, // Include cookies for authentication
 });
 
 // Add response interceptor for better error handling
@@ -273,16 +274,18 @@ export const kdpBooksApi = {
 // ================================================
 
 export const kdpAnalyticsApi = {
-  getRoiAnalytics: async (bookId: string, startDate?: string, endDate?: string) => {
+  getRoiAnalytics: async (bookId: string, startDate?: string, endDate?: string, token?: string) => {
     const response = await apiClient.get<RoiAnalytics>(`/api/kdp/analytics/${bookId}`, {
       params: { startDate, endDate },
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     return response.data;
   },
 
-  getDashboardSummary: async (startDate?: string, endDate?: string) => {
+  getDashboardSummary: async (startDate?: string, endDate?: string, token?: string) => {
     const response = await apiClient.get<KdpDashboardSummary>('/api/kdp/dashboard/summary', {
       params: { startDate, endDate },
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     return response.data;
   },
