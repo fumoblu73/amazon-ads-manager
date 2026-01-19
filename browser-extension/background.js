@@ -9,6 +9,8 @@ let scrapedData = null;
 let scrapeTabId = null;
 let scrapePromiseResolve = null;
 let scrapePromiseReject = null;
+let pendingSyncJwtToken = null;
+let pendingSyncMarketplace = null;
 
 // Listener per installazione estensione
 chrome.runtime.onInstalled.addListener(() => {
@@ -49,8 +51,37 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       scrapePromiseReject = null;
     }
 
-    // NON chiudere il tab - lascialo aperto per debug
-    // L'utente può chiuderlo manualmente dopo aver verificato i log
+    // Se abbiamo dati e JWT token, invia automaticamente al server
+    if (request.success && pendingSyncJwtToken) {
+      console.log('[Background] Auto-sending data to server...');
+      sendDataToServer(scrapedData, pendingSyncJwtToken, pendingSyncMarketplace || 'US')
+        .then(result => {
+          console.log('[Background] ✅ Data sent to server successfully:', result);
+          updateBadge('✓', '#00aa00');
+          // Salva in storage per notificare il popup
+          chrome.storage.local.set({
+            lastSalesSync: new Date().toISOString(),
+            lastSalesSyncSuccess: true,
+            lastSalesData: scrapedData
+          });
+          // Reset badge dopo 5 secondi
+          setTimeout(() => updateBadge('', '#ff9900'), 5000);
+        })
+        .catch(error => {
+          console.error('[Background] ❌ Failed to send data to server:', error);
+          updateBadge('!', '#ff0000');
+          chrome.storage.local.set({
+            lastSalesSync: new Date().toISOString(),
+            lastSalesSyncSuccess: false,
+            lastSalesSyncError: error.message
+          });
+        })
+        .finally(() => {
+          pendingSyncJwtToken = null;
+          pendingSyncMarketplace = null;
+        });
+    }
+
     scrapeTabId = null;
   }
 
@@ -71,10 +102,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   // Popup richiede di iniziare scraping client-side
   if (request.action === 'startClientScraping') {
+    // Salva JWT token e marketplace per l'invio automatico quando i dati sono pronti
+    pendingSyncJwtToken = request.jwtToken;
+    pendingSyncMarketplace = request.marketplace;
+    console.log('[Background] Saved JWT token for auto-send, marketplace:', pendingSyncMarketplace);
+
+    // Rispondi subito al popup (che potrebbe chiudersi)
+    sendResponse({ success: true, message: 'Scraping started - data will be sent automatically' });
+
+    // Avvia lo scraping in background
     startClientSideScraping()
-      .then(data => sendResponse({ success: true, data }))
-      .catch(error => sendResponse({ success: false, error: error.message }));
-    return true; // Async
+      .then(data => {
+        console.log('[Background] Scraping completed, data will be auto-sent');
+      })
+      .catch(error => {
+        console.error('[Background] Scraping failed:', error.message);
+        updateBadge('!', '#ff0000');
+      });
+
+    return false; // Non async - rispondiamo subito
   }
 
   // Popup richiede di inviare dati al server
