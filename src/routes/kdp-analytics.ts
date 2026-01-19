@@ -269,7 +269,7 @@ router.get('/analytics/historical', authMiddleware, async (req: AuthRequest, res
       return res.json(getMockHistoricalStats());
     }
 
-    const userId = req.userId; // TODO: Get from auth
+    const userId = req.userId;
     const { startDate, endDate } = getDateRange(
       req.query.startDate as string,
       req.query.endDate as string
@@ -277,8 +277,9 @@ router.get('/analytics/historical', authMiddleware, async (req: AuthRequest, res
 
     const statsRepository = AppDataSource.getRepository(KdpDailyStats);
     const bookRepository = AppDataSource.getRepository(KdpBook);
+    const snapshotRepository = AppDataSource.getRepository(KdpSalesSnapshot);
 
-    // Get aggregate stats for period
+    // Get aggregate stats for period from KdpDailyStats
     const aggregateStats = await statsRepository
       .createQueryBuilder('stats')
       .select('SUM(stats.grossRoyalties)', 'totalGrossRoyalties')
@@ -291,7 +292,7 @@ router.get('/analytics/historical', authMiddleware, async (req: AuthRequest, res
       .getRawOne();
 
     // Get chart data (daily aggregates)
-    const chartData = await statsRepository
+    let chartData = await statsRepository
       .createQueryBuilder('stats')
       .select('stats.date', 'date')
       .addSelect('SUM(stats.grossRoyalties)', 'royalties')
@@ -302,7 +303,7 @@ router.get('/analytics/historical', authMiddleware, async (req: AuthRequest, res
       .orderBy('stats.date', 'ASC')
       .getRawMany();
 
-    const formattedChartData = chartData.map(row => ({
+    let formattedChartData = chartData.map(row => ({
       date: row.date,
       royalties: parseFloat(row.royalties || 0),
       spending: parseFloat(row.spending || 0)
@@ -322,7 +323,7 @@ router.get('/analytics/historical', authMiddleware, async (req: AuthRequest, res
       .orderBy('SUM(stats.grossRoyalties)', 'DESC')
       .getRawMany();
 
-    const books = [];
+    let books: any[] = [];
     for (const stat of bookStats) {
       const book = await bookRepository.findOne({
         where: { asin: stat.asin, userId }
@@ -336,18 +337,61 @@ router.get('/analytics/historical', authMiddleware, async (req: AuthRequest, res
       });
     }
 
+    // Initialize summary with KdpDailyStats data
+    let summary = {
+      totalGrossRoyalties: parseFloat(aggregateStats?.totalGrossRoyalties || 0),
+      totalSpending: parseFloat(aggregateStats?.totalSpending || 0),
+      totalNetRoyalties: parseFloat(aggregateStats?.totalNetRoyalties || 0),
+      totalPaidUnits: parseInt(aggregateStats?.totalPaidUnits || 0),
+      totalFreeUnits: parseInt(aggregateStats?.totalFreeUnits || 0)
+    };
+
+    // If no data in KdpDailyStats, try to get from latest snapshot
+    if (summary.totalGrossRoyalties === 0 && formattedChartData.length === 0) {
+      const latestSnapshot = await snapshotRepository.findOne({
+        where: { userId },
+        order: { createdAt: 'DESC' }
+      });
+
+      if (latestSnapshot) {
+        // Use snapshot summary data
+        summary = {
+          totalGrossRoyalties: parseFloat(latestSnapshot.totalRoyalties?.toString() || '0'),
+          totalSpending: 0,
+          totalNetRoyalties: parseFloat(latestSnapshot.totalRoyalties?.toString() || '0'),
+          totalPaidUnits: (latestSnapshot.printOrders || 0) + (latestSnapshot.digitalOrders || 0),
+          totalFreeUnits: 0
+        };
+
+        // Use dailyOrders from snapshot for chart data
+        if (latestSnapshot.dailyOrders && latestSnapshot.dailyOrders.length > 0) {
+          formattedChartData = latestSnapshot.dailyOrders.map((d: any) => ({
+            date: d.date,
+            royalties: 0, // dailyOrders only has order counts, not royalties
+            spending: 0,
+            orders: d.orders || 0
+          }));
+        }
+
+        // Use topTitles from snapshot for books
+        if (latestSnapshot.topTitles && latestSnapshot.topTitles.length > 0) {
+          books = latestSnapshot.topTitles.map((t: any) => ({
+            asin: t.asin,
+            title: t.title || 'Unknown',
+            grossRoyalties: t.royalties || 0,
+            spending: 0,
+            netRoyalties: t.royalties || 0
+          }));
+        }
+      }
+    }
+
     // Find best month (if data spans multiple months)
-    const bestMonth = chartData.length > 0 ? chartData[0].date.substring(0, 7) : null;
+    const bestMonth = formattedChartData.length > 0 ? formattedChartData[0].date?.substring(0, 7) : null;
 
     const response = {
       period: { startDate, endDate },
-      summary: {
-        totalGrossRoyalties: parseFloat(aggregateStats.totalGrossRoyalties || 0),
-        totalSpending: parseFloat(aggregateStats.totalSpending || 0),
-        totalNetRoyalties: parseFloat(aggregateStats.totalNetRoyalties || 0),
-        totalPaidUnits: parseInt(aggregateStats.totalPaidUnits || 0),
-        totalFreeUnits: parseInt(aggregateStats.totalFreeUnits || 0)
-      },
+      summary,
       chartData: formattedChartData,
       books,
       bestMonth
@@ -508,15 +552,34 @@ router.get('/analytics/country', authMiddleware, async (req: AuthRequest, res: R
       return res.json(getMockCountryStats());
     }
 
-    const userId = req.userId; // TODO: Get from auth
+    const userId = req.userId;
     const { startDate, endDate } = getDateRange(
       req.query.startDate as string,
       req.query.endDate as string
     );
 
     const statsRepository = AppDataSource.getRepository(KdpDailyStats);
+    const snapshotRepository = AppDataSource.getRepository(KdpSalesSnapshot);
 
-    // Get stats by marketplace
+    const marketplaceNames: { [key: string]: string } = {
+      'US': 'United States',
+      'UK': 'United Kingdom',
+      'DE': 'Germany',
+      'FR': 'France',
+      'IT': 'Italy',
+      'ES': 'Spain',
+      'CA': 'Canada',
+      'AU': 'Australia',
+      'JP': 'Japan',
+      'BR': 'Brazil',
+      'MX': 'Mexico',
+      'IN': 'India',
+      'NL': 'Netherlands',
+      'PL': 'Poland',
+      'SE': 'Sweden'
+    };
+
+    // Get stats by marketplace from KdpDailyStats
     const countryStats = await statsRepository
       .createQueryBuilder('stats')
       .select('stats.marketplace', 'marketplace')
@@ -530,24 +593,31 @@ router.get('/analytics/country', authMiddleware, async (req: AuthRequest, res: R
       .orderBy('SUM(stats.grossRoyalties)', 'DESC')
       .getRawMany();
 
-    const marketplaceNames: { [key: string]: string } = {
-      'US': 'United States',
-      'UK': 'United Kingdom',
-      'DE': 'Germany',
-      'FR': 'France',
-      'IT': 'Italy',
-      'ES': 'Spain',
-      'CA': 'Canada',
-      'AU': 'Australia'
-    };
-
-    const countriesData = countryStats.map(stat => ({
+    let countriesData = countryStats.map(stat => ({
       marketplace: stat.marketplace,
       countryName: marketplaceNames[stat.marketplace] || stat.marketplace,
       royalties: parseFloat(stat.royalties || 0),
       spending: parseFloat(stat.spending || 0),
       sales: parseInt(stat.sales || 0)
     }));
+
+    // If no data in KdpDailyStats, try to get from latest snapshot
+    if (countriesData.length === 0) {
+      const latestSnapshot = await snapshotRepository.findOne({
+        where: { userId },
+        order: { createdAt: 'DESC' }
+      });
+
+      if (latestSnapshot && latestSnapshot.marketplaceData && latestSnapshot.marketplaceData.length > 0) {
+        countriesData = latestSnapshot.marketplaceData.map((mp: any) => ({
+          marketplace: mp.marketplace,
+          countryName: marketplaceNames[mp.marketplace] || mp.marketplace,
+          royalties: parseFloat(mp.royalties || 0),
+          spending: 0,
+          sales: parseInt(mp.orders || 0)
+        }));
+      }
+    }
 
     // Calculate total global
     const totalGross = countriesData.reduce((sum, c) => sum + c.royalties, 0);
@@ -607,21 +677,22 @@ router.get('/analytics/country', authMiddleware, async (req: AuthRequest, res: R
 // ================================================
 router.get('/analytics/month-comparison', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const month1 = req.query.month1 as string || '2024-01';
-    const month2 = req.query.month2 as string || '2024-02';
+    const month1 = req.query.month1 as string || '2024-11';
+    const month2 = req.query.month2 as string || '2024-12';
 
     // Return mock data if enabled
     if (USE_MOCK_DATA) {
       return res.json(getMockMonthComparison(month1, month2));
     }
 
-    const userId = req.userId; // TODO: Get from auth
+    const userId = req.userId;
     const statsRepository = AppDataSource.getRepository(KdpDailyStats);
+    const snapshotRepository = AppDataSource.getRepository(KdpSalesSnapshot);
 
-    // Helper to get month stats
-    const getMonthStats = async (month: string) => {
+    // Helper to get month stats from KdpDailyStats
+    const getMonthStatsFromDaily = async (month: string) => {
       const startDate = `${month}-01`;
-      const endDate = `${month}-31`; // Simplified, should calculate actual last day
+      const endDate = `${month}-31`;
 
       const stats = await statsRepository
         .createQueryBuilder('stats')
@@ -637,19 +708,57 @@ router.get('/analytics/month-comparison', authMiddleware, async (req: AuthReques
 
       return {
         month,
-        grossRoyalties: parseFloat(stats.totalGrossRoyalties || 0),
-        spending: parseFloat(stats.totalSpending || 0),
-        netRoyalties: parseFloat(stats.totalNetRoyalties || 0),
-        paidUnits: parseInt(stats.totalPaidUnits || 0),
-        freeUnits: parseInt(stats.totalFreeUnits || 0),
-        kenpReads: parseInt(stats.totalKenpReads || 0)
+        grossRoyalties: parseFloat(stats?.totalGrossRoyalties || 0),
+        spending: parseFloat(stats?.totalSpending || 0),
+        netRoyalties: parseFloat(stats?.totalNetRoyalties || 0),
+        paidUnits: parseInt(stats?.totalPaidUnits || 0),
+        freeUnits: parseInt(stats?.totalFreeUnits || 0),
+        kenpReads: parseInt(stats?.totalKenpReads || 0)
       };
     };
 
-    const [stats1, stats2] = await Promise.all([
-      getMonthStats(month1),
-      getMonthStats(month2)
+    // Get stats from KdpDailyStats first
+    let [stats1, stats2] = await Promise.all([
+      getMonthStatsFromDaily(month1),
+      getMonthStatsFromDaily(month2)
     ]);
+
+    // If no data in KdpDailyStats, try to get from latest snapshot for current month
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    // Get latest snapshot to fill in missing data
+    const latestSnapshot = await snapshotRepository.findOne({
+      where: { userId },
+      order: { createdAt: 'DESC' }
+    });
+
+    if (latestSnapshot) {
+      // If month2 is current month and has no data, use snapshot
+      if (month2 === currentMonth && stats2.grossRoyalties === 0) {
+        stats2 = {
+          month: month2,
+          grossRoyalties: parseFloat(latestSnapshot.totalRoyalties?.toString() || '0'),
+          spending: 0,
+          netRoyalties: parseFloat(latestSnapshot.totalRoyalties?.toString() || '0'),
+          paidUnits: (latestSnapshot.printOrders || 0) + (latestSnapshot.digitalOrders || 0),
+          freeUnits: 0,
+          kenpReads: latestSnapshot.kenpRead || 0
+        };
+      }
+      // If month1 is current month and has no data, use snapshot
+      if (month1 === currentMonth && stats1.grossRoyalties === 0) {
+        stats1 = {
+          month: month1,
+          grossRoyalties: parseFloat(latestSnapshot.totalRoyalties?.toString() || '0'),
+          spending: 0,
+          netRoyalties: parseFloat(latestSnapshot.totalRoyalties?.toString() || '0'),
+          paidUnits: (latestSnapshot.printOrders || 0) + (latestSnapshot.digitalOrders || 0),
+          freeUnits: 0,
+          kenpReads: latestSnapshot.kenpRead || 0
+        };
+      }
+    }
 
     const response = {
       month1: stats1,
