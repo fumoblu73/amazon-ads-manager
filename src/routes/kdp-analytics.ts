@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { AppDataSource } from '../config/database';
 import { KdpDailyStats } from '../models/KdpDailyStats';
 import { KdpBook } from '../models/KdpBook';
+import { KdpSalesSnapshot } from '../entities/KdpSalesSnapshot';
 import { Between, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
 import {
   getMockDashboardSummary,
@@ -50,7 +51,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       return res.json(getMockDashboardSummary());
     }
 
-    const userId = req.userId; // TODO: Get from auth
+    const userId = req.userId;
     const { startDate, endDate} = getDateRange(
       req.query.startDate as string,
       req.query.endDate as string
@@ -58,8 +59,15 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
 
     const statsRepository = AppDataSource.getRepository(KdpDailyStats);
     const bookRepository = AppDataSource.getRepository(KdpBook);
+    const snapshotRepository = AppDataSource.getRepository(KdpSalesSnapshot);
 
-    // Get overall stats for the period
+    // Prima prova a ottenere l'ultimo snapshot da client-side scraping
+    const latestSnapshot = await snapshotRepository.findOne({
+      where: { userId },
+      order: { createdAt: 'DESC' }
+    });
+
+    // Get overall stats for the period from KdpDailyStats
     const stats = await statsRepository
       .createQueryBuilder('stats')
       .select('SUM(stats.grossRoyalties)', 'totalGrossRoyalties')
@@ -72,14 +80,50 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       .andWhere('stats.date BETWEEN :startDate AND :endDate', { startDate, endDate })
       .getRawOne();
 
-    // Calculate monthly stats (last 30 days)
-    const monthlyGross = parseFloat(stats.totalGrossRoyalties || 0);
-    const monthlySpending = parseFloat(stats.totalSpending || 0);
-    const monthlyNet = parseFloat(stats.totalNetRoyalties || 0);
+    // Use snapshot data if available, otherwise use KdpDailyStats
+    let monthlyGross = parseFloat(stats?.totalGrossRoyalties || 0);
+    let monthlySpending = parseFloat(stats?.totalSpending || 0);
+    let monthlyNet = parseFloat(stats?.totalNetRoyalties || 0);
+    let totalPaidUnits = parseInt(stats?.totalPaidUnits || 0);
+    let totalFreeUnits = parseInt(stats?.totalFreeUnits || 0);
+    let totalKenpReads = parseInt(stats?.totalKenpReads || 0);
+    let topEarnersToday: any[] = [];
+    let topEarnersYesterday: any[] = [];
+
+    // Se abbiamo uno snapshot recente, usa i suoi dati
+    if (latestSnapshot) {
+      console.log(`📊 Using KdpSalesSnapshot data from ${latestSnapshot.createdAt}`);
+
+      // Usa i dati dallo snapshot se non ci sono dati in KdpDailyStats
+      if (monthlyGross === 0 && latestSnapshot.totalRoyalties) {
+        monthlyGross = parseFloat(latestSnapshot.totalRoyalties.toString());
+        monthlyNet = monthlyGross; // No spending data from KDP Reports
+      }
+
+      if (totalPaidUnits === 0) {
+        totalPaidUnits = (latestSnapshot.printOrders || 0) + (latestSnapshot.digitalOrders || 0);
+      }
+
+      if (totalKenpReads === 0 && latestSnapshot.kenpRead) {
+        totalKenpReads = latestSnapshot.kenpRead;
+      }
+
+      // Usa top titles dallo snapshot
+      if (latestSnapshot.topTitles && latestSnapshot.topTitles.length > 0) {
+        topEarnersToday = latestSnapshot.topTitles.map((t: any) => ({
+          bookId: t.asin,
+          asin: t.asin,
+          title: t.title || 'Unknown',
+          royalties: t.royalties || 0,
+          spending: 0
+        }));
+      }
+    }
+
     const monthlyROI = monthlySpending > 0 ? ((monthlyNet / monthlySpending) * 100) : null;
     const monthlyROAS = monthlySpending > 0 ? ((monthlyGross / monthlySpending) * 100) : null;
 
-    // Get today's stats
+    // Get today's stats from KdpDailyStats
     const today = new Date().toISOString().split('T')[0];
     const todayStats = await statsRepository.findOne({
       where: { userId, date: today }
@@ -91,9 +135,38 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
     const dailyROI = dailySpending > 0 ? ((dailyNet / dailySpending) * 100) : null;
     const dailyROAS = dailySpending > 0 ? ((dailyGross / dailySpending) * 100) : null;
 
-    // Get top earners (yesterday and today)
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    // Get top earners from KdpDailyStats (if we don't have them from snapshot)
+    if (topEarnersToday.length === 0) {
+      const topToday = await statsRepository
+        .createQueryBuilder('stats')
+        .select('stats.asin', 'asin')
+        .addSelect('SUM(stats.grossRoyalties)', 'royalties')
+        .addSelect('SUM(stats.spending)', 'spending')
+        .where('stats.userId = :userId', { userId })
+        .andWhere('stats.date = :date', { date: today })
+        .andWhere('stats.asin IS NOT NULL')
+        .groupBy('stats.asin')
+        .orderBy('SUM(stats.grossRoyalties)', 'DESC')
+        .limit(10)
+        .getRawMany();
 
+      // Enrich with book titles
+      for (const item of topToday) {
+        const book = await bookRepository.findOne({
+          where: { asin: item.asin, userId }
+        });
+        topEarnersToday.push({
+          bookId: item.asin,
+          asin: item.asin,
+          title: book?.title || 'Unknown',
+          royalties: parseFloat(item.royalties || 0),
+          spending: parseFloat(item.spending || 0)
+        });
+      }
+    }
+
+    // Get yesterday's top earners from KdpDailyStats
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const topYesterday = await statsRepository
       .createQueryBuilder('stats')
       .select('stats.asin', 'asin')
@@ -107,76 +180,72 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       .limit(10)
       .getRawMany();
 
-    const topToday = await statsRepository
-      .createQueryBuilder('stats')
-      .select('stats.asin', 'asin')
-      .addSelect('SUM(stats.grossRoyalties)', 'royalties')
-      .addSelect('SUM(stats.spending)', 'spending')
-      .where('stats.userId = :userId', { userId })
-      .andWhere('stats.date = :date', { date: today })
-      .andWhere('stats.asin IS NOT NULL')
-      .groupBy('stats.asin')
-      .orderBy('SUM(stats.grossRoyalties)', 'DESC')
-      .limit(10)
-      .getRawMany();
+    for (const item of topYesterday) {
+      const book = await bookRepository.findOne({
+        where: { asin: item.asin, userId }
+      });
+      topEarnersYesterday.push({
+        bookId: item.asin,
+        asin: item.asin,
+        title: book?.title || 'Unknown',
+        royalties: parseFloat(item.royalties || 0),
+        spending: parseFloat(item.spending || 0)
+      });
+    }
 
-    // Enrich with book titles
-    const enrichTopEarners = async (topList: any[]) => {
-      const results = [];
-      for (const item of topList) {
-        const book = await bookRepository.findOne({
-          where: { asin: item.asin, userId }
-        });
-        results.push({
-          asin: item.asin,
-          title: book?.title || 'Unknown',
-          royalties: parseFloat(item.royalties || 0),
-          spending: parseFloat(item.spending || 0)
-        });
-      }
-      return results;
-    };
-
-    const topEarnersYesterday = await enrichTopEarners(topYesterday);
-    const topEarnersToday = await enrichTopEarners(topToday);
+    // Calcola numero libri totali dell'utente
+    const totalLiveBooks = await bookRepository.count({
+      where: { userId }
+    });
 
     // Build response
     const summary = {
       period: { startDate, endDate },
       overall: {
         monthlyStats: {
-          gross: monthlyGross,
+          adOrders: totalPaidUnits,
+          grossRoyalties: monthlyGross,
           spending: monthlySpending,
           netRoyalties: monthlyNet,
           overallROI: monthlyROI,
           amsROI: monthlyROI,
-          amsROAS: monthlyROAS
+          amsACoS: monthlyROAS ? (100 / monthlyROAS * 100) : null
         },
         dailyStats: {
-          gross: dailyGross,
+          adOrders: 0,
+          grossRoyalties: dailyGross,
           spending: dailySpending,
           netRoyalties: dailyNet,
           overallROI: dailyROI,
           amsROI: dailyROI,
-          amsROAS: dailyROAS
+          amsACoS: dailyROAS ? (100 / dailyROAS * 100) : null
         }
       },
       widgets: {
-        paidSales: parseInt(stats.totalPaidUnits || 0),
-        freeSales: parseInt(stats.totalFreeUnits || 0),
-        kenpReads: parseInt(stats.totalKenpReads || 0),
-        totalGrossRoyalties: monthlyGross,
-        totalSpending: monthlySpending,
-        totalNetRoyalties: monthlyNet,
-        avgDailyGross: monthlyGross / 30,
-        avgDailyNet: monthlyNet / 30,
-        overallROI: monthlyROI,
-        amsROAS: monthlyROAS
+        grossRoyaltiesEstimator: monthlyGross,
+        todayNetRoyalties: dailyNet,
+        yesterdayNetRoyalties: 0,
+        kenpReadsThisMonth: totalKenpReads,
+        totalLiveBooks: totalLiveBooks || 0,
+        dailyAvgGrossRoyalties: monthlyGross / 30,
+        dailyAvgNetRoyalties: monthlyNet / 30,
+        estimatedProjection: monthlyGross,
+        bookSalesThisMonth: totalPaidUnits
       },
       topEarners: {
         yesterday: topEarnersYesterday,
         today: topEarnersToday
-      }
+      },
+      // Include snapshot info for debugging
+      snapshotInfo: latestSnapshot ? {
+        id: latestSnapshot.id,
+        createdAt: latestSnapshot.createdAt,
+        source: latestSnapshot.source,
+        currency: latestSnapshot.currency,
+        totalRoyalties: latestSnapshot.totalRoyalties,
+        printOrders: latestSnapshot.printOrders,
+        digitalOrders: latestSnapshot.digitalOrders
+      } : null
     };
 
     res.json(summary);
