@@ -28,11 +28,11 @@
       // Cerca nel body della pagina il pattern csrftoken
       const bodyHtml = document.documentElement.innerHTML;
 
-      // Pattern 1: csrftoken nel JSON
+      // Pattern 1: csrftoken nel JSON - formato {"csrftoken":{"token":"xxx"}}
       const csrfMatch = bodyHtml.match(/"csrftoken"\s*:\s*\{\s*"token"\s*:\s*"([^"]+)"/);
       if (csrfMatch) {
         capturedData.csrfToken = csrfMatch[1];
-        console.log('[KDP Scraper] CSRF token found (pattern 1)');
+        console.log('[KDP Scraper] CSRF token found (pattern 1):', csrfMatch[1].substring(0, 20) + '...');
         return csrfMatch[1];
       }
 
@@ -42,7 +42,7 @@
         const token = metaTag.getAttribute('content');
         if (token) {
           capturedData.csrfToken = token;
-          console.log('[KDP Scraper] CSRF token found (meta tag)');
+          console.log('[KDP Scraper] CSRF token found (meta tag):', token.substring(0, 20) + '...');
           return token;
         }
       }
@@ -51,16 +51,30 @@
       const stateMatch = bodyHtml.match(/csrfToken['"]\s*:\s*['"]([^'"]+)['"]/i);
       if (stateMatch) {
         capturedData.csrfToken = stateMatch[1];
-        console.log('[KDP Scraper] CSRF token found (pattern 3)');
+        console.log('[KDP Scraper] CSRF token found (pattern 3):', stateMatch[1].substring(0, 20) + '...');
         return stateMatch[1];
       }
 
-      // Pattern 4: Cerca qualsiasi token nell'HTML
-      const anyTokenMatch = bodyHtml.match(/csrf[_-]?token['":\s]+['"]([a-zA-Z0-9_-]{20,})['"]/i);
+      // Pattern 4: Cerca "token" dentro csrftoken object
+      const tokenMatch = bodyHtml.match(/"token"\s*:\s*"([a-zA-Z0-9+/=_-]{20,})"/);
+      if (tokenMatch) {
+        capturedData.csrfToken = tokenMatch[1];
+        console.log('[KDP Scraper] CSRF token found (pattern 4 - token field):', tokenMatch[1].substring(0, 20) + '...');
+        return tokenMatch[1];
+      }
+
+      // Pattern 5: Cerca csrf in qualsiasi formato
+      const anyTokenMatch = bodyHtml.match(/csrf[_-]?token['":\s]+['"]([a-zA-Z0-9+/=_-]{20,})['"]/i);
       if (anyTokenMatch) {
         capturedData.csrfToken = anyTokenMatch[1];
-        console.log('[KDP Scraper] CSRF token found (pattern 4)');
+        console.log('[KDP Scraper] CSRF token found (pattern 5):', anyTokenMatch[1].substring(0, 20) + '...');
         return anyTokenMatch[1];
+      }
+
+      // Debug: cerca tutte le occorrenze di "csrf" nel documento
+      const csrfOccurrences = bodyHtml.match(/csrf[^"]{0,50}/gi);
+      if (csrfOccurrences) {
+        console.log('[KDP Scraper] Found csrf occurrences:', csrfOccurrences.slice(0, 5));
       }
 
     } catch (e) {

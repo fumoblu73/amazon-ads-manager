@@ -107,25 +107,46 @@ async function startClientSideScraping() {
     scrapePromiseResolve = resolve;
     scrapePromiseReject = reject;
 
-    // Timeout dopo 60 secondi
+    // Timeout dopo 90 secondi
     setTimeout(() => {
       if (scrapePromiseReject) {
         reject(new Error('Scraping timeout - nessun dato ricevuto'));
         scrapePromiseResolve = null;
         scrapePromiseReject = null;
       }
-    }, 60000);
+    }, 90000);
   });
 
-  // Apri tab kdpreports (dashboard con dati)
-  // NOTA: active: true perche' Amazon richiede la tab in foreground per la sessione
-  const tab = await chrome.tabs.create({
-    url: 'https://kdpreports.amazon.com/#/dashboard',
-    active: true // Apri in foreground - necessario per autenticazione Amazon
-  });
+  // Prima cerca se c'è già un tab di kdpreports aperto
+  const existingTabs = await chrome.tabs.query({ url: 'https://kdpreports.amazon.com/*' });
+  console.log('[Background] Found existing kdpreports tabs:', existingTabs.length);
 
-  scrapeTabId = tab.id;
-  console.log('[Background] Opened kdpreports tab:', tab.id);
+  let tab;
+  if (existingTabs.length > 0) {
+    // Usa il tab esistente
+    tab = existingTabs[0];
+    scrapeTabId = tab.id;
+    console.log('[Background] Using existing tab:', tab.id, 'URL:', tab.url);
+
+    // Porta il tab in primo piano
+    await chrome.tabs.update(tab.id, { active: true });
+    await chrome.windows.update(tab.windowId, { focused: true });
+
+    // Invia direttamente il comando di scraping dopo un breve delay
+    setTimeout(() => {
+      console.log('[Background] Sending startScraping to existing tab');
+      chrome.tabs.sendMessage(scrapeTabId, { action: 'startScraping' });
+    }, 2000);
+  } else {
+    // Apri nuovo tab kdpreports (URL senza hash - la SPA caricherà la dashboard)
+    tab = await chrome.tabs.create({
+      url: 'https://kdpreports.amazon.com/dashboard',
+      active: true
+    });
+    scrapeTabId = tab.id;
+    console.log('[Background] Opened NEW kdpreports tab:', tab.id);
+    // Il messaggio startScraping verrà inviato quando riceviamo kdpScraperReady
+  }
 
   // Aspetta i dati
   return dataPromise;
