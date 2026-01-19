@@ -274,24 +274,35 @@
     // Helper per fare fetch sicuro con controllo content-type
     async function safeFetch(url, options) {
       console.log('[KDP Scraper] Fetching:', url);
+      console.log('[KDP Scraper] Headers:', JSON.stringify(options.headers));
+
       const res = await fetch(url, options);
       console.log('[KDP Scraper] Response status:', res.status, res.statusText);
+      console.log('[KDP Scraper] Response headers:', [...res.headers.entries()]);
 
       if (!res.ok) {
         console.log(`[KDP Scraper] Request failed: ${res.status} ${res.statusText}`);
+        const errorText = await res.text();
+        console.log('[KDP Scraper] Error response (first 500 chars):', errorText.substring(0, 500));
         return null;
       }
+
       const contentType = res.headers.get('content-type');
       console.log('[KDP Scraper] Content-Type:', contentType);
 
       if (!contentType || !contentType.includes('application/json')) {
         console.log(`[KDP Scraper] Non-JSON response: ${contentType}`);
-        // Check if it's a login page
         const text = await res.text();
-        if (text.includes('signin') || text.includes('login') || text.includes('<!doctype')) {
-          console.log('[KDP Scraper] Detected login page in response - user not authenticated');
+        console.log('[KDP Scraper] Response text (first 500 chars):', text.substring(0, 500));
+
+        // Check if it's actually a login/signin page (more specific check)
+        if (text.includes('ap_email') || text.includes('signIn') || text.includes('auth-portal')) {
+          console.log('[KDP Scraper] Detected login page in response');
           throw new Error('Not authenticated - please login to kdpreports.amazon.com first');
         }
+
+        // Se è HTML ma non una login page, potrebbe essere un errore diverso
+        console.log('[KDP Scraper] Non-JSON response but not a login page, skipping');
         return null;
       }
       return res.json();

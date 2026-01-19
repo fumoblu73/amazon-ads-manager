@@ -67,13 +67,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       scrapePromiseReject = null;
     }
 
-    // Chiudi tab
-    if (scrapeTabId) {
-      setTimeout(() => {
-        chrome.tabs.remove(scrapeTabId).catch(() => {});
-        scrapeTabId = null;
-      }, 1000);
-    }
+    // NON chiudere il tab in caso di errore - lascialo aperto per debug
+    // L'utente può chiuderlo manualmente
+    scrapeTabId = null;
   }
 
   // Popup richiede di iniziare scraping client-side
