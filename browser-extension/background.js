@@ -40,6 +40,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // Dati catturati dal content script
   if (request.action === 'kdpDataComplete') {
     console.log('[Background] KDP data complete:', request.success);
+    console.log('[Background] Data received:', JSON.stringify(request.data).substring(0, 500));
     scrapedData = request.data;
 
     if (scrapePromiseResolve && request.success) {
@@ -48,13 +49,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       scrapePromiseReject = null;
     }
 
-    // Chiudi tab dopo aver ricevuto i dati
-    if (scrapeTabId) {
-      setTimeout(() => {
-        chrome.tabs.remove(scrapeTabId).catch(() => {});
-        scrapeTabId = null;
-      }, 1000);
-    }
+    // NON chiudere il tab - lascialo aperto per debug
+    // L'utente può chiuderlo manualmente dopo aver verificato i log
+    scrapeTabId = null;
   }
 
   // Scraping fallito
