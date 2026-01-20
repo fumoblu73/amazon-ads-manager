@@ -306,8 +306,9 @@ interface TopEarner {
   bsrRank?: number | null;
 }
 
-interface ChartDataPoint {
-  date: string;
+interface MonthlyChartDataPoint {
+  month: string;
+  label: string;
   royalties: number;
   orders: number;
 }
@@ -352,13 +353,9 @@ export interface KdpDashboardSummary {
     currentMonth: TopEarner[];
   };
   charts?: {
-    previousMonth: {
+    monthly: {
       label: string;
-      data: ChartDataPoint[];
-    };
-    currentMonth: {
-      label: string;
-      data: ChartDataPoint[];
+      data: MonthlyChartDataPoint[];
     };
   };
   snapshotInfo?: {

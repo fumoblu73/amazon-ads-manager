@@ -276,56 +276,42 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       });
     }
 
-    // Get daily chart data for current month
-    const currentMonthChartData = await statsRepository
-      .createQueryBuilder('stats')
-      .select('stats.date', 'date')
-      .addSelect('SUM(stats.grossRoyalties)', 'royalties')
-      .addSelect('SUM(stats.paidUnits)', 'orders')
-      .where('stats.userId = :userId', { userId })
-      .andWhere('stats.date BETWEEN :start AND :end', {
-        start: currentMonth.startDate,
-        end: currentMonth.endDate
-      })
-      .groupBy('stats.date')
-      .orderBy('stats.date', 'ASC')
-      .getRawMany();
+    // Get monthly chart data for the last 12 months (Publisher Champ style)
+    const monthlyChartData: Array<{month: string; label: string; royalties: number; orders: number}> = [];
+    const now = new Date();
 
-    // Get daily chart data for previous month
-    const previousMonthChartData = await statsRepository
-      .createQueryBuilder('stats')
-      .select('stats.date', 'date')
-      .addSelect('SUM(stats.grossRoyalties)', 'royalties')
-      .addSelect('SUM(stats.paidUnits)', 'orders')
-      .where('stats.userId = :userId', { userId })
-      .andWhere('stats.date BETWEEN :start AND :end', {
-        start: previousMonth.startDate,
-        end: previousMonth.endDate
-      })
-      .groupBy('stats.date')
-      .orderBy('stats.date', 'ASC')
-      .getRawMany();
+    for (let i = 11; i >= 0; i--) {
+      const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+      const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
 
-    // If no chart data from KdpDailyStats, use snapshot dailyOrders
-    let formattedCurrentChartData = currentMonthChartData.map(row => ({
-      date: row.date,
-      royalties: parseFloat(row.royalties || 0),
-      orders: parseInt(row.orders || 0)
-    }));
+      const monthStats = await statsRepository
+        .createQueryBuilder('stats')
+        .select('SUM(stats.grossRoyalties)', 'royalties')
+        .addSelect('SUM(stats.paidUnits)', 'orders')
+        .where('stats.userId = :userId', { userId })
+        .andWhere('stats.date BETWEEN :start AND :end', {
+          start: monthStart.toISOString().split('T')[0],
+          end: monthEnd.toISOString().split('T')[0]
+        })
+        .getRawOne();
 
-    if (formattedCurrentChartData.length === 0 && latestSnapshot?.dailyOrders) {
-      formattedCurrentChartData = latestSnapshot.dailyOrders.map((d: any) => ({
-        date: d.date,
-        royalties: 0,
-        orders: d.orders || 0
-      }));
+      monthlyChartData.push({
+        month: monthStart.toISOString().split('T')[0],
+        label: monthStart.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+        royalties: parseFloat(monthStats?.royalties || 0),
+        orders: parseInt(monthStats?.orders || 0)
+      });
     }
 
-    const formattedPreviousChartData = previousMonthChartData.map(row => ({
-      date: row.date,
-      royalties: parseFloat(row.royalties || 0),
-      orders: parseInt(row.orders || 0)
-    }));
+    // If current month has no data from KdpDailyStats but we have snapshot, use it
+    if (latestSnapshot && monthlyChartData.length > 0) {
+      const lastMonthData = monthlyChartData[monthlyChartData.length - 1];
+      if (lastMonthData.royalties === 0 && latestSnapshot.totalRoyalties) {
+        lastMonthData.royalties = parseFloat(latestSnapshot.totalRoyalties.toString());
+        lastMonthData.orders = (latestSnapshot.printOrders || 0) + (latestSnapshot.digitalOrders || 0);
+      }
+    }
 
     // Count total live books
     const totalLiveBooks = await bookRepository.count({
@@ -460,15 +446,11 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
         currentMonth: topEarnersToday
       },
 
-      // Chart data for daily breakdown
+      // Monthly chart data (last 12 months - Publisher Champ style)
       charts: {
-        previousMonth: {
-          label: previousMonth.monthLabel,
-          data: formattedPreviousChartData
-        },
-        currentMonth: {
-          label: currentMonth.monthLabel,
-          data: formattedCurrentChartData
+        monthly: {
+          label: 'Monthly Performance',
+          data: monthlyChartData
         }
       },
 
