@@ -435,71 +435,62 @@ export default function KdpDashboard() {
         />
       </div>
 
-      {/* Charts Section */}
-      {summary.charts && (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          {/* Previous Month Chart */}
-          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-white mb-4">
-              {summary.charts.previousMonth.label} Daily Stats
-            </h2>
-            {summary.charts.previousMonth.data.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={summary.charts.previousMonth.data}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis
-                    dataKey="date"
-                    stroke="#9CA3AF"
-                    fontSize={10}
-                    tickFormatter={(value) => new Date(value).getDate().toString()}
-                  />
-                  <YAxis stroke="#9CA3AF" fontSize={10} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
-                    labelStyle={{ color: '#F3F4F6' }}
-                    formatter={(value) => [value, 'Orders']}
-                    labelFormatter={(label) => new Date(label).toLocaleDateString()}
-                  />
-                  <Bar dataKey="orders" fill="#3B82F6" name="orders" />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[200px] flex items-center justify-center text-gray-500">
-                No data for {summary.charts.previousMonth.label}
-              </div>
-            )}
-          </div>
-
-          {/* Current Month Chart */}
-          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-white mb-4">
-              {summary.charts.currentMonth.label} Daily Stats
-            </h2>
-            {summary.charts.currentMonth.data.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={summary.charts.currentMonth.data}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis
-                    dataKey="date"
-                    stroke="#9CA3AF"
-                    fontSize={10}
-                    tickFormatter={(value) => new Date(value).getDate().toString()}
-                  />
-                  <YAxis stroke="#9CA3AF" fontSize={10} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
-                    labelStyle={{ color: '#F3F4F6' }}
-                    formatter={(value) => [value, 'Orders']}
-                    labelFormatter={(label) => new Date(label).toLocaleDateString()}
-                  />
-                  <Bar dataKey="orders" fill="#F59E0B" name="orders" />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[200px] flex items-center justify-center text-gray-500">
-                No data for {summary.charts.currentMonth.label}
-              </div>
-            )}
+      {/* Monthly Performance Chart */}
+      {summary.charts?.monthly && (
+        <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
+          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            Monthly Performance (Last 12 Months)
+          </h2>
+          {summary.charts.monthly.data.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={summary.charts.monthly.data}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis
+                  dataKey="label"
+                  stroke="#9CA3AF"
+                  fontSize={11}
+                />
+                <YAxis
+                  yAxisId="left"
+                  stroke="#F59E0B"
+                  fontSize={10}
+                  tickFormatter={(value) => `$${value}`}
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  stroke="#3B82F6"
+                  fontSize={10}
+                />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                  labelStyle={{ color: '#F3F4F6' }}
+                  formatter={(value, name) => {
+                    if (name === 'royalties') return [`$${Number(value).toFixed(2)}`, 'Royalties'];
+                    return [value, 'Orders'];
+                  }}
+                />
+                <Bar yAxisId="left" dataKey="royalties" fill="#F59E0B" name="royalties" radius={[4, 4, 0, 0]} />
+                <Bar yAxisId="right" dataKey="orders" fill="#3B82F6" name="orders" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[300px] flex items-center justify-center text-gray-500">
+              No monthly data available
+            </div>
+          )}
+          <div className="flex justify-center gap-6 mt-4 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-orange-500 rounded"></div>
+              <span className="text-gray-400">Royalties ($)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-blue-500 rounded"></div>
+              <span className="text-gray-400">Orders</span>
+            </div>
           </div>
         </div>
       )}
