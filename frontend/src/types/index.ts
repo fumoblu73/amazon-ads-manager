@@ -259,31 +259,69 @@ export interface BsrAnalysis {
   history: BsrDataPoint[];
 }
 
-// KDP Dashboard Types
+// KDP Dashboard Types (Publisher Champ style)
+
+interface MonthStats {
+  label: string;
+  adOrders: number;
+  grossRoyalties: number;
+  spending: number;
+  netRoyalties: number;
+  overallROI: number | null;
+  amsROI: number | null;
+  amsACoS: number | null;
+}
+
+interface DayStats {
+  label: string;
+  adOrders: number;
+  grossRoyalties: number;
+  spending: number;
+  netRoyalties: number;
+  overallROI: number | null;
+  amsROI: number | null;
+  amsACoS: number | null;
+}
+
+interface StatsChange {
+  adOrders: number | null;
+  grossRoyalties: number | null;
+  spending: number | null;
+  netRoyalties: number | null;
+}
+
+interface TopEarner {
+  bookId: string;
+  title: string;
+  asin: string;
+  royalties: number;
+  spending?: number;
+  coverUrl?: string | null;
+  bsrRank?: number | null;
+}
+
+interface ChartDataPoint {
+  date: string;
+  royalties: number;
+  orders: number;
+}
 
 export interface KdpDashboardSummary {
   period: {
     startDate: string;
     endDate: string;
+    label?: string;
   };
   overall: {
     monthlyStats: {
-      adOrders: number;
-      grossRoyalties: number;
-      spending: number;
-      netRoyalties: number;
-      overallROI: number | null;
-      amsROI: number | null;
-      amsACoS: number | null;
+      previousMonth: MonthStats;
+      currentMonth: MonthStats;
+      change: StatsChange;
     };
     dailyStats: {
-      adOrders: number;
-      grossRoyalties: number;
-      spending: number;
-      netRoyalties: number;
-      overallROI: number | null;
-      amsROI: number | null;
-      amsACoS: number | null;
+      yesterday: DayStats;
+      today: DayStats;
+      change: StatsChange;
     };
   };
   widgets: {
@@ -295,27 +333,33 @@ export interface KdpDashboardSummary {
     dailyAvgGrossRoyalties: number;
     dailyAvgNetRoyalties: number;
     estimatedProjection: number;
-    ordersThisMonth: {
-      organic: number;
-      inorganic: number;
-    };
     bookSalesThisMonth: number;
-    preOrders: number;
+    royaltiesChange?: number | null;
+    ordersChange?: number | null;
   };
   topEarners: {
-    yesterday: Array<{
-      bookId: string;
-      title: string;
-      asin: string;
-      royalties: number;
-    }>;
-    today: Array<{
-      bookId: string;
-      title: string;
-      asin: string;
-      royalties: number;
-    }>;
+    previousMonth: TopEarner[];
+    currentMonth: TopEarner[];
   };
+  charts?: {
+    previousMonth: {
+      label: string;
+      data: ChartDataPoint[];
+    };
+    currentMonth: {
+      label: string;
+      data: ChartDataPoint[];
+    };
+  };
+  snapshotInfo?: {
+    id: string;
+    createdAt: string;
+    source: string;
+    currency: string;
+    totalRoyalties: number;
+    printOrders: number;
+    digitalOrders: number;
+  } | null;
 }
 
 // Historical Stats Types
