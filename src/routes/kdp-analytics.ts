@@ -117,7 +117,9 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
         netRoyalties: parseFloat(stats?.totalNetRoyalties || 0),
         paidUnits: parseInt(stats?.totalPaidUnits || 0),
         freeUnits: parseInt(stats?.totalFreeUnits || 0),
-        kenpReads: parseInt(stats?.totalKenpReads || 0)
+        kenpReads: parseInt(stats?.totalKenpReads || 0),
+        printOrders: 0,
+        digitalOrders: 0
       };
     };
 
@@ -163,7 +165,9 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
           netRoyalties: parseFloat(latestSnapshot.totalRoyalties.toString()),
           paidUnits: (latestSnapshot.printOrders || 0) + (latestSnapshot.digitalOrders || 0),
           freeUnits: 0,
-          kenpReads: latestSnapshot.kenpRead || 0
+          kenpReads: latestSnapshot.kenpRead || 0,
+          printOrders: latestSnapshot.printOrders || 0,
+          digitalOrders: latestSnapshot.digitalOrders || 0
         };
       }
 
@@ -361,6 +365,8 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
           previousMonth: {
             label: previousMonth.monthLabel,
             adOrders: previousMonthStats.paidUnits,
+            paperbacks: previousMonthStats.printOrders || 0,
+            reads: previousMonthStats.kenpReads || 0,
             grossRoyalties: previousMonthStats.grossRoyalties,
             spending: previousMonthStats.spending,
             netRoyalties: previousMonthStats.netRoyalties,
@@ -371,6 +377,8 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
           currentMonth: {
             label: currentMonth.monthLabel,
             adOrders: currentMonthStats.paidUnits,
+            paperbacks: currentMonthStats.printOrders || 0,
+            reads: currentMonthStats.kenpReads || 0,
             grossRoyalties: currentMonthStats.grossRoyalties,
             spending: currentMonthStats.spending,
             netRoyalties: currentMonthStats.netRoyalties,
@@ -380,6 +388,8 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
           },
           change: {
             adOrders: calculatePercentChange(currentMonthStats.paidUnits, previousMonthStats.paidUnits),
+            paperbacks: calculatePercentChange(currentMonthStats.printOrders || 0, previousMonthStats.printOrders || 0),
+            reads: calculatePercentChange(currentMonthStats.kenpReads || 0, previousMonthStats.kenpReads || 0),
             grossRoyalties: calculatePercentChange(currentMonthStats.grossRoyalties, previousMonthStats.grossRoyalties),
             spending: calculatePercentChange(currentMonthStats.spending, previousMonthStats.spending),
             netRoyalties: calculatePercentChange(currentMonthStats.netRoyalties, previousMonthStats.netRoyalties)
@@ -391,6 +401,8 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
           yesterday: {
             label: formatDateShort(yesterday),
             adOrders: yesterdayStats.paidUnits,
+            paperbacks: 0,
+            reads: yesterdayStats.kenpReads || 0,
             grossRoyalties: yesterdayStats.grossRoyalties,
             spending: yesterdayStats.spending,
             netRoyalties: yesterdayStats.netRoyalties,
@@ -401,6 +413,8 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
           today: {
             label: formatDateShort(today),
             adOrders: todayStats.paidUnits,
+            paperbacks: 0,
+            reads: todayStats.kenpReads || 0,
             grossRoyalties: todayStats.grossRoyalties,
             spending: todayStats.spending,
             netRoyalties: todayStats.netRoyalties,
@@ -410,6 +424,8 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
           },
           change: {
             adOrders: calculatePercentChange(todayStats.paidUnits, yesterdayStats.paidUnits),
+            paperbacks: null,
+            reads: calculatePercentChange(todayStats.kenpReads || 0, yesterdayStats.kenpReads || 0),
             grossRoyalties: calculatePercentChange(todayStats.grossRoyalties, yesterdayStats.grossRoyalties),
             spending: calculatePercentChange(todayStats.spending, yesterdayStats.spending),
             netRoyalties: calculatePercentChange(todayStats.netRoyalties, yesterdayStats.netRoyalties)
@@ -420,6 +436,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       // Widgets
       widgets: {
         grossRoyaltiesEstimator: currentMonthStats.grossRoyalties,
+        netRoyaltiesThisMonth: currentMonthStats.netRoyalties,
         todayNetRoyalties: todayStats.netRoyalties,
         yesterdayNetRoyalties: yesterdayStats.netRoyalties,
         kenpReadsThisMonth: currentMonthStats.kenpReads,
@@ -428,6 +445,10 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
         dailyAvgNetRoyalties: dailyAvgNet,
         estimatedProjection: projectedGross,
         bookSalesThisMonth: currentMonthStats.paidUnits,
+        // Organic = digital orders, Inorganic = ad orders (from spending > 0)
+        organicOrders: currentMonthStats.digitalOrders || 0,
+        inorganicOrders: currentMonthStats.printOrders || 0,
+        preOrders: 0, // Pre-orders not tracked in current schema
         // Additional widgets for percentage changes
         royaltiesChange: calculatePercentChange(currentMonthStats.grossRoyalties, previousMonthStats.grossRoyalties),
         ordersChange: calculatePercentChange(currentMonthStats.paidUnits, previousMonthStats.paidUnits)

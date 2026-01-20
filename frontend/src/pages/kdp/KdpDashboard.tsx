@@ -136,6 +136,22 @@ export default function KdpDashboard() {
                   </td>
                 </tr>
                 <tr className="border-b border-gray-700/50">
+                  <td className="py-3 text-gray-400">Paperbacks</td>
+                  <td className="py-3 text-center">{monthlyStats.previousMonth.paperbacks || 0}</td>
+                  <td className="py-3 text-center font-medium">{monthlyStats.currentMonth.paperbacks || 0}</td>
+                  <td className={`py-3 text-center ${formatChange(monthlyStats.change.paperbacks).color}`}>
+                    {formatChange(monthlyStats.change.paperbacks).text}
+                  </td>
+                </tr>
+                <tr className="border-b border-gray-700/50">
+                  <td className="py-3 text-gray-400">Reads</td>
+                  <td className="py-3 text-center">{(monthlyStats.previousMonth.reads || 0).toLocaleString()}</td>
+                  <td className="py-3 text-center font-medium">{(monthlyStats.currentMonth.reads || 0).toLocaleString()}</td>
+                  <td className={`py-3 text-center ${formatChange(monthlyStats.change.reads).color}`}>
+                    {formatChange(monthlyStats.change.reads).text}
+                  </td>
+                </tr>
+                <tr className="border-b border-gray-700/50">
                   <td className="py-3 text-gray-400">Royalties (Gross)</td>
                   <td className="py-3 text-center">{formatCurrency(monthlyStats.previousMonth.grossRoyalties)}</td>
                   <td className="py-3 text-center font-medium">{formatCurrency(monthlyStats.currentMonth.grossRoyalties)}</td>
@@ -214,6 +230,22 @@ export default function KdpDashboard() {
                   </td>
                 </tr>
                 <tr className="border-b border-gray-700/50">
+                  <td className="py-3 text-gray-400">Paperbacks</td>
+                  <td className="py-3 text-center">{dailyStats.yesterday.paperbacks || 0}</td>
+                  <td className="py-3 text-center font-medium">{dailyStats.today.paperbacks || 0}</td>
+                  <td className={`py-3 text-center ${formatChange(dailyStats.change.paperbacks).color}`}>
+                    {formatChange(dailyStats.change.paperbacks).text}
+                  </td>
+                </tr>
+                <tr className="border-b border-gray-700/50">
+                  <td className="py-3 text-gray-400">Reads</td>
+                  <td className="py-3 text-center">{(dailyStats.yesterday.reads || 0).toLocaleString()}</td>
+                  <td className="py-3 text-center font-medium">{(dailyStats.today.reads || 0).toLocaleString()}</td>
+                  <td className={`py-3 text-center ${formatChange(dailyStats.change.reads).color}`}>
+                    {formatChange(dailyStats.change.reads).text}
+                  </td>
+                </tr>
+                <tr className="border-b border-gray-700/50">
                   <td className="py-3 text-gray-400">Royalties (Gross)</td>
                   <td className="py-3 text-center">{formatCurrency(dailyStats.yesterday.grossRoyalties)}</td>
                   <td className="py-3 text-center font-medium">{formatCurrency(dailyStats.today.grossRoyalties)}</td>
@@ -261,7 +293,7 @@ export default function KdpDashboard() {
         </div>
       </div>
 
-      {/* Widgets Grid */}
+      {/* Widgets Grid - Row 1 */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         <StatsCard
           title="Gross Royalties"
@@ -276,9 +308,21 @@ export default function KdpDashboard() {
         />
 
         <StatsCard
+          title="Net Royalties"
+          value={formatCurrency(summary.widgets.netRoyaltiesThisMonth || summary.widgets.grossRoyaltiesEstimator)}
+          subtitle="This month"
+          variant="success"
+          icon={
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          }
+        />
+
+        <StatsCard
           title="Today's Net"
           value={formatCurrency(summary.widgets.todayNetRoyalties)}
-          subtitle={`Yesterday: ${formatCurrency(summary.widgets.yesterdayNetRoyalties)}`}
+          subtitle="Today"
           variant="success"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -288,8 +332,46 @@ export default function KdpDashboard() {
         />
 
         <StatsCard
+          title="Yesterday's Net"
+          value={formatCurrency(summary.widgets.yesterdayNetRoyalties)}
+          subtitle="Yesterday"
+          icon={
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          }
+        />
+
+        <StatsCard
+          title="Daily Avg Gross"
+          value={formatCurrency(summary.widgets.dailyAvgGrossRoyalties)}
+          subtitle="This month avg"
+          icon={
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          }
+        />
+
+        <StatsCard
+          title="Projection"
+          value={formatCurrency(summary.widgets.estimatedProjection)}
+          subtitle="Full month est."
+          variant="primary"
+          icon={
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+          }
+        />
+      </div>
+
+      {/* Widgets Grid - Row 2 */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+        <StatsCard
           title="KENP Reads"
           value={(summary.widgets?.kenpReadsThisMonth || 0).toLocaleString()}
+          subtitle="This month"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
@@ -309,13 +391,34 @@ export default function KdpDashboard() {
         />
 
         <StatsCard
-          title="Projection"
-          value={formatCurrency(summary.widgets.estimatedProjection)}
-          subtitle="Full month est."
-          variant="primary"
+          title="Organic Orders"
+          value={summary.widgets.organicOrders || 0}
+          subtitle="Digital sales"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            </svg>
+          }
+        />
+
+        <StatsCard
+          title="Print Orders"
+          value={summary.widgets.inorganicOrders || 0}
+          subtitle="Paperbacks"
+          icon={
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+          }
+        />
+
+        <StatsCard
+          title="Pre-orders"
+          value={summary.widgets.preOrders || 0}
+          subtitle="Pending"
+          icon={
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           }
         />
@@ -323,6 +426,7 @@ export default function KdpDashboard() {
         <StatsCard
           title="Live Books"
           value={summary.widgets.totalLiveBooks}
+          subtitle="In catalog"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
