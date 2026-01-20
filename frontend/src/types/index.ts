@@ -264,6 +264,8 @@ export interface BsrAnalysis {
 interface MonthStats {
   label: string;
   adOrders: number;
+  paperbacks: number;
+  reads: number;
   grossRoyalties: number;
   spending: number;
   netRoyalties: number;
@@ -275,6 +277,8 @@ interface MonthStats {
 interface DayStats {
   label: string;
   adOrders: number;
+  paperbacks: number;
+  reads: number;
   grossRoyalties: number;
   spending: number;
   netRoyalties: number;
@@ -285,6 +289,8 @@ interface DayStats {
 
 interface StatsChange {
   adOrders: number | null;
+  paperbacks: number | null;
+  reads: number | null;
   grossRoyalties: number | null;
   spending: number | null;
   netRoyalties: number | null;
@@ -326,6 +332,7 @@ export interface KdpDashboardSummary {
   };
   widgets: {
     grossRoyaltiesEstimator: number;
+    netRoyaltiesThisMonth: number;
     todayNetRoyalties: number;
     yesterdayNetRoyalties: number;
     kenpReadsThisMonth: number;
@@ -334,6 +341,9 @@ export interface KdpDashboardSummary {
     dailyAvgNetRoyalties: number;
     estimatedProjection: number;
     bookSalesThisMonth: number;
+    organicOrders: number;
+    inorganicOrders: number;
+    preOrders: number;
     royaltiesChange?: number | null;
     ordersChange?: number | null;
   };
