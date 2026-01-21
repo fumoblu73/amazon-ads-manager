@@ -172,7 +172,8 @@ router.post('/sales-data', authMiddleware, async (req: AuthRequest, res: Respons
     const overview = data.overview?.overviewWidget || {};
     const ordersHistogram = data.orders?.histogram?.data || [];
     const marketplaceDistribution = data.marketplace?.histogram?.data || [];
-    const topTitlesData = data.topTitles?.topEarningTitles || [];
+    // topTitles può arrivare in due formati: topTitlesWidget.topTitles o topEarningTitles
+    const topTitlesData = data.topTitles?.topTitlesWidget?.topTitles || data.topTitles?.topEarningTitles || [];
 
     console.log(`   Overview: ${JSON.stringify(overview)}`);
     console.log(`   Orders histogram entries: ${ordersHistogram.length}`);
