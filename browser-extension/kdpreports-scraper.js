@@ -18,6 +18,7 @@
     orders: null,
     marketplace: null,
     topTitles: null,
+    historicalMonths: [],
     csrfToken: null,
     timestamp: new Date().toISOString()
   };
@@ -359,6 +360,37 @@
       if (capturedData.topTitles) {
         console.log('[KDP Scraper] Top titles received:', Object.keys(capturedData.topTitles));
       }
+
+      // 5. Historical data - fetch last 12 months
+      console.log('[KDP Scraper] Fetching historical data (last 12 months)...');
+      capturedData.historicalMonths = [];
+
+      for (let i = 0; i < 12; i++) {
+        const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const monthDateParam = monthDate.toISOString().split('.')[0] + 'Z';
+        const monthLabel = monthDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
+        console.log(`[KDP Scraper] Fetching month ${i + 1}/12: ${monthLabel}...`);
+
+        const monthOverview = await safeFetch(
+          `${baseUrl}/overview?date=${encodeURIComponent(monthDateParam)}&viewOption=THIS_MONTH`,
+          { headers, credentials: 'include' }
+        );
+
+        if (monthOverview?.overviewWidget) {
+          capturedData.historicalMonths.push({
+            month: monthDate.toISOString().split('T')[0].substring(0, 7), // YYYY-MM format
+            label: monthLabel,
+            data: monthOverview.overviewWidget
+          });
+          console.log(`[KDP Scraper] Month ${monthLabel}: $${monthOverview.overviewWidget.totalRoyalties?.toFixed(2) || 0}`);
+        }
+
+        // Small delay to avoid rate limiting
+        await new Promise(r => setTimeout(r, 300));
+      }
+
+      console.log(`[KDP Scraper] Historical data: ${capturedData.historicalMonths.length} months captured`);
 
       // Invia tutti i dati al background script
       capturedData.timestamp = new Date().toISOString();
