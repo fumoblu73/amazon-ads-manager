@@ -46,61 +46,146 @@ export const mockBooks = [
 ];
 
 export const getMockDashboardSummary = () => {
-  const today = new Date().toISOString().split('T')[0];
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+
+  const currentMonthLabel = now.toLocaleDateString('en-US', { month: 'short' });
+  const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prevMonthLabel = prevMonthDate.toLocaleDateString('en-US', { month: 'short' });
+
+  // Generate monthly chart data (last 12 months)
+  const monthlyChartData = [];
+  for (let i = 11; i >= 0; i--) {
+    const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    monthlyChartData.push({
+      month: monthDate.toISOString().split('T')[0],
+      label: monthDate.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+      royalties: 800 + Math.random() * 600,
+      orders: 80 + Math.floor(Math.random() * 60)
+    });
+  }
 
   return {
     period: {
-      startDate: thirtyDaysAgo,
-      endDate: today
+      startDate: firstOfMonth,
+      endDate: today,
+      label: `${currentMonthLabel} 1st → ${currentMonthLabel} ${now.getDate()}th`
     },
     overall: {
       monthlyStats: {
-        adOrders: 128,
-        grossRoyalties: 1250.50,
-        spending: 480.25,
-        netRoyalties: 770.25,
-        overallROI: 160.42,
-        amsROI: 160.42,
-        amsACoS: 38.42
+        previousMonth: {
+          label: prevMonthLabel,
+          adOrders: 112,
+          paperbacks: 45,
+          reads: 38500,
+          grossRoyalties: 1150.30,
+          spending: 450.20,
+          netRoyalties: 700.10,
+          overallROI: 155.50,
+          amsROI: 155.50,
+          amsACoS: 39.14
+        },
+        currentMonth: {
+          label: currentMonthLabel,
+          adOrders: 128,
+          paperbacks: 52,
+          reads: 45680,
+          grossRoyalties: 1250.50,
+          spending: 480.25,
+          netRoyalties: 770.25,
+          overallROI: 160.42,
+          amsROI: 160.42,
+          amsACoS: 38.42
+        },
+        change: {
+          adOrders: 14.3,
+          paperbacks: 15.6,
+          reads: 18.6,
+          grossRoyalties: 8.7,
+          spending: 6.7,
+          netRoyalties: 10.0
+        }
       },
       dailyStats: {
-        adOrders: 4,
-        grossRoyalties: 42.30,
-        spending: 15.80,
-        netRoyalties: 26.50,
-        overallROI: 167.72,
-        amsROI: 167.72,
-        amsACoS: 37.35
+        yesterday: {
+          label: `${new Date(yesterday).getDate()}/${new Date(yesterday).getMonth() + 1}`,
+          adOrders: 5,
+          paperbacks: 2,
+          reads: 1520,
+          grossRoyalties: 48.50,
+          spending: 18.20,
+          netRoyalties: 30.30,
+          overallROI: 166.48,
+          amsROI: 166.48,
+          amsACoS: 37.53
+        },
+        today: {
+          label: `${now.getDate()}/${now.getMonth() + 1}`,
+          adOrders: 4,
+          paperbacks: 1,
+          reads: 1280,
+          grossRoyalties: 42.30,
+          spending: 15.80,
+          netRoyalties: 26.50,
+          overallROI: 167.72,
+          amsROI: 167.72,
+          amsACoS: 37.35
+        },
+        change: {
+          adOrders: -20.0,
+          paperbacks: -50.0,
+          reads: -15.8,
+          grossRoyalties: -12.8,
+          spending: -13.2,
+          netRoyalties: -12.5
+        }
       }
     },
     widgets: {
-      grossRoyaltiesEstimator: 1350.00,
+      grossRoyaltiesEstimator: 1250.50,
+      netRoyaltiesThisMonth: 770.25,
       todayNetRoyalties: 26.50,
-      yesterdayNetRoyalties: 31.20,
+      yesterdayNetRoyalties: 30.30,
       kenpReadsThisMonth: 45680,
-      totalLiveBooks: 3,
+      totalLiveBooks: 12,
       dailyAvgGrossRoyalties: 41.68,
       dailyAvgNetRoyalties: 25.67,
       estimatedProjection: 1450.00,
-      ordersThisMonth: {
-        organic: 85,
-        inorganic: 43
-      },
       bookSalesThisMonth: 128,
-      preOrders: 12
+      organicOrders: 85,
+      inorganicOrders: 43,
+      preOrders: 12,
+      royaltiesChange: 8.7,
+      ordersChange: 14.3
     },
     topEarners: {
-      yesterday: [
-        { bookId: '1', asin: 'B0ABC12345', title: 'The Mystery of the Lost Key', royalties: 45.20 },
-        { bookId: '2', asin: 'B0DEF67890', title: 'Digital Marketing Mastery', royalties: 38.50 },
-        { bookId: '3', asin: 'B0GHI11223', title: 'French Cooking Essentials', royalties: 22.10 }
+      previousMonth: [
+        { bookId: '1', asin: 'B0ABC12345', title: 'The Mystery of the Lost Key', royalties: 425.20, spending: 165.40, coverUrl: null, bsrRank: 12450 },
+        { bookId: '2', asin: 'B0DEF67890', title: 'Digital Marketing Mastery', royalties: 380.50, spending: 185.60, coverUrl: null, bsrRank: 8920 },
+        { bookId: '3', asin: 'B0GHI11223', title: 'French Cooking Essentials', royalties: 220.10, spending: 68.25, coverUrl: null, bsrRank: 25680 }
       ],
-      today: [
-        { bookId: '2', asin: 'B0DEF67890', title: 'Digital Marketing Mastery', royalties: 52.30 },
-        { bookId: '1', asin: 'B0ABC12345', title: 'The Mystery of the Lost Key', royalties: 41.80 },
-        { bookId: '3', asin: 'B0GHI11223', title: 'French Cooking Essentials', royalties: 28.60 }
+      currentMonth: [
+        { bookId: '2', asin: 'B0DEF67890', title: 'Digital Marketing Mastery', royalties: 520.30, spending: 195.40, coverUrl: null, bsrRank: 6840 },
+        { bookId: '1', asin: 'B0ABC12345', title: 'The Mystery of the Lost Key', royalties: 418.80, spending: 172.50, coverUrl: null, bsrRank: 14200 },
+        { bookId: '3', asin: 'B0GHI11223', title: 'French Cooking Essentials', royalties: 286.60, spending: 82.35, coverUrl: null, bsrRank: 21450 }
       ]
+    },
+    charts: {
+      monthly: {
+        label: 'Monthly Performance',
+        data: monthlyChartData
+      }
+    },
+    snapshotInfo: {
+      id: 'mock-snapshot-001',
+      createdAt: new Date().toISOString(),
+      source: 'mock-data',
+      currency: 'USD',
+      totalRoyalties: 1250.50,
+      printOrders: 52,
+      digitalOrders: 76
     }
   };
 };
