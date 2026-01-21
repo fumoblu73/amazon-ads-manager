@@ -12,6 +12,13 @@ let scrapePromiseReject = null;
 let pendingSyncJwtToken = null;
 let pendingSyncMarketplace = null;
 
+// Helper per inviare messaggi al popup (se aperto)
+function sendToPopup(message) {
+  chrome.runtime.sendMessage(message).catch(() => {
+    // Popup potrebbe essere chiuso, ignora l'errore
+  });
+}
+
 // Listener per installazione estensione
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Amazon Ads Manager - KDP Sync extension installed');
@@ -33,10 +40,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('[Background] KDP Scraper ready on:', request.url);
     // Invia comando per iniziare scraping
     if (scrapeTabId && sender.tab?.id === scrapeTabId) {
+      sendToPopup({ action: 'syncProgress', percent: 15, text: 'Pagina caricata, avvio scraping...' });
       setTimeout(() => {
         chrome.tabs.sendMessage(scrapeTabId, { action: 'startScraping' });
-      }, 5000); // Aspetta 5 secondi che la pagina sia completamente caricata
+      }, 3000); // Aspetta 3 secondi che la pagina sia completamente caricata
     }
+  }
+
+  // Progresso scraping dal content script
+  if (request.action === 'kdpScrapingProgress') {
+    const percent = 20 + Math.round((request.monthIndex / 12) * 60); // 20-80%
+    sendToPopup({
+      action: 'syncProgress',
+      percent: percent,
+      text: `Scaricamento ${request.monthLabel}... (${request.monthIndex + 1}/12)`
+    });
   }
 
   // Dati catturati dal content script
@@ -54,22 +72,42 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // Se abbiamo dati e JWT token, invia automaticamente al server
     if (request.success && pendingSyncJwtToken) {
       console.log('[Background] Auto-sending data to server...');
+      sendToPopup({ action: 'syncProgress', percent: 85, text: 'Invio dati al server...' });
+
       sendDataToServer(scrapedData, pendingSyncJwtToken, pendingSyncMarketplace || 'US')
         .then(result => {
           console.log('[Background] ✅ Data sent to server successfully:', result);
           updateBadge('✓', '#00aa00');
+
+          // Notifica il popup del completamento
+          sendToPopup({
+            action: 'syncComplete',
+            success: true,
+            monthsCount: scrapedData.historicalMonths?.length || 12,
+            currency: scrapedData.overview?.overviewWidget?.currency || 'USD',
+            totalRoyalties: scrapedData.overview?.overviewWidget?.totalRoyalties || 0
+          });
+
           // Salva in storage per notificare il popup
           chrome.storage.local.set({
             lastSalesSync: new Date().toISOString(),
             lastSalesSyncSuccess: true,
             lastSalesData: scrapedData
           });
+
           // Reset badge dopo 5 secondi
           setTimeout(() => updateBadge('', '#ff9900'), 5000);
         })
         .catch(error => {
           console.error('[Background] ❌ Failed to send data to server:', error);
           updateBadge('!', '#ff0000');
+
+          sendToPopup({
+            action: 'syncComplete',
+            success: false,
+            error: error.message
+          });
+
           chrome.storage.local.set({
             lastSalesSync: new Date().toISOString(),
             lastSalesSyncSuccess: false,
@@ -95,8 +133,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       scrapePromiseReject = null;
     }
 
-    // NON chiudere il tab in caso di errore - lascialo aperto per debug
-    // L'utente può chiuderlo manualmente
+    sendToPopup({
+      action: 'syncError',
+      error: request.error
+    });
+
     scrapeTabId = null;
   }
 
@@ -107,8 +148,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     pendingSyncMarketplace = request.marketplace;
     console.log('[Background] Saved JWT token for auto-send, marketplace:', pendingSyncMarketplace);
 
-    // Rispondi subito al popup (che potrebbe chiudersi)
-    sendResponse({ success: true, message: 'Scraping started - data will be sent automatically' });
+    // Rispondi subito al popup
+    sendResponse({ success: true, message: 'Scraping started' });
 
     // Avvia lo scraping in background
     startClientSideScraping()
@@ -118,9 +159,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .catch(error => {
         console.error('[Background] Scraping failed:', error.message);
         updateBadge('!', '#ff0000');
+        sendToPopup({
+          action: 'syncError',
+          error: error.message
+        });
       });
 
-    return false; // Non async - rispondiamo subito
+    return false;
   }
 
   // Popup richiede di inviare dati al server
@@ -128,7 +173,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendDataToServer(request.data, request.jwtToken, request.marketplace)
       .then(result => sendResponse({ success: true, result }))
       .catch(error => sendResponse({ success: false, error: error.message }));
-    return true; // Async
+    return true;
   }
 
   // Recupera ultimi dati scrappati
@@ -146,14 +191,14 @@ async function startClientSideScraping() {
     scrapePromiseResolve = resolve;
     scrapePromiseReject = reject;
 
-    // Timeout dopo 90 secondi
+    // Timeout dopo 120 secondi (aumentato per i 12 mesi)
     setTimeout(() => {
       if (scrapePromiseReject) {
         reject(new Error('Scraping timeout - nessun dato ricevuto'));
         scrapePromiseResolve = null;
         scrapePromiseReject = null;
       }
-    }, 90000);
+    }, 120000);
   });
 
   // Prima cerca se c'è già un tab di kdpreports aperto
@@ -171,13 +216,17 @@ async function startClientSideScraping() {
     await chrome.tabs.update(tab.id, { active: true });
     await chrome.windows.update(tab.windowId, { focused: true });
 
+    sendToPopup({ action: 'syncProgress', percent: 12, text: 'Usando tab esistente...' });
+
     // Invia direttamente il comando di scraping dopo un breve delay
     setTimeout(() => {
       console.log('[Background] Sending startScraping to existing tab');
       chrome.tabs.sendMessage(scrapeTabId, { action: 'startScraping' });
     }, 2000);
   } else {
-    // Apri nuovo tab kdpreports (URL senza hash - la SPA caricherà la dashboard)
+    // Apri nuovo tab kdpreports
+    sendToPopup({ action: 'syncProgress', percent: 10, text: 'Apertura kdpreports...' });
+
     tab = await chrome.tabs.create({
       url: 'https://kdpreports.amazon.com/dashboard',
       active: true
