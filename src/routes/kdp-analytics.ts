@@ -796,11 +796,6 @@ router.get('/analytics/book-stats', authMiddleware, async (req: AuthRequest, res
       value: parseFloat(row.value || 0)
     }));
 
-    // Get best performing date
-    const bestDate = formattedChartData.length > 0
-      ? formattedChartData.reduce((max, curr) => curr.value > max.value ? curr : max).date
-      : null;
-
     // Get book-level data
     const bookStats = await statsRepository
       .createQueryBuilder('stats')
