@@ -625,14 +625,43 @@ router.get('/analytics/historical', authMiddleware, async (req: AuthRequest, res
     };
 
     // If no data in KdpDailyStats, try to get from latest snapshot
-    if (summary.totalGrossRoyalties === 0 && formattedChartData.length === 0) {
-      const latestSnapshot = await snapshotRepository.findOne({
-        where: { userId },
-        order: { createdAt: 'DESC' }
-      });
+    const latestSnapshot = await snapshotRepository.findOne({
+      where: { userId },
+      order: { createdAt: 'DESC' }
+    });
 
-      if (latestSnapshot) {
-        // Use snapshot summary data
+    if (summary.totalGrossRoyalties === 0 && latestSnapshot) {
+      // Calculate totals from historicalMonths if available
+      if (latestSnapshot.historicalMonths && latestSnapshot.historicalMonths.length > 0) {
+        let totalRoyalties = 0;
+        let totalOrders = 0;
+        let totalReads = 0;
+
+        latestSnapshot.historicalMonths.forEach((hm: any) => {
+          totalRoyalties += hm.totalRoyalties || 0;
+          totalOrders += (hm.printOrders || 0) + (hm.digitalOrders || 0);
+          totalReads += hm.kenpRead || 0;
+        });
+
+        summary = {
+          totalGrossRoyalties: totalRoyalties,
+          totalSpending: 0,
+          totalNetRoyalties: totalRoyalties,
+          totalPaidUnits: totalOrders,
+          totalFreeUnits: 0
+        };
+
+        // Build monthly chart data from historicalMonths
+        formattedChartData = latestSnapshot.historicalMonths.map((hm: any) => ({
+          date: `${hm.month}-01`,
+          label: hm.label,
+          royalties: hm.totalRoyalties || 0,
+          spending: 0,
+          orders: (hm.printOrders || 0) + (hm.digitalOrders || 0),
+          reads: hm.kenpRead || 0
+        })).reverse(); // Oldest first
+      } else {
+        // Fallback to current month data
         summary = {
           totalGrossRoyalties: parseFloat(latestSnapshot.totalRoyalties?.toString() || '0'),
           totalSpending: 0,
@@ -640,32 +669,28 @@ router.get('/analytics/historical', authMiddleware, async (req: AuthRequest, res
           totalPaidUnits: (latestSnapshot.printOrders || 0) + (latestSnapshot.digitalOrders || 0),
           totalFreeUnits: 0
         };
+      }
 
-        // Use dailyOrders from snapshot for chart data
-        if (latestSnapshot.dailyOrders && latestSnapshot.dailyOrders.length > 0) {
-          formattedChartData = latestSnapshot.dailyOrders.map((d: any) => ({
-            date: d.date,
-            royalties: 0, // dailyOrders only has order counts, not royalties
-            spending: 0,
-            orders: d.orders || 0
-          }));
-        }
-
-        // Use topTitles from snapshot for books
-        if (latestSnapshot.topTitles && latestSnapshot.topTitles.length > 0) {
-          books = latestSnapshot.topTitles.map((t: any) => ({
-            asin: t.asin,
-            title: t.title || 'Unknown',
-            grossRoyalties: t.royalties || 0,
-            spending: 0,
-            netRoyalties: t.royalties || 0
-          }));
-        }
+      // Use topTitles from snapshot for books
+      if (latestSnapshot.topTitles && latestSnapshot.topTitles.length > 0) {
+        books = latestSnapshot.topTitles.map((t: any) => ({
+          asin: t.asin,
+          title: t.title || 'Unknown',
+          grossRoyalties: t.royalties || 0,
+          spending: 0,
+          netRoyalties: t.royalties || 0
+        }));
       }
     }
 
-    // Find best month (if data spans multiple months)
-    const bestMonth = formattedChartData.length > 0 ? formattedChartData[0].date?.substring(0, 7) : null;
+    // Find best month
+    let bestMonth = null;
+    if (formattedChartData.length > 0) {
+      const best = formattedChartData.reduce((max: any, curr: any) =>
+        (curr.royalties || 0) > (max.royalties || 0) ? curr : max
+      );
+      bestMonth = best.date?.substring(0, 7);
+    }
 
     const response = {
       period: { startDate, endDate },
@@ -789,7 +814,7 @@ router.get('/analytics/book-stats', authMiddleware, async (req: AuthRequest, res
       .orderBy('SUM(stats.grossRoyalties)', 'DESC')
       .getRawMany();
 
-    const books = [];
+    let books: any[] = [];
     for (const stat of bookStats) {
       const book = await bookRepository.findOne({
         where: { asin: stat.asin, userId }
@@ -802,10 +827,58 @@ router.get('/analytics/book-stats', authMiddleware, async (req: AuthRequest, res
       });
     }
 
+    // Fallback to snapshot if no data
+    let totalNetRoyalties = parseFloat(totalNet?.totalNetRoyalties || 0);
+    let finalChartData = formattedChartData;
+    let bestDate = formattedChartData.length > 0
+      ? formattedChartData.reduce((max, curr) => curr.value > max.value ? curr : max).date
+      : null;
+
+    if (totalNetRoyalties === 0 || formattedChartData.length === 0) {
+      const snapshotRepository = AppDataSource.getRepository(KdpSalesSnapshot);
+      const latestSnapshot = await snapshotRepository.findOne({
+        where: { userId },
+        order: { createdAt: 'DESC' }
+      });
+
+      if (latestSnapshot) {
+        // Use historicalMonths for chart data
+        if (latestSnapshot.historicalMonths && latestSnapshot.historicalMonths.length > 0) {
+          finalChartData = latestSnapshot.historicalMonths.map((hm: any) => ({
+            date: `${hm.month}-01`,
+            value: metric === 'kenp_reads' ? (hm.kenpRead || 0) :
+                   metric === 'books_sold' ? ((hm.printOrders || 0) + (hm.digitalOrders || 0)) :
+                   (hm.totalRoyalties || 0)
+          })).reverse();
+
+          totalNetRoyalties = latestSnapshot.historicalMonths.reduce(
+            (sum: number, hm: any) => sum + (hm.totalRoyalties || 0), 0
+          );
+
+          if (finalChartData.length > 0) {
+            const best = finalChartData.reduce((max: any, curr: any) =>
+              (curr.value || 0) > (max.value || 0) ? curr : max
+            );
+            bestDate = best.date;
+          }
+        }
+
+        // Use topTitles for books if empty
+        if (books.length === 0 && latestSnapshot.topTitles && latestSnapshot.topTitles.length > 0) {
+          books = latestSnapshot.topTitles.map((t: any) => ({
+            asin: t.asin,
+            title: t.title || 'Unknown',
+            grossRoyalties: t.royalties || 0,
+            spending: 0
+          }));
+        }
+      }
+    }
+
     const response = {
-      totalNetRoyalties: parseFloat(totalNet.totalNetRoyalties || 0),
+      totalNetRoyalties,
       bestDate,
-      chartData: formattedChartData,
+      chartData: finalChartData,
       books
     };
 
@@ -1012,7 +1085,37 @@ router.get('/analytics/month-comparison', authMiddleware, async (req: AuthReques
     });
 
     if (latestSnapshot) {
-      // If month2 is current month and has no data, use snapshot
+      // Helper to get month data from historicalMonths
+      const getFromHistorical = (month: string) => {
+        if (latestSnapshot.historicalMonths && latestSnapshot.historicalMonths.length > 0) {
+          const histData = latestSnapshot.historicalMonths.find((hm: any) => hm.month === month);
+          if (histData) {
+            return {
+              month,
+              grossRoyalties: histData.totalRoyalties || 0,
+              spending: 0,
+              netRoyalties: histData.totalRoyalties || 0,
+              paidUnits: (histData.printOrders || 0) + (histData.digitalOrders || 0),
+              freeUnits: 0,
+              kenpReads: histData.kenpRead || 0
+            };
+          }
+        }
+        return null;
+      };
+
+      // Try to get stats from historicalMonths if KdpDailyStats is empty
+      if (stats1.grossRoyalties === 0) {
+        const fromHist = getFromHistorical(month1);
+        if (fromHist) stats1 = fromHist;
+      }
+
+      if (stats2.grossRoyalties === 0) {
+        const fromHist = getFromHistorical(month2);
+        if (fromHist) stats2 = fromHist;
+      }
+
+      // Fallback for current month to current snapshot data
       if (month2 === currentMonth && stats2.grossRoyalties === 0) {
         stats2 = {
           month: month2,
@@ -1024,7 +1127,6 @@ router.get('/analytics/month-comparison', authMiddleware, async (req: AuthReques
           kenpReads: latestSnapshot.kenpRead || 0
         };
       }
-      // If month1 is current month and has no data, use snapshot
       if (month1 === currentMonth && stats1.grossRoyalties === 0) {
         stats1 = {
           month: month1,

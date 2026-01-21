@@ -372,6 +372,13 @@
 
         console.log(`[KDP Scraper] Fetching month ${i + 1}/12: ${monthLabel}...`);
 
+        // Invia progresso al background/popup
+        chrome.runtime.sendMessage({
+          action: 'kdpScrapingProgress',
+          monthIndex: i,
+          monthLabel: monthLabel
+        }).catch(() => {});
+
         const monthOverview = await safeFetch(
           `${baseUrl}/overview?date=${encodeURIComponent(monthDateParam)}&viewOption=THIS_MONTH`,
           { headers, credentials: 'include' }
