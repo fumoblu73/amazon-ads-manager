@@ -171,6 +171,27 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
         };
       }
 
+      // Use historical months for previous month stats if available
+      if (latestSnapshot.historicalMonths && latestSnapshot.historicalMonths.length > 1 && previousMonthStats.grossRoyalties === 0) {
+        // Find previous month in historical data (index 1 should be previous month)
+        const prevMonthKey = previousMonth.startDate.substring(0, 7); // YYYY-MM
+        const prevMonthData = latestSnapshot.historicalMonths.find((hm: any) => hm.month === prevMonthKey);
+
+        if (prevMonthData) {
+          console.log(`📊 Using historical data for previous month: ${prevMonthKey}`);
+          previousMonthStats = {
+            grossRoyalties: prevMonthData.totalRoyalties || 0,
+            spending: 0,
+            netRoyalties: prevMonthData.totalRoyalties || 0,
+            paidUnits: (prevMonthData.printOrders || 0) + (prevMonthData.digitalOrders || 0),
+            freeUnits: 0,
+            kenpReads: prevMonthData.kenpRead || 0,
+            printOrders: prevMonthData.printOrders || 0,
+            digitalOrders: prevMonthData.digitalOrders || 0
+          };
+        }
+      }
+
       // Use top titles from snapshot
       if (latestSnapshot.topTitles && latestSnapshot.topTitles.length > 0) {
         topEarnersToday = latestSnapshot.topTitles.map((t: any) => ({
@@ -304,8 +325,30 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       });
     }
 
-    // If current month has no data from KdpDailyStats but we have snapshot, use it
-    if (latestSnapshot && monthlyChartData.length > 0) {
+    // If we have snapshot with historical months, use it to fill in chart data
+    if (latestSnapshot) {
+      // Use historicalMonths from snapshot if available
+      if (latestSnapshot.historicalMonths && latestSnapshot.historicalMonths.length > 0) {
+        console.log(`📊 Using historical data from snapshot: ${latestSnapshot.historicalMonths.length} months`);
+
+        // Map historical months by month key (YYYY-MM)
+        const historicalMap = new Map();
+        latestSnapshot.historicalMonths.forEach((hm: any) => {
+          historicalMap.set(hm.month, hm);
+        });
+
+        // Update chart data with historical values
+        monthlyChartData.forEach(chartMonth => {
+          const monthKey = chartMonth.month.substring(0, 7); // YYYY-MM
+          const historicalData = historicalMap.get(monthKey);
+          if (historicalData && chartMonth.royalties === 0) {
+            chartMonth.royalties = historicalData.totalRoyalties || 0;
+            chartMonth.orders = (historicalData.printOrders || 0) + (historicalData.digitalOrders || 0);
+          }
+        });
+      }
+
+      // Fallback: use current month data from snapshot
       const lastMonthData = monthlyChartData[monthlyChartData.length - 1];
       if (lastMonthData.royalties === 0 && latestSnapshot.totalRoyalties) {
         lastMonthData.royalties = parseFloat(latestSnapshot.totalRoyalties.toString());

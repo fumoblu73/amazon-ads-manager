@@ -174,10 +174,13 @@ router.post('/sales-data', authMiddleware, async (req: AuthRequest, res: Respons
     const marketplaceDistribution = data.marketplace?.histogram?.data || [];
     // topTitles può arrivare in due formati: topTitlesWidget.topTitles o topEarningTitles
     const topTitlesData = data.topTitles?.topTitlesWidget?.topTitles || data.topTitles?.topEarningTitles || [];
+    // Historical months data (last 12 months)
+    const historicalMonths = data.historicalMonths || [];
 
     console.log(`   Overview: ${JSON.stringify(overview)}`);
     console.log(`   Orders histogram entries: ${ordersHistogram.length}`);
     console.log(`   Marketplace entries: ${marketplaceDistribution.length}`);
+    console.log(`   Historical months: ${historicalMonths.length}`);
 
     // Crea snapshot
     const snapshotRepository = AppDataSource.getRepository(KdpSalesSnapshot);
@@ -208,6 +211,15 @@ router.post('/sales-data', authMiddleware, async (req: AuthRequest, res: Respons
         asin: item.asin || '',
         title: item.title || '',
         royalties: item.royalties || 0
+      })),
+      // Historical months data
+      historicalMonths: historicalMonths.map((item: any) => ({
+        month: item.month || '',
+        label: item.label || '',
+        totalRoyalties: item.data?.totalRoyalties || 0,
+        digitalOrders: item.data?.digitalOrders || 0,
+        printOrders: item.data?.printOrders || 0,
+        kenpRead: item.data?.kenpRead || 0
       }))
     });
 

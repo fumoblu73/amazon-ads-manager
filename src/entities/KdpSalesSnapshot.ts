@@ -57,6 +57,17 @@ export class KdpSalesSnapshot {
     royalties: number;
   }[];
 
+  // Historical Monthly Data (last 12 months)
+  @Column({ type: 'jsonb', nullable: true, name: 'historical_months' })
+  historicalMonths: {
+    month: string;
+    label: string;
+    totalRoyalties: number;
+    digitalOrders: number;
+    printOrders: number;
+    kenpRead: number;
+  }[];
+
   // Metadata
   @Column({ type: 'varchar', length: 10, default: 'US' })
   marketplace: string;
