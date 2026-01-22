@@ -92,11 +92,31 @@ export default function KdpDashboard() {
       // Stato estensione
       if (type === 'KDP_EXTENSION_STATUS') {
         console.log('[Dashboard] Extension status:', event.data);
-        setExtensionStatus({
-          installed: event.data.installed,
-          authenticated: event.data.authenticated,
-          lastSync: event.data.lastSync,
-          lastSyncSuccess: event.data.lastSyncSuccess
+        setExtensionStatus(prev => {
+          // Se abbiamo già un lastSync più recente (es. appena sincronizzato), mantienilo
+          let lastSync = event.data.lastSync;
+          let lastSyncSuccess = event.data.lastSyncSuccess;
+
+          if (prev.lastSync && event.data.lastSync) {
+            const prevDate = new Date(prev.lastSync).getTime();
+            const newDate = new Date(event.data.lastSync).getTime();
+            if (prevDate > newDate) {
+              console.log('[Dashboard] Keeping more recent lastSync from state');
+              lastSync = prev.lastSync;
+              lastSyncSuccess = prev.lastSyncSuccess;
+            }
+          } else if (prev.lastSync && !event.data.lastSync) {
+            // Se l'estensione non ha lastSync ma noi sì, mantieni il nostro
+            lastSync = prev.lastSync;
+            lastSyncSuccess = prev.lastSyncSuccess;
+          }
+
+          return {
+            installed: event.data.installed,
+            authenticated: event.data.authenticated,
+            lastSync,
+            lastSyncSuccess
+          };
         });
       }
 
@@ -114,6 +134,12 @@ export default function KdpDashboard() {
         setSyncProgress({ active: false, percent: 100, text: 'Completato!' });
         if (event.data.success) {
           setShowSyncAlert(false);
+          // Aggiorna lastSync per evitare che l'alert ricompaia
+          setExtensionStatus(prev => ({
+            ...prev,
+            lastSync: new Date().toISOString(),
+            lastSyncSuccess: true
+          }));
           // Ricarica i dati della dashboard
           setTimeout(() => loadDashboardData(), 2000);
         }
@@ -137,10 +163,16 @@ export default function KdpDashboard() {
       checkExtensionStatus();
     }, 1000);
 
-    // Se dopo 3 secondi l'estensione non risponde, mostra comunque l'alert
+    // Se dopo 3 secondi l'estensione non risponde, mostra alert solo per "estensione non installata"
     const timeout2 = setTimeout(() => {
-      console.log('[Dashboard] Extension check timeout, showing alert anyway');
-      setShowSyncAlert(true);
+      // Solo se l'estensione non è stata rilevata, mostra l'alert
+      setExtensionStatus(prev => {
+        if (!prev.installed) {
+          console.log('[Dashboard] Extension not detected after 3s, showing install alert');
+          setShowSyncAlert(true);
+        }
+        return prev;
+      });
     }, 3000);
 
     return () => {
@@ -150,15 +182,15 @@ export default function KdpDashboard() {
     };
   }, [checkExtensionStatus]);
 
-  // Mostra alert se serve sync (quando estensione è rilevata)
+  // Mostra/nascondi alert in base a se serve sync (quando estensione è rilevata)
   useEffect(() => {
     if (extensionStatus.installed) {
-      console.log('[Dashboard] Extension installed, needsSync:', needsSync());
-      if (needsSync()) {
-        setShowSyncAlert(true);
-      }
+      const syncNeeded = needsSync();
+      console.log('[Dashboard] Extension installed, needsSync:', syncNeeded);
+      // Mostra alert solo se serve sync, altrimenti nascondilo
+      setShowSyncAlert(syncNeeded);
     }
-  }, [extensionStatus.installed, needsSync]);
+  }, [extensionStatus.installed, extensionStatus.lastSync, needsSync]);
 
   useEffect(() => {
     loadDashboardData();
