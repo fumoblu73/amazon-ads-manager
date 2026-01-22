@@ -224,15 +224,19 @@ async function startClientSideScraping() {
       chrome.tabs.sendMessage(scrapeTabId, { action: 'startScraping' });
     }, 2000);
   } else {
-    // Apri nuovo tab kdpreports IN BACKGROUND (active: false) per non chiudere il popup
-    sendToPopup({ action: 'syncProgress', percent: 10, text: 'Apertura kdpreports in background...' });
+    // Apri nuovo tab kdpreports - deve essere attivo per eseguire gli script correttamente
+    sendToPopup({ action: 'syncProgress', percent: 10, text: 'Apertura kdpreports...' });
+
+    // Trova la finestra corrente per aprire il tab lì
+    const currentWindow = await chrome.windows.getCurrent();
 
     tab = await chrome.tabs.create({
       url: 'https://kdpreports.amazon.com/dashboard',
-      active: false  // <-- NON attivare il tab, così il popup rimane aperto
+      active: true,  // Deve essere attivo per lo scraping
+      windowId: currentWindow.id
     });
     scrapeTabId = tab.id;
-    console.log('[Background] Opened NEW kdpreports tab in background:', tab.id);
+    console.log('[Background] Opened NEW kdpreports tab:', tab.id);
     // Il messaggio startScraping verrà inviato quando riceviamo kdpScraperReady
   }
 
