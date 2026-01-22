@@ -170,10 +170,13 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       // Use snapshot data for current month if KdpDailyStats is empty
       if (currentMonthStats.grossRoyalties === 0) {
         const currentMonthKey = currentMonth.startDate.substring(0, 7); // YYYY-MM
+        console.log(`📊 Looking for current month: ${currentMonthKey}`);
+        console.log(`📊 Available months in historicalMap: ${Array.from(historicalMap.keys()).join(', ')}`);
+
         const currentMonthHistorical = historicalMap.get(currentMonthKey);
 
         if (currentMonthHistorical) {
-          console.log(`📊 Using historical data for current month: ${currentMonthKey} = $${currentMonthHistorical.totalRoyalties}`);
+          console.log(`📊 ✅ Found historical data for current month: ${currentMonthKey} = $${currentMonthHistorical.totalRoyalties}`);
           currentMonthStats = {
             grossRoyalties: currentMonthHistorical.totalRoyalties || 0,
             spending: 0,
@@ -185,7 +188,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
             digitalOrders: currentMonthHistorical.digitalOrders || 0
           };
         } else if (latestSnapshot.totalRoyalties) {
-          console.log(`📊 Using snapshot totalRoyalties for current month: $${latestSnapshot.totalRoyalties}`);
+          console.log(`📊 ⚠️ Current month ${currentMonthKey} not in historicalMonths, using snapshot totalRoyalties: $${latestSnapshot.totalRoyalties}`);
           currentMonthStats = {
             grossRoyalties: parseFloat(latestSnapshot.totalRoyalties.toString()),
             spending: 0,
@@ -196,7 +199,11 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
             printOrders: latestSnapshot.printOrders || 0,
             digitalOrders: latestSnapshot.digitalOrders || 0
           };
+        } else {
+          console.log(`📊 ❌ No data found for current month ${currentMonthKey} - neither in historicalMonths nor snapshot`);
         }
+      } else {
+        console.log(`📊 Current month already has data from DB: $${currentMonthStats.grossRoyalties}`);
       }
 
       // Use historical months for previous month stats if available
