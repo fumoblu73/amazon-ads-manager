@@ -156,29 +156,56 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
     // If we have snapshot data and no KdpDailyStats, use snapshot
     if (latestSnapshot) {
       console.log(`📊 Using KdpSalesSnapshot data from ${latestSnapshot.createdAt}`);
+      console.log(`📊 Snapshot historicalMonths count: ${latestSnapshot.historicalMonths?.length || 0}`);
+
+      // Build historical data map for easy lookup
+      const historicalMap = new Map<string, any>();
+      if (latestSnapshot.historicalMonths && latestSnapshot.historicalMonths.length > 0) {
+        latestSnapshot.historicalMonths.forEach((hm: any) => {
+          historicalMap.set(hm.month, hm);
+          console.log(`📊 Historical month: ${hm.month} = $${hm.totalRoyalties || 0}`);
+        });
+      }
 
       // Use snapshot data for current month if KdpDailyStats is empty
-      if (currentMonthStats.grossRoyalties === 0 && latestSnapshot.totalRoyalties) {
-        currentMonthStats = {
-          grossRoyalties: parseFloat(latestSnapshot.totalRoyalties.toString()),
-          spending: 0,
-          netRoyalties: parseFloat(latestSnapshot.totalRoyalties.toString()),
-          paidUnits: (latestSnapshot.printOrders || 0) + (latestSnapshot.digitalOrders || 0),
-          freeUnits: 0,
-          kenpReads: latestSnapshot.kenpRead || 0,
-          printOrders: latestSnapshot.printOrders || 0,
-          digitalOrders: latestSnapshot.digitalOrders || 0
-        };
+      if (currentMonthStats.grossRoyalties === 0) {
+        const currentMonthKey = currentMonth.startDate.substring(0, 7); // YYYY-MM
+        const currentMonthHistorical = historicalMap.get(currentMonthKey);
+
+        if (currentMonthHistorical) {
+          console.log(`📊 Using historical data for current month: ${currentMonthKey} = $${currentMonthHistorical.totalRoyalties}`);
+          currentMonthStats = {
+            grossRoyalties: currentMonthHistorical.totalRoyalties || 0,
+            spending: 0,
+            netRoyalties: currentMonthHistorical.totalRoyalties || 0,
+            paidUnits: (currentMonthHistorical.printOrders || 0) + (currentMonthHistorical.digitalOrders || 0),
+            freeUnits: 0,
+            kenpReads: currentMonthHistorical.kenpRead || 0,
+            printOrders: currentMonthHistorical.printOrders || 0,
+            digitalOrders: currentMonthHistorical.digitalOrders || 0
+          };
+        } else if (latestSnapshot.totalRoyalties) {
+          console.log(`📊 Using snapshot totalRoyalties for current month: $${latestSnapshot.totalRoyalties}`);
+          currentMonthStats = {
+            grossRoyalties: parseFloat(latestSnapshot.totalRoyalties.toString()),
+            spending: 0,
+            netRoyalties: parseFloat(latestSnapshot.totalRoyalties.toString()),
+            paidUnits: (latestSnapshot.printOrders || 0) + (latestSnapshot.digitalOrders || 0),
+            freeUnits: 0,
+            kenpReads: latestSnapshot.kenpRead || 0,
+            printOrders: latestSnapshot.printOrders || 0,
+            digitalOrders: latestSnapshot.digitalOrders || 0
+          };
+        }
       }
 
       // Use historical months for previous month stats if available
-      if (latestSnapshot.historicalMonths && latestSnapshot.historicalMonths.length > 1 && previousMonthStats.grossRoyalties === 0) {
-        // Find previous month in historical data (index 1 should be previous month)
+      if (previousMonthStats.grossRoyalties === 0) {
         const prevMonthKey = previousMonth.startDate.substring(0, 7); // YYYY-MM
-        const prevMonthData = latestSnapshot.historicalMonths.find((hm: any) => hm.month === prevMonthKey);
+        const prevMonthData = historicalMap.get(prevMonthKey);
 
         if (prevMonthData) {
-          console.log(`📊 Using historical data for previous month: ${prevMonthKey}`);
+          console.log(`📊 Using historical data for previous month: ${prevMonthKey} = $${prevMonthData.totalRoyalties}`);
           previousMonthStats = {
             grossRoyalties: prevMonthData.totalRoyalties || 0,
             spending: 0,
