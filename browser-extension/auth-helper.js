@@ -5,7 +5,7 @@
   console.log('[Auth Helper] Script loaded');
 
   // Notifica all'app che l'estensione è installata
-  window.postMessage({ type: 'EXTENSION_INSTALLED', version: '1.2.0' }, '*');
+  window.postMessage({ type: 'EXTENSION_INSTALLED', version: '1.3.0' }, '*');
 
   // Leggi il cookie extension_token
   function getCookie(name) {
