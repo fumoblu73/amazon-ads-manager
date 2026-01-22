@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { kdpAnalyticsApi } from '../../services/api';
 import StatsCard from '../../components/kdp/StatsCard';
 import type { KdpDashboardSummary } from '../../types';
@@ -12,10 +12,137 @@ import {
   Bar
 } from 'recharts';
 
+// Tipo per lo stato dell'estensione
+interface ExtensionStatus {
+  installed: boolean;
+  authenticated: boolean;
+  lastSync: string | null;
+  lastSyncSuccess: boolean;
+}
+
+// Tipo per il progresso sync
+interface SyncProgress {
+  active: boolean;
+  percent: number;
+  text: string;
+}
+
 export default function KdpDashboard() {
   const [summary, setSummary] = useState<KdpDashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Stato estensione e sync
+  const [extensionStatus, setExtensionStatus] = useState<ExtensionStatus>({
+    installed: false,
+    authenticated: false,
+    lastSync: null,
+    lastSyncSuccess: false
+  });
+  const [syncProgress, setSyncProgress] = useState<SyncProgress>({
+    active: false,
+    percent: 0,
+    text: ''
+  });
+  const [showSyncAlert, setShowSyncAlert] = useState(false);
+
+  // Verifica se serve sync (ultimo sync > 24 ore fa o mai fatto)
+  const needsSync = useCallback(() => {
+    if (!extensionStatus.lastSync) return true;
+    const lastSyncDate = new Date(extensionStatus.lastSync);
+    const hoursSinceSync = (Date.now() - lastSyncDate.getTime()) / (1000 * 60 * 60);
+    return hoursSinceSync > 24;
+  }, [extensionStatus.lastSync]);
+
+  // Controlla stato estensione
+  const checkExtensionStatus = useCallback(() => {
+    window.postMessage({ type: 'KDP_EXTENSION_CHECK' }, '*');
+  }, []);
+
+  // Avvia sync automatico
+  const startAutoSync = useCallback(() => {
+    if (!extensionStatus.installed) {
+      alert('Estensione non installata. Installa l\'estensione Amazon Ads Manager - KDP Sync per sincronizzare i dati.');
+      return;
+    }
+    if (!extensionStatus.authenticated) {
+      alert('Estensione non autenticata. Ricarica la pagina per autenticare l\'estensione.');
+      return;
+    }
+
+    setSyncProgress({ active: true, percent: 5, text: 'Avvio sincronizzazione...' });
+    window.postMessage({ type: 'KDP_SYNC_REQUEST', action: 'startSync' }, '*');
+  }, [extensionStatus]);
+
+  // Listener per messaggi dall'estensione
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+
+      const { type } = event.data || {};
+
+      // Estensione installata
+      if (type === 'EXTENSION_INSTALLED') {
+        console.log('[Dashboard] Extension detected');
+        setExtensionStatus(prev => ({ ...prev, installed: true }));
+        checkExtensionStatus();
+      }
+
+      // Stato estensione
+      if (type === 'KDP_EXTENSION_STATUS') {
+        setExtensionStatus({
+          installed: event.data.installed,
+          authenticated: event.data.authenticated,
+          lastSync: event.data.lastSync,
+          lastSyncSuccess: event.data.lastSyncSuccess
+        });
+      }
+
+      // Progresso sync
+      if (type === 'KDP_SYNC_PROGRESS') {
+        setSyncProgress({
+          active: true,
+          percent: event.data.percent,
+          text: event.data.text
+        });
+      }
+
+      // Sync completato
+      if (type === 'KDP_SYNC_COMPLETE') {
+        setSyncProgress({ active: false, percent: 100, text: 'Completato!' });
+        if (event.data.success) {
+          setShowSyncAlert(false);
+          // Ricarica i dati della dashboard
+          setTimeout(() => loadDashboardData(), 2000);
+        }
+      }
+
+      // Errore sync
+      if (type === 'KDP_SYNC_ERROR') {
+        setSyncProgress({ active: false, percent: 0, text: '' });
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+
+    // Controlla estensione all'avvio
+    checkExtensionStatus();
+
+    // Ricontrolla dopo 1 secondo (l'estensione potrebbe non essere ancora caricata)
+    const timeout = setTimeout(checkExtensionStatus, 1000);
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      clearTimeout(timeout);
+    };
+  }, [checkExtensionStatus]);
+
+  // Mostra alert se serve sync
+  useEffect(() => {
+    if (extensionStatus.installed && needsSync()) {
+      setShowSyncAlert(true);
+    }
+  }, [extensionStatus.installed, needsSync]);
 
   useEffect(() => {
     loadDashboardData();
@@ -80,8 +207,91 @@ export default function KdpDashboard() {
 
   const { monthlyStats, dailyStats } = summary.overall;
 
+  // Formatta ultima sync
+  const formatLastSync = () => {
+    if (!extensionStatus.lastSync) return 'Mai';
+    const date = new Date(extensionStatus.lastSync);
+    return date.toLocaleString('it-IT', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   return (
     <div className="p-6 space-y-6">
+      {/* Sync Alert Banner */}
+      {(showSyncAlert || syncProgress.active) && (
+        <div className={`rounded-xl p-4 border ${
+          syncProgress.active
+            ? 'bg-blue-500/10 border-blue-500/30'
+            : 'bg-orange-500/10 border-orange-500/30'
+        }`}>
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-3">
+              {syncProgress.active ? (
+                <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <svg className="w-10 h-10 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              )}
+              <div>
+                {syncProgress.active ? (
+                  <>
+                    <p className="text-white font-medium">Sincronizzazione in corso...</p>
+                    <p className="text-blue-400 text-sm">{syncProgress.text}</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-white font-medium">Sincronizzazione dati KDP necessaria</p>
+                    <p className="text-gray-400 text-sm">
+                      Ultimo sync: {formatLastSync()}
+                      {!extensionStatus.installed && ' • Estensione non rilevata'}
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {syncProgress.active ? (
+              <div className="flex-1 min-w-[200px] max-w-md">
+                <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-blue-500 transition-all duration-300"
+                    style={{ width: `${syncProgress.percent}%` }}
+                  ></div>
+                </div>
+                <p className="text-xs text-gray-400 mt-1 text-right">{syncProgress.percent}%</p>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <button
+                  onClick={startAutoSync}
+                  disabled={!extensionStatus.installed || syncProgress.active}
+                  className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Sincronizza Ora
+                </button>
+                <button
+                  onClick={() => setShowSyncAlert(false)}
+                  className="px-3 py-2 text-gray-400 hover:text-white transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Header with dynamic period */}
       <div className="flex items-center justify-between">
         <div>
@@ -90,16 +300,30 @@ export default function KdpDashboard() {
             {summary.period.label || `${summary.period.startDate} - ${summary.period.endDate}`}
           </p>
         </div>
-        <button
-          onClick={loadDashboardData}
-          disabled={loading}
-          className="px-4 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
-        >
-          <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Sync button sempre visibile */}
+          <button
+            onClick={startAutoSync}
+            disabled={!extensionStatus.installed || syncProgress.active}
+            title={extensionStatus.installed ? 'Sincronizza dati KDP' : 'Estensione non installata'}
+            className="px-4 py-2 bg-orange-500/20 text-orange-500 rounded-lg hover:bg-orange-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            <svg className={`w-4 h-4 ${syncProgress.active ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {syncProgress.active ? 'Sync...' : 'Sync KDP'}
+          </button>
+          <button
+            onClick={loadDashboardData}
+            disabled={loading}
+            className="px-4 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
+          >
+            <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Overall Stats Tables */}
