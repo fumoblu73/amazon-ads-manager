@@ -156,10 +156,11 @@ class RegionApiClient {
     try {
       console.log(`📥 [${this.region}] Recupero campagne per profilo ${profileId}...`);
 
+      // Prima prova con l'API v3
       const response = await this.client.post('/sp/campaigns/list', {
         maxResults: 1000,
         stateFilter: {
-          include: ['ENABLED', 'PAUSED']
+          include: ['ENABLED', 'PAUSED', 'ARCHIVED']
         }
       }, {
         headers: {
@@ -169,12 +170,27 @@ class RegionApiClient {
         }
       });
 
+      console.log(`📊 [${this.region}] Response:`, JSON.stringify(response.data).substring(0, 500));
       const campaigns = response.data.campaigns || [];
       console.log(`✅ [${this.region}] Trovate ${campaigns.length} campagne`);
       return campaigns;
     } catch (error: any) {
-      console.error(`❌ [${this.region}] Errore recupero campagne:`, error.response?.data || error.message);
-      return [];
+      console.error(`❌ [${this.region}] Errore recupero campagne:`, JSON.stringify(error.response?.data || error.message));
+
+      // Fallback: prova con API v2
+      try {
+        console.log(`🔄 [${this.region}] Provo con API v2...`);
+        const response = await this.client.get('/v2/sp/campaigns', {
+          headers: {
+            'Amazon-Advertising-API-Scope': profileId
+          }
+        });
+        console.log(`✅ [${this.region}] API v2 - Trovate ${response.data?.length || 0} campagne`);
+        return response.data || [];
+      } catch (error2: any) {
+        console.error(`❌ [${this.region}] Anche API v2 fallita:`, error2.response?.data || error2.message);
+        return [];
+      }
     }
   }
 
