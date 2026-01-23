@@ -34,10 +34,19 @@ router.get('/campaigns/:marketplace', async (req: Request, res: Response) => {
     const { marketplace } = req.params;
     console.log(`📥 GET /api/amazon-ads/campaigns/${marketplace}`);
 
+    // Import per verificare il profile ID
+    const { getProfileIdForMarketplace, MARKETPLACE_TO_REGION } = await import('../config/amazon');
+    const profileId = getProfileIdForMarketplace(marketplace);
+    const region = MARKETPLACE_TO_REGION[marketplace.toUpperCase()];
+
+    console.log(`🔍 ProfileId: ${profileId}, Region: ${region}`);
+
     const campaigns = await amazonAdsService.getCampaignsForMarketplace(marketplace);
     res.json({
       success: true,
       marketplace: marketplace.toUpperCase(),
+      profileId,
+      region,
       count: campaigns.length,
       data: campaigns
     });
