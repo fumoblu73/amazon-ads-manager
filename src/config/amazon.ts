@@ -49,6 +49,25 @@ export const MARKETPLACE_TO_REGION: Record<string, 'EU' | 'NA' | 'FE'> = {
   'IN': 'FE'
 };
 
+// Profile IDs per marketplace (caricati da env)
+export const MARKETPLACE_PROFILES: Record<string, string> = {
+  'US': process.env.AMAZON_PROFILE_US || '',
+  'CA': process.env.AMAZON_PROFILE_CA || '',
+  'UK': process.env.AMAZON_PROFILE_UK || '',
+  'GB': process.env.AMAZON_PROFILE_UK || '',
+  'DE': process.env.AMAZON_PROFILE_DE || '',
+  'FR': process.env.AMAZON_PROFILE_FR || '',
+  'IT': process.env.AMAZON_PROFILE_IT || '',
+  'ES': process.env.AMAZON_PROFILE_ES || '',
+  'AU': process.env.AMAZON_PROFILE_AU || ''
+};
+
+// Funzione per ottenere il profile ID per un marketplace
+export const getProfileIdForMarketplace = (marketplace: string): string | null => {
+  const profileId = MARKETPLACE_PROFILES[marketplace.toUpperCase()];
+  return profileId || null;
+};
+
 // Carica credenziali da variabili d'ambiente
 // Supporta sia formato vecchio (AMAZON_*) che nuovo (AMAZON_EU_*, AMAZON_NA_*, AMAZON_FE_*)
 const loadMultiRegionConfig = (): MultiRegionConfig => {

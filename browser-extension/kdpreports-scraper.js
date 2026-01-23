@@ -262,9 +262,12 @@
     }
     console.log('[KDP Scraper] CSRF token found, proceeding with API calls...');
 
-    // Date per le query
+    // Date per le query - format manually to avoid timezone issues
     const now = new Date();
-    const dateParam = now.toISOString().split('.')[0] + 'Z';
+    const currentYear = now.getFullYear();
+    const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+    const currentDay = String(now.getDate()).padStart(2, '0');
+    const dateParam = `${currentYear}-${currentMonth}-${currentDay}T12:00:00Z`; // Use noon UTC
 
     const baseUrl = 'https://kdpreports.amazon.com/reports/dashboard';
     const headers = {
@@ -366,11 +369,29 @@
       capturedData.historicalMonths = [];
 
       for (let i = 0; i < 12; i++) {
+        // For current month (i=0), use today's date to get all data
+        // For past months, use the last day of that month
+        const isCurrentMonth = (i === 0);
         const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const monthDateParam = monthDate.toISOString().split('.')[0] + 'Z';
+
+        // Format date manually to avoid timezone conversion issues
+        const year = monthDate.getFullYear();
+        const month = String(monthDate.getMonth() + 1).padStart(2, '0');
+        const monthKey = `${year}-${month}`; // YYYY-MM format
+
+        // For current month use today, for past months use last day of month
+        let dayForQuery;
+        if (isCurrentMonth) {
+          dayForQuery = String(now.getDate()).padStart(2, '0');
+        } else {
+          // Last day of the month
+          const lastDay = new Date(year, monthDate.getMonth() + 1, 0).getDate();
+          dayForQuery = String(lastDay).padStart(2, '0');
+        }
+        const monthDateParam = `${year}-${month}-${dayForQuery}T12:00:00Z`;
         const monthLabel = monthDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 
-        console.log(`[KDP Scraper] Fetching month ${i + 1}/12: ${monthLabel}...`);
+        console.log(`[KDP Scraper] Fetching month ${i + 1}/12: ${monthLabel} (${monthKey})...`);
 
         // Invia progresso al background/popup
         chrome.runtime.sendMessage({
@@ -384,14 +405,21 @@
           { headers, credentials: 'include' }
         );
 
-        if (monthOverview?.overviewWidget) {
-          capturedData.historicalMonths.push({
-            month: monthDate.toISOString().split('T')[0].substring(0, 7), // YYYY-MM format
-            label: monthLabel,
-            data: monthOverview.overviewWidget
-          });
-          console.log(`[KDP Scraper] Month ${monthLabel}: $${monthOverview.overviewWidget.totalRoyalties?.toFixed(2) || 0}`);
-        }
+        // Always include the month, even if data is empty (use zeros as defaults)
+        const monthData = monthOverview?.overviewWidget || {
+          currency: 'USD',
+          digitalOrders: 0,
+          printOrders: 0,
+          kenpRead: 0,
+          totalRoyalties: 0
+        };
+
+        capturedData.historicalMonths.push({
+          month: monthKey, // YYYY-MM format (manually calculated to avoid timezone issues)
+          label: monthLabel,
+          data: monthData
+        });
+        console.log(`[KDP Scraper] Month ${monthLabel}: $${monthData.totalRoyalties?.toFixed(2) || 0}`);
 
         // Small delay to avoid rate limiting
         await new Promise(r => setTimeout(r, 300));

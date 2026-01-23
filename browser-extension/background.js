@@ -12,11 +12,29 @@ let scrapePromiseReject = null;
 let pendingSyncJwtToken = null;
 let pendingSyncMarketplace = null;
 
-// Helper per inviare messaggi al popup (se aperto)
-function sendToPopup(message) {
+// Helper per inviare messaggi al popup (se aperto) E ai content scripts dell'app
+async function sendToPopup(message) {
+  // Invia al popup
   chrome.runtime.sendMessage(message).catch(() => {
     // Popup potrebbe essere chiuso, ignora l'errore
   });
+
+  // Invia anche ai tab dell'app (dove gira auth-helper.js)
+  try {
+    const appTabs = await chrome.tabs.query({
+      url: [
+        'https://amazon-ads-manager-qsio.onrender.com/*',
+        'http://localhost:3000/*'
+      ]
+    });
+    for (const tab of appTabs) {
+      chrome.tabs.sendMessage(tab.id, message).catch(() => {
+        // Tab potrebbe non avere il content script, ignora
+      });
+    }
+  } catch (e) {
+    // Ignora errori
+  }
 }
 
 // Listener per installazione estensione
@@ -117,10 +135,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         .finally(() => {
           pendingSyncJwtToken = null;
           pendingSyncMarketplace = null;
-        });
-    }
 
-    scrapeTabId = null;
+          // Chiudi il tab di kdpreports dopo il sync (successo o errore)
+          if (scrapeTabId) {
+            const tabToClose = scrapeTabId;
+            setTimeout(() => {
+              chrome.tabs.remove(tabToClose).catch(() => {
+                // Tab potrebbe essere già chiuso, ignora
+              });
+              console.log('[Background] Closed kdpreports tab:', tabToClose);
+            }, 2000);
+          }
+          scrapeTabId = null;
+        });
+    } else {
+      scrapeTabId = null;
+    }
   }
 
   // Scraping fallito
@@ -224,7 +254,7 @@ async function startClientSideScraping() {
       chrome.tabs.sendMessage(scrapeTabId, { action: 'startScraping' });
     }, 2000);
   } else {
-    // Apri nuovo tab kdpreports - deve essere attivo per eseguire gli script correttamente
+    // Apri nuovo tab kdpreports in background
     sendToPopup({ action: 'syncProgress', percent: 10, text: 'Apertura kdpreports...' });
 
     // Trova la finestra corrente per aprire il tab lì
@@ -232,11 +262,11 @@ async function startClientSideScraping() {
 
     tab = await chrome.tabs.create({
       url: 'https://kdpreports.amazon.com/dashboard',
-      active: true,  // Deve essere attivo per lo scraping
+      active: false,  // Apri in background per non disturbare l'utente
       windowId: currentWindow.id
     });
     scrapeTabId = tab.id;
-    console.log('[Background] Opened NEW kdpreports tab:', tab.id);
+    console.log('[Background] Opened NEW kdpreports tab in background:', tab.id);
     // Il messaggio startScraping verrà inviato quando riceviamo kdpScraperReady
   }
 

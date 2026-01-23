@@ -14,6 +14,7 @@ import kdpSyncRoutes from './routes/kdp-sync';
 import authRoutes from './routes/auth';
 import settingsRoutes from './routes/settings';
 import migrateRoutes from './routes/migrate.routes';
+import amazonAdsRoutes from './routes/amazon-ads';
 import { initializeDatabase } from './config/database';
 import { kdpSyncScheduler } from './services/kdp-sync-scheduler';
 import { automationScheduler } from './automation/scheduler';
@@ -58,7 +59,12 @@ if (process.env.NODE_ENV !== 'production') {
         kdp_dashboard: '/api/kdp/dashboard/summary',
         kdp_analytics: '/api/kdp/analytics/*',
         kdp_bsr: '/api/kdp/bsr',
-        kdp_journal: '/api/kdp/journal-events'
+        kdp_journal: '/api/kdp/journal-events',
+        amazon_ads_health: '/api/amazon-ads/health',
+        amazon_ads_profiles: '/api/amazon-ads/profiles',
+        amazon_ads_campaigns: '/api/amazon-ads/campaigns/:marketplace',
+        amazon_ads_performance: '/api/amazon-ads/performance/:marketplace?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD',
+        amazon_ads_summary: '/api/amazon-ads/summary?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD'
       }
     });
   });
@@ -83,6 +89,9 @@ app.use('/api/books', booksRoutes);
 app.use('/api/campaigns', campaignsRoutes);
 app.use('/api/logs', logsRoutes);
 app.use('/api/settings', settingsRoutes);
+
+// Amazon Ads API Routes
+app.use('/api/amazon-ads', amazonAdsRoutes);
 
 // KDP Analytics Routes
 app.use('/api/kdp/books', kdpBooksRoutes);
