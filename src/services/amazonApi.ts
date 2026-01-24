@@ -7,19 +7,47 @@
 import axios, { AxiosInstance } from 'axios';
 import { amazonConfig, getApiEndpoint } from '../config/amazon';
 
+// Interfaccia per configurazione custom
+export interface AmazonApiConfig {
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+  profileId: string;
+  endpoint: string;
+  marketplace?: string;
+}
+
 // Classe che gestisce tutte le interazioni con l'API Amazon
 class AmazonApiService {
   private client: AxiosInstance;  // Client HTTP per fare richieste
   private accessToken: string = '';  // Token di accesso (si rinnova automaticamente)
   private tokenExpiry: number = 0;   // Timestamp scadenza token
+  private config: AmazonApiConfig;   // Configurazione (custom o default)
+  private marketplace: string;       // Marketplace per logging
 
-  constructor() {
+  constructor(customConfig?: AmazonApiConfig) {
+    // Usa configurazione custom se fornita, altrimenti fallback a config globale
+    if (customConfig) {
+      this.config = customConfig;
+      this.marketplace = customConfig.marketplace || 'CUSTOM';
+    } else {
+      // Fallback alla configurazione globale legacy
+      this.config = {
+        clientId: amazonConfig.clientId,
+        clientSecret: amazonConfig.clientSecret,
+        refreshToken: amazonConfig.refreshToken,
+        profileId: amazonConfig.profileId,
+        endpoint: getApiEndpoint()
+      };
+      this.marketplace = 'DEFAULT';
+    }
+
     // Crea un client axios configurato per Amazon API
     this.client = axios.create({
-      baseURL: getApiEndpoint(),  // URL base dell'API
+      baseURL: this.config.endpoint,
       headers: {
         'Content-Type': 'application/json',
-        'Amazon-Advertising-API-ClientId': amazonConfig.clientId
+        'Amazon-Advertising-API-ClientId': this.config.clientId
       }
     });
 
@@ -31,10 +59,20 @@ class AmazonApiService {
 
       // Aggiunge il token all'header Authorization
       config.headers.Authorization = `Bearer ${this.accessToken}`;
-      config.headers['Amazon-Advertising-API-Scope'] = amazonConfig.profileId;
+      config.headers['Amazon-Advertising-API-Scope'] = this.config.profileId;
 
       return config;
     });
+  }
+
+  // Getter per il marketplace
+  getMarketplace(): string {
+    return this.marketplace;
+  }
+
+  // Getter per il profileId
+  getProfileId(): string {
+    return this.config.profileId;
   }
 
   // ================================================
@@ -58,24 +96,24 @@ class AmazonApiService {
   // Rinnova il token di accesso usando il refresh token
   private async refreshAccessToken(): Promise<void> {
     try {
-      console.log('🔄 Rinnovo token di accesso Amazon...');
+      console.log(`🔄 [${this.marketplace}] Rinnovo token di accesso Amazon...`);
 
       // Chiamata all'endpoint di autenticazione Amazon
       const response = await axios.post('https://api.amazon.com/auth/o2/token', {
         grant_type: 'refresh_token',
-        refresh_token: amazonConfig.refreshToken,
-        client_id: amazonConfig.clientId,
-        client_secret: amazonConfig.clientSecret
+        refresh_token: this.config.refreshToken,
+        client_id: this.config.clientId,
+        client_secret: this.config.clientSecret
       });
 
       // Salva il nuovo token e calcola quando scadrà
       this.accessToken = response.data.access_token;
       this.tokenExpiry = Date.now() + (response.data.expires_in * 1000);
 
-      console.log('✅ Token rinnovato con successo');
+      console.log(`✅ [${this.marketplace}] Token rinnovato con successo`);
     } catch (error) {
-      console.error('❌ Errore rinnovo token:', error);
-      throw new Error('Impossibile autenticarsi con Amazon API');
+      console.error(`❌ [${this.marketplace}] Errore rinnovo token:`, error);
+      throw new Error(`Impossibile autenticarsi con Amazon API per ${this.marketplace}`);
     }
   }
 
@@ -106,9 +144,10 @@ class AmazonApiService {
   // METODI PER CAMPAGNE
   // ================================================
 
-  // Recupera tutte le campagne del profilo di default
+  // Recupera tutte le campagne del profilo dell'istanza
   async getCampaigns(): Promise<any[]> {
-    return this.getCampaignsForProfile(amazonConfig.profileId);
+    // Usa il profileId dell'istanza (non della config globale)
+    return this.getCampaignsForProfile(this.config.profileId);
   }
 
   // Recupera tutte le campagne per un profilo specifico
@@ -621,6 +660,9 @@ class AmazonApiService {
   }
 }
 
+// Esporta la classe per permettere la creazione di istanze custom
+export { AmazonApiService };
+
 // Esporta un'istanza unica del servizio (Singleton pattern)
-// In questo modo usi sempre lo stesso client con lo stesso token
+// Usata per backward compatibility con codice esistente
 export const amazonApiService = new AmazonApiService();

@@ -5,6 +5,7 @@
 
 import { Router, Request, Response } from 'express';
 import { amazonAdsService } from '../services/amazon-ads.service';
+import { adsSpendSyncService } from '../services/ads-spend-sync.service';
 
 const router = Router();
 
@@ -180,6 +181,99 @@ router.get('/health', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       status: 'error',
+      error: error.message
+    });
+  }
+});
+
+// ================================================
+// SYNC AD SPEND TO DATABASE
+// ================================================
+
+// POST /api/amazon-ads/sync-spend
+// Sincronizza i dati di spesa pubblicitaria nel database KdpDailyStats
+// Body: { startDate, endDate, marketplace? }
+router.post('/sync-spend', async (req: Request, res: Response) => {
+  try {
+    const { startDate, endDate, marketplace } = req.body;
+
+    // Default: ultimi 30 giorni
+    const end = endDate || new Date().toISOString().split('T')[0];
+    const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    // TODO: In produzione, recuperare userId dal token JWT
+    // Per ora usiamo un userId di test o dal body
+    const userId = req.body.userId || 'default-user';
+
+    console.log(`📥 POST /api/amazon-ads/sync-spend`);
+    console.log(`   UserId: ${userId}`);
+    console.log(`   Periodo: ${start} - ${end}`);
+    console.log(`   Marketplace: ${marketplace || 'TUTTI'}`);
+
+    let result;
+
+    if (marketplace) {
+      // Sync singolo marketplace
+      const syncResult = await adsSpendSyncService.syncMarketplace(userId, marketplace, start, end);
+      result = {
+        totalRecordsSaved: syncResult.recordsSaved,
+        marketplaceResults: [{
+          marketplace,
+          success: syncResult.success,
+          recordsSaved: syncResult.recordsSaved
+        }]
+      };
+    } else {
+      // Sync tutti i marketplace
+      result = await adsSpendSyncService.syncAllMarketplaces(userId, start, end);
+    }
+
+    res.json({
+      success: true,
+      message: `Sync completato: ${result.totalRecordsSaved} record salvati`,
+      dateRange: { startDate: start, endDate: end },
+      ...result
+    });
+  } catch (error: any) {
+    console.error('❌ Errore sync ad spend:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// POST /api/amazon-ads/sync-spend/:marketplace
+// Sincronizza i dati di spesa per un singolo marketplace
+router.post('/sync-spend/:marketplace', async (req: Request, res: Response) => {
+  try {
+    const { marketplace } = req.params;
+    const { startDate, endDate } = req.body;
+
+    // Default: ultimi 30 giorni
+    const end = endDate || new Date().toISOString().split('T')[0];
+    const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const userId = req.body.userId || 'default-user';
+
+    console.log(`📥 POST /api/amazon-ads/sync-spend/${marketplace}`);
+    console.log(`   Periodo: ${start} - ${end}`);
+
+    const result = await adsSpendSyncService.syncMarketplace(userId, marketplace, start, end);
+
+    res.json({
+      success: result.success,
+      message: result.success
+        ? `Sync ${marketplace} completato: ${result.recordsSaved} record salvati`
+        : `Sync ${marketplace} fallito`,
+      dateRange: { startDate: start, endDate: end },
+      marketplace,
+      recordsSaved: result.recordsSaved
+    });
+  } catch (error: any) {
+    console.error('❌ Errore sync ad spend:', error.message);
+    res.status(500).json({
+      success: false,
       error: error.message
     });
   }
