@@ -9,6 +9,11 @@
 
 import { amazonApiService } from '../services/amazonApi';
 import { createUserAmazonApiService } from '../services/UserAmazonApiFactory';
+import {
+  createMarketplaceApiService,
+  getConfiguredMarketplaces,
+  isMarketplaceConfigured
+} from '../services/MarketplaceApiFactory';
 import { AppDataSource } from '../config/database';
 import { Campaign } from '../models/Campaign';
 import { isInWarmupPeriod } from '../utils/timeframe';
@@ -22,76 +27,133 @@ import { executeFunc4, shouldExecuteFunc4 } from './functions/func4';
 import { executeFunc5, shouldExecuteFunc5, CampaignMapping } from './functions/func5';
 
 /**
- * FUNZIONE PRINCIPALE
- * Esegue tutte le automazioni per tutte le campagne
+ * FUNZIONE PRINCIPALE (MULTI-MARKETPLACE)
+ * Esegue tutte le automazioni per tutte le campagne su tutti i marketplace configurati
  */
 export async function runAutomationRules(): Promise<void> {
-  console.log('🎯 Inizio esecuzione regole di automazione\n');
+  console.log('🎯 Inizio esecuzione regole di automazione (MULTI-MARKETPLACE)\n');
 
   try {
     // ================================================
-    // 1. RECUPERA TUTTE LE CAMPAGNE
+    // 1. RECUPERA MARKETPLACE CONFIGURATI
     // ================================================
-    const campaigns = await amazonApiService.getCampaigns();
-    console.log(`📊 Trovate ${campaigns.length} campagne totali`);
+    const configuredMarketplaces = getConfiguredMarketplaces();
+    console.log(`🌍 Marketplace configurati: ${configuredMarketplaces.join(', ')}`);
 
-    // Filtra solo campagne enabled
-    const activeCampaigns = campaigns.filter((c: any) => c.state === 'enabled');
-    console.log(`✅ Campagne attive: ${activeCampaigns.length}\n`);
-
-    if (activeCampaigns.length === 0) {
-      console.log('⚠️  Nessuna campagna attiva. Nulla da fare.');
+    if (configuredMarketplaces.length === 0) {
+      console.log('⚠️  Nessun marketplace configurato. Nulla da fare.');
       return;
     }
 
-    // ================================================
-    // 2. RAGGRUPPA CAMPAGNE PER LIBRO (ASIN)
-    // ================================================
-    // Assumiamo che ogni campagna abbia un campo bookId o asin
-    // Per semplificare, processiamo ogni campagna individualmente
-    // In un'app reale, dovresti raggruppare per libro per la Funzione 5
-
-    const stats = {
-      campaignsProcessed: 0,
-      campaignsInWarmup: 0,
+    const globalStats = {
+      totalCampaignsProcessed: 0,
+      totalCampaignsInWarmup: 0,
       func1Executed: 0,
       func2Executed: 0,
       func3Executed: 0,
       func4Executed: 0,
       func5Executed: 0,
-      errors: 0
+      errors: 0,
+      byMarketplace: {} as Record<string, { campaigns: number; functions: number }>
     };
 
     // ================================================
-    // 3. PROCESSA OGNI CAMPAGNA
+    // 2. PROCESSA OGNI MARKETPLACE
     // ================================================
-    for (const campaign of activeCampaigns) {
+    for (const marketplace of configuredMarketplaces) {
+      console.log(`\n${'='.repeat(60)}`);
+      console.log(`🌍 MARKETPLACE: ${marketplace}`);
+      console.log('='.repeat(60));
+
       try {
-        await processCampaign(campaign, stats);
-      } catch (error) {
-        stats.errors++;
-        console.error(`❌ Errore elaborazione campagna ${campaign.name}:`, error);
+        // Crea API service per questo marketplace
+        const apiService = createMarketplaceApiService(marketplace);
+
+        // Recupera campagne per questo marketplace
+        const campaigns = await apiService.getCampaigns();
+        console.log(`📊 Trovate ${campaigns.length} campagne totali`);
+
+        // Filtra solo campagne enabled
+        const activeCampaigns = campaigns.filter((c: any) =>
+          c.state === 'enabled' || c.state === 'ENABLED'
+        );
+        console.log(`✅ Campagne attive: ${activeCampaigns.length}`);
+
+        globalStats.byMarketplace[marketplace] = { campaigns: activeCampaigns.length, functions: 0 };
+
+        if (activeCampaigns.length === 0) {
+          console.log(`⚠️  [${marketplace}] Nessuna campagna attiva. Skip.`);
+          continue;
+        }
+
+        const stats = {
+          campaignsProcessed: 0,
+          campaignsInWarmup: 0,
+          func1Executed: 0,
+          func2Executed: 0,
+          func3Executed: 0,
+          func4Executed: 0,
+          func5Executed: 0,
+          errors: 0
+        };
+
+        // Processa ogni campagna
+        for (const campaign of activeCampaigns) {
+          try {
+            await processCampaignWithApiService(campaign, stats, apiService, marketplace);
+          } catch (error) {
+            stats.errors++;
+            console.error(`❌ [${marketplace}] Errore campagna ${campaign.name}:`, error);
+          }
+        }
+
+        // Accumula statistiche
+        globalStats.totalCampaignsProcessed += stats.campaignsProcessed;
+        globalStats.totalCampaignsInWarmup += stats.campaignsInWarmup;
+        globalStats.func1Executed += stats.func1Executed;
+        globalStats.func2Executed += stats.func2Executed;
+        globalStats.func3Executed += stats.func3Executed;
+        globalStats.func4Executed += stats.func4Executed;
+        globalStats.func5Executed += stats.func5Executed;
+        globalStats.errors += stats.errors;
+        globalStats.byMarketplace[marketplace].functions =
+          stats.func1Executed + stats.func2Executed + stats.func3Executed +
+          stats.func4Executed + stats.func5Executed;
+
+        console.log(`✅ [${marketplace}] Completato: ${stats.campaignsProcessed} campagne processate`);
+
+      } catch (error: any) {
+        globalStats.errors++;
+        console.error(`❌ [${marketplace}] Errore marketplace: ${error.message}`);
       }
+
+      // Delay tra marketplace per evitare rate limiting
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
     // ================================================
-    // 4. RIEPILOGO FINALE
+    // 3. RIEPILOGO FINALE GLOBALE
     // ================================================
     console.log('\n' + '='.repeat(60));
-    console.log('📊 RIEPILOGO ESECUZIONE AUTOMAZIONI');
+    console.log('📊 RIEPILOGO ESECUZIONE AUTOMAZIONI (TUTTI I MARKETPLACE)');
     console.log('='.repeat(60));
-    console.log(`Campagne processate: ${stats.campaignsProcessed}`);
-    console.log(`Campagne in warmup (saltate): ${stats.campaignsInWarmup}`);
-    console.log(`\nFunzioni eseguite:`);
-    console.log(`  - Funzione 1 (Progressive Bidding): ${stats.func1Executed}`);
-    console.log(`  - Funzione 2 (Placement Optimization): ${stats.func2Executed}`);
-    console.log(`  - Funzione 3 (Targeting Optimization): ${stats.func3Executed}`);
-    console.log(`  - Funzione 4 (Auto Ad Optimization): ${stats.func4Executed}`);
-    console.log(`  - Funzione 5 (Campaign Feeding): ${stats.func5Executed}`);
-    console.log(`\nErrori: ${stats.errors}`);
+    console.log(`Marketplace processati: ${configuredMarketplaces.length}`);
+    console.log(`Campagne totali processate: ${globalStats.totalCampaignsProcessed}`);
+    console.log(`Campagne in warmup (saltate): ${globalStats.totalCampaignsInWarmup}`);
+    console.log(`\nPer marketplace:`);
+    Object.entries(globalStats.byMarketplace).forEach(([mp, data]) => {
+      console.log(`   - ${mp}: ${data.campaigns} campagne, ${data.functions} funzioni`);
+    });
+    console.log(`\nFunzioni eseguite totali:`);
+    console.log(`  - Funzione 1 (Progressive Bidding): ${globalStats.func1Executed}`);
+    console.log(`  - Funzione 2 (Placement Optimization): ${globalStats.func2Executed}`);
+    console.log(`  - Funzione 3 (Targeting Optimization): ${globalStats.func3Executed}`);
+    console.log(`  - Funzione 4 (Auto Ad Optimization): ${globalStats.func4Executed}`);
+    console.log(`  - Funzione 5 (Campaign Feeding): ${globalStats.func5Executed}`);
+    console.log(`\nErrori totali: ${globalStats.errors}`);
     console.log('='.repeat(60));
 
-    console.log('\n🎯 Tutte le regole sono state eseguite\n');
+    console.log('\n🎯 Tutte le regole sono state eseguite su tutti i marketplace\n');
 
   } catch (error) {
     console.error('❌ Errore fatale durante esecuzione automazioni:', error);
@@ -365,6 +427,239 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
 }
 
 /**
+ * Processa una singola campagna con un apiService specifico (per multi-marketplace)
+ * @param campaign - Campagna da processare
+ * @param stats - Oggetto statistiche
+ * @param apiService - Istanza AmazonApiService per il marketplace specifico
+ * @param marketplace - Codice marketplace
+ */
+async function processCampaignWithApiService(
+  campaign: any,
+  stats: any,
+  apiService: any,
+  marketplace: string
+): Promise<void> {
+  stats.campaignsProcessed++;
+
+  const campaignId = campaign.campaignId;
+  const campaignName = campaign.name;
+  const campaignType = determineCampaignType(campaign);
+  const createdAt = new Date(campaign.startDate || campaign.creationDate || Date.now());
+
+  console.log(`\n${'─'.repeat(50)}`);
+  console.log(`📢 [${marketplace}] Campagna: ${campaignName}`);
+  console.log(`   Tipo: ${campaignType} | ID: ${campaignId}`);
+  console.log(`${'─'.repeat(50)}`);
+
+  // Controllo periodo di warmup
+  if (isInWarmupPeriod(createdAt)) {
+    console.log(`⏳ [${marketplace}] Campagna in warmup (< 7 giorni). Skip.`);
+    stats.campaignsInWarmup++;
+    return;
+  }
+
+  // Configurazione mock (in produzione: recuperare da database)
+  const mockBook = {
+    price: 15,
+    printingCost: 3,
+    royaltyPercentage: 60
+  };
+
+  const mockConfig = {
+    func1_enabled: true,
+    func1_bidIncrease: 0.02,
+    func1_frequency: 3,
+    func1_impressions: 20,
+    func1_clicks: 0,
+
+    func2_enabled: true,
+    func2_frequency: 7,
+    func2_timeframeWeeks: 4,
+
+    func3_enabled: true,
+    func3_frequency: 3,
+    func3_timeframeA: 2000,
+    func3_timeframeB: 3000,
+    func3_timeframeC: 5000,
+    func3_clicksPause: 10,
+    func3_clicks65days: 30,
+
+    func4_enabled: true,
+    func4_frequency: 7,
+    func4_timeframeA: 1000,
+    func4_timeframeB: 3000,
+    func4_timeframeC: 5000,
+    func4_clicksNegative: 10,
+    func4_spendNegative: 10,
+
+    func5_enabled: true,
+    func5_frequency: 7,
+    func5_minOrders: 1,
+    func5_bidBroad: 0.30,
+    func5_bidExact: 0.50,
+    func5_bidPhrase: 0.40,
+    func5_bidExpanded: 0.30
+  };
+
+  const mockPlacements = { topOfSearch: 0, restOfSearch: 10, productPages: 5 };
+  const mockTotalImpressions = 50000;
+  const mockAdGroupId = campaign.adGroupId || 'mock-adgroup-id';
+
+  // FUNZIONE 1: Progressive Bidding Increase
+  if (shouldExecuteFunc1(campaignType) && mockConfig.func1_enabled) {
+    const shouldRun = automationScheduler.shouldExecuteFunction(
+      `func1_${marketplace}_${campaignId}`,
+      mockConfig.func1_frequency,
+      createdAt
+    );
+
+    if (shouldRun) {
+      try {
+        await executeFunc1(campaignId, campaignType as any, campaignName, marketplace, apiService, {
+          bidIncrease: mockConfig.func1_bidIncrease,
+          frequency: mockConfig.func1_frequency,
+          maxImpressions: mockConfig.func1_impressions,
+          maxClicks: mockConfig.func1_clicks
+        });
+        automationScheduler.markFunctionExecuted(`func1_${marketplace}_${campaignId}`);
+        stats.func1Executed++;
+      } catch (error: any) {
+        console.error(`❌ [${marketplace}] Errore Func1: ${error.message}`);
+      }
+    }
+  }
+
+  // FUNZIONE 3: Targeting Optimization
+  if (shouldExecuteFunc3(campaignType) && mockConfig.func3_enabled) {
+    const shouldRun = automationScheduler.shouldExecuteFunction(
+      `func3_${marketplace}_${campaignId}`,
+      mockConfig.func3_frequency,
+      createdAt
+    );
+
+    if (shouldRun) {
+      try {
+        await executeFunc3(
+          campaignId, campaignType as any, campaignName, marketplace,
+          mockBook, mockTotalImpressions, apiService,
+          {
+            frequency: mockConfig.func3_frequency,
+            timeframeA: mockConfig.func3_timeframeA,
+            timeframeB: mockConfig.func3_timeframeB,
+            timeframeC: mockConfig.func3_timeframeC,
+            clicksPause: mockConfig.func3_clicksPause,
+            clicks65days: mockConfig.func3_clicks65days
+          }
+        );
+        automationScheduler.markFunctionExecuted(`func3_${marketplace}_${campaignId}`);
+        stats.func3Executed++;
+      } catch (error: any) {
+        console.error(`❌ [${marketplace}] Errore Func3: ${error.message}`);
+      }
+    }
+  }
+
+  // FUNZIONE 2: Placement Optimization
+  if (shouldExecuteFunc2(campaignType) && mockConfig.func2_enabled) {
+    const shouldRun = automationScheduler.shouldExecuteFunction(
+      `func2_${marketplace}_${campaignId}`,
+      mockConfig.func2_frequency,
+      createdAt
+    );
+
+    if (shouldRun) {
+      try {
+        await executeFunc2(
+          campaignId, campaignName, marketplace,
+          mockBook, mockPlacements, apiService,
+          {
+            frequency: mockConfig.func2_frequency,
+            placementTimeframeWeeks: mockConfig.func2_timeframeWeeks
+          }
+        );
+        automationScheduler.markFunctionExecuted(`func2_${marketplace}_${campaignId}`);
+        stats.func2Executed++;
+      } catch (error: any) {
+        console.error(`❌ [${marketplace}] Errore Func2: ${error.message}`);
+      }
+    }
+  }
+
+  // FUNZIONE 4: Auto Ad Optimization
+  if (shouldExecuteFunc4(campaignType) && mockConfig.func4_enabled) {
+    const shouldRun = automationScheduler.shouldExecuteFunction(
+      `func4_${marketplace}_${campaignId}`,
+      mockConfig.func4_frequency,
+      createdAt
+    );
+
+    if (shouldRun) {
+      try {
+        await executeFunc4(
+          campaignId, campaignName, marketplace,
+          mockAdGroupId, mockBook, mockTotalImpressions, apiService,
+          {
+            frequency: mockConfig.func4_frequency,
+            timeframeA: mockConfig.func4_timeframeA,
+            timeframeB: mockConfig.func4_timeframeB,
+            timeframeC: mockConfig.func4_timeframeC,
+            clicksNegative: mockConfig.func4_clicksNegative,
+            spendNegative: mockConfig.func4_spendNegative
+          }
+        );
+        automationScheduler.markFunctionExecuted(`func4_${marketplace}_${campaignId}`);
+        stats.func4Executed++;
+      } catch (error: any) {
+        console.error(`❌ [${marketplace}] Errore Func4: ${error.message}`);
+      }
+    }
+  }
+
+  // FUNZIONE 5: Campaign Feeding
+  if (shouldExecuteFunc5(campaignType) && mockConfig.func5_enabled) {
+    const shouldRun = automationScheduler.shouldExecuteFunction(
+      `func5_${marketplace}_${campaignId}`,
+      mockConfig.func5_frequency,
+      createdAt
+    );
+
+    if (shouldRun) {
+      try {
+        const mockCampaignMapping: CampaignMapping = {
+          campaign1Id: 'mock-campaign-1',
+          campaign1AdGroupId: 'mock-adgroup-1',
+          campaign2Id: 'mock-campaign-2',
+          campaign2AdGroupId: 'mock-adgroup-2',
+          campaign3Id: 'mock-campaign-3',
+          campaign3AdGroupId: 'mock-adgroup-3',
+          campaign4Id: 'mock-campaign-4',
+          campaign4AdGroupId: 'mock-adgroup-4',
+          campaign5Id: campaignId,
+          campaign5AdGroupId: mockAdGroupId
+        };
+
+        await executeFunc5(
+          campaignId, campaignType as any, marketplace,
+          mockCampaignMapping, apiService,
+          {
+            frequency: mockConfig.func5_frequency,
+            minOrders: mockConfig.func5_minOrders,
+            bidBroad: mockConfig.func5_bidBroad,
+            bidExact: mockConfig.func5_bidExact,
+            bidPhrase: mockConfig.func5_bidPhrase,
+            bidExpanded: mockConfig.func5_bidExpanded
+          }
+        );
+        automationScheduler.markFunctionExecuted(`func5_${marketplace}_${campaignId}`);
+        stats.func5Executed++;
+      } catch (error: any) {
+        console.error(`❌ [${marketplace}] Errore Func5: ${error.message}`);
+      }
+    }
+  }
+}
+
+/**
  * Determina il tipo di campagna (1-5) in base al nome o ad altri criteri
  * In un'app reale, questo dovrebbe essere memorizzato nel database
  */
@@ -386,15 +681,21 @@ function determineCampaignType(campaign: any): 1 | 2 | 3 | 4 | 5 {
 }
 
 /**
- * PER-USER AUTOMATION EXECUTION
- * Runs automation rules for a specific user using their OAuth tokens
+ * PER-USER AUTOMATION EXECUTION (MULTI-MARKETPLACE)
+ * Runs automation rules for a specific user across all configured marketplaces
  */
 export async function runAutomationRulesForUser(userId: string): Promise<void> {
   console.log(`\n🤖 Running automations for user ${userId}...`);
 
   try {
-    // Create per-user API service
-    const apiService = createUserAmazonApiService(userId);
+    // Get configured marketplaces
+    const configuredMarketplaces = getConfiguredMarketplaces();
+    console.log(`🌍 Configured marketplaces: ${configuredMarketplaces.join(', ')}`);
+
+    if (configuredMarketplaces.length === 0) {
+      console.log('⚠️  No marketplaces configured. Nothing to do.');
+      return;
+    }
 
     // Get user's campaigns from database
     const campaignRepo = AppDataSource.getRepository(Campaign);
@@ -412,61 +713,104 @@ export async function runAutomationRulesForUser(userId: string): Promise<void> {
     const stats = {
       campaignsProcessed: 0,
       campaignsInWarmup: 0,
+      campaignsSkippedNoMarketplace: 0,
       func1Executed: 0,
       func2Executed: 0,
       func3Executed: 0,
       func4Executed: 0,
       func5Executed: 0,
-      errors: 0
+      errors: 0,
+      byMarketplace: {} as Record<string, number>
     };
 
-    // Process each campaign
+    // Group campaigns by marketplace
+    const campaignsByMarketplace = new Map<string, typeof campaigns>();
     for (const campaign of campaigns) {
-      try {
-        stats.campaignsProcessed++;
-
-        // Check warmup period (skip if too new)
-        if (isInWarmupPeriod(campaign.createdAt)) {
-          stats.campaignsInWarmup++;
-          console.log(`⏳ Campaign ${campaign.name} is in warmup period (< 7 days). Skipping.`);
-          continue;
-        }
-
-        console.log(`\n📦 Processing campaign: ${campaign.name} (${campaign.marketplace})`);
-
-        // Determine campaign type (you'll need to add this logic based on your campaign structure)
-        const campaignType = determineCampaignType(campaign);
-
-        // Execute functions based on campaign type
-        // Note: You'll need to adapt this to your actual campaign data structure
-        // This is a simplified version
-
-        // Func1: Progressive Bidding (campaigns 1-4)
-        if (campaignType >= 1 && campaignType <= 4) {
-          // Add logic to check if func1 should execute based on frequency/last execution
-          // For now, simplified execution
-          try {
-            await executeFunc1(
-              campaign.amazonCampaignId,
-              campaignType as 1 | 2 | 3 | 4,
-              campaign.name,
-              campaign.marketplace,
-              apiService
-            );
-            stats.func1Executed++;
-          } catch (error) {
-            console.error(`Error executing Func1 for campaign ${campaign.name}:`, error);
-            stats.errors++;
-          }
-        }
-
-        // Add similar logic for func2-5 as needed
-        // This is where you'd implement the full automation logic per campaign
-
-      } catch (error) {
-        stats.errors++;
-        console.error(`❌ Error processing campaign ${campaign.name}:`, error);
+      const mp = (campaign.marketplace || 'US').toUpperCase();
+      if (!campaignsByMarketplace.has(mp)) {
+        campaignsByMarketplace.set(mp, []);
       }
+      campaignsByMarketplace.get(mp)!.push(campaign);
+    }
+
+    console.log(`\n📊 Campaigns by marketplace:`);
+    campaignsByMarketplace.forEach((camps, mp) => {
+      console.log(`   - ${mp}: ${camps.length} campaigns`);
+    });
+
+    // Process each marketplace
+    for (const marketplace of configuredMarketplaces) {
+      const marketplaceCampaigns = campaignsByMarketplace.get(marketplace) || [];
+
+      if (marketplaceCampaigns.length === 0) {
+        console.log(`\n⏭️  [${marketplace}] No campaigns, skipping`);
+        continue;
+      }
+
+      console.log(`\n${'─'.repeat(60)}`);
+      console.log(`🌍 Processing marketplace: ${marketplace} (${marketplaceCampaigns.length} campaigns)`);
+      console.log(`${'─'.repeat(60)}`);
+
+      // Create API service for this marketplace
+      let apiService;
+      try {
+        apiService = createMarketplaceApiService(marketplace);
+      } catch (error: any) {
+        console.error(`❌ [${marketplace}] Failed to create API service: ${error.message}`);
+        stats.errors++;
+        continue;
+      }
+
+      stats.byMarketplace[marketplace] = 0;
+
+      // Process campaigns for this marketplace
+      for (const campaign of marketplaceCampaigns) {
+        try {
+          stats.campaignsProcessed++;
+
+          // Check warmup period (skip if too new)
+          if (isInWarmupPeriod(campaign.createdAt)) {
+            stats.campaignsInWarmup++;
+            console.log(`⏳ [${marketplace}] Campaign ${campaign.name} in warmup. Skipping.`);
+            continue;
+          }
+
+          console.log(`\n📦 [${marketplace}] Processing: ${campaign.name}`);
+
+          // Determine campaign type
+          const campaignType = determineCampaignType(campaign);
+          console.log(`   Type: ${campaignType}`);
+
+          // Execute functions based on campaign type
+          // Func1: Progressive Bidding (campaigns 1-4)
+          if (campaignType >= 1 && campaignType <= 4) {
+            try {
+              await executeFunc1(
+                campaign.amazonCampaignId,
+                campaignType as 1 | 2 | 3 | 4,
+                campaign.name,
+                marketplace,
+                apiService
+              );
+              stats.func1Executed++;
+              stats.byMarketplace[marketplace]++;
+            } catch (error: any) {
+              console.error(`   ❌ Func1 error: ${error.message}`);
+              stats.errors++;
+            }
+          }
+
+          // Func2, Func3, Func4, Func5 would follow similar pattern
+          // with appropriate conditions based on campaignType
+
+        } catch (error: any) {
+          stats.errors++;
+          console.error(`❌ [${marketplace}] Error processing ${campaign.name}: ${error.message}`);
+        }
+      }
+
+      // Small delay between marketplaces to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
 
     // Summary
@@ -475,6 +819,10 @@ export async function runAutomationRulesForUser(userId: string): Promise<void> {
     console.log('='.repeat(60));
     console.log(`Campaigns processed: ${stats.campaignsProcessed}`);
     console.log(`Campaigns in warmup (skipped): ${stats.campaignsInWarmup}`);
+    console.log(`\nBy marketplace:`);
+    Object.entries(stats.byMarketplace).forEach(([mp, count]) => {
+      console.log(`   - ${mp}: ${count} functions executed`);
+    });
     console.log(`\nFunctions executed:`);
     console.log(`  - Function 1 (Progressive Bidding): ${stats.func1Executed}`);
     console.log(`  - Function 2 (Placement Optimization): ${stats.func2Executed}`);
