@@ -697,59 +697,23 @@ export async function runAutomationRulesForUser(userId: string): Promise<void> {
       return;
     }
 
-    // Get user's campaigns from database
-    const campaignRepo = AppDataSource.getRepository(Campaign);
-    const campaigns = await campaignRepo.find({
-      where: { userId, state: 'enabled' }
-    });
-
-    console.log(`📊 Found ${campaigns.length} active campaigns for user ${userId}`);
-
-    if (campaigns.length === 0) {
-      console.log('⚠️  No active campaigns for this user. Nothing to do.');
-      return;
-    }
-
-    const stats = {
-      campaignsProcessed: 0,
-      campaignsInWarmup: 0,
-      campaignsSkippedNoMarketplace: 0,
+    const globalStats = {
+      totalCampaignsProcessed: 0,
+      totalCampaignsInWarmup: 0,
       func1Executed: 0,
       func2Executed: 0,
       func3Executed: 0,
       func4Executed: 0,
       func5Executed: 0,
       errors: 0,
-      byMarketplace: {} as Record<string, number>
+      byMarketplace: {} as Record<string, { campaigns: number; functions: number }>
     };
 
-    // Group campaigns by marketplace
-    const campaignsByMarketplace = new Map<string, typeof campaigns>();
-    for (const campaign of campaigns) {
-      const mp = (campaign.marketplace || 'US').toUpperCase();
-      if (!campaignsByMarketplace.has(mp)) {
-        campaignsByMarketplace.set(mp, []);
-      }
-      campaignsByMarketplace.get(mp)!.push(campaign);
-    }
-
-    console.log(`\n📊 Campaigns by marketplace:`);
-    campaignsByMarketplace.forEach((camps, mp) => {
-      console.log(`   - ${mp}: ${camps.length} campaigns`);
-    });
-
-    // Process each marketplace
+    // Process each marketplace - fetch campaigns from Amazon API
     for (const marketplace of configuredMarketplaces) {
-      const marketplaceCampaigns = campaignsByMarketplace.get(marketplace) || [];
-
-      if (marketplaceCampaigns.length === 0) {
-        console.log(`\n⏭️  [${marketplace}] No campaigns, skipping`);
-        continue;
-      }
-
-      console.log(`\n${'─'.repeat(60)}`);
-      console.log(`🌍 Processing marketplace: ${marketplace} (${marketplaceCampaigns.length} campaigns)`);
-      console.log(`${'─'.repeat(60)}`);
+      console.log(`\n${'='.repeat(60)}`);
+      console.log(`🌍 MARKETPLACE: ${marketplace}`);
+      console.log('='.repeat(60));
 
       // Create API service for this marketplace
       let apiService;
@@ -757,79 +721,91 @@ export async function runAutomationRulesForUser(userId: string): Promise<void> {
         apiService = createMarketplaceApiService(marketplace);
       } catch (error: any) {
         console.error(`❌ [${marketplace}] Failed to create API service: ${error.message}`);
-        stats.errors++;
+        globalStats.errors++;
         continue;
       }
 
-      stats.byMarketplace[marketplace] = 0;
+      try {
+        // Fetch campaigns directly from Amazon API
+        const campaigns = await apiService.getCampaigns();
+        console.log(`📊 [${marketplace}] Found ${campaigns.length} total campaigns from API`);
 
-      // Process campaigns for this marketplace
-      for (const campaign of marketplaceCampaigns) {
-        try {
-          stats.campaignsProcessed++;
+        // Filter only enabled campaigns
+        const activeCampaigns = campaigns.filter((c: any) =>
+          c.state === 'enabled' || c.state === 'ENABLED'
+        );
+        console.log(`✅ [${marketplace}] Active campaigns: ${activeCampaigns.length}`);
 
-          // Check warmup period (skip if too new)
-          if (isInWarmupPeriod(campaign.createdAt)) {
-            stats.campaignsInWarmup++;
-            console.log(`⏳ [${marketplace}] Campaign ${campaign.name} in warmup. Skipping.`);
-            continue;
-          }
+        globalStats.byMarketplace[marketplace] = { campaigns: activeCampaigns.length, functions: 0 };
 
-          console.log(`\n📦 [${marketplace}] Processing: ${campaign.name}`);
-
-          // Determine campaign type
-          const campaignType = determineCampaignType(campaign);
-          console.log(`   Type: ${campaignType}`);
-
-          // Execute functions based on campaign type
-          // Func1: Progressive Bidding (campaigns 1-4)
-          if (campaignType >= 1 && campaignType <= 4) {
-            try {
-              await executeFunc1(
-                campaign.amazonCampaignId,
-                campaignType as 1 | 2 | 3 | 4,
-                campaign.name,
-                marketplace,
-                apiService
-              );
-              stats.func1Executed++;
-              stats.byMarketplace[marketplace]++;
-            } catch (error: any) {
-              console.error(`   ❌ Func1 error: ${error.message}`);
-              stats.errors++;
-            }
-          }
-
-          // Func2, Func3, Func4, Func5 would follow similar pattern
-          // with appropriate conditions based on campaignType
-
-        } catch (error: any) {
-          stats.errors++;
-          console.error(`❌ [${marketplace}] Error processing ${campaign.name}: ${error.message}`);
+        if (activeCampaigns.length === 0) {
+          console.log(`⚠️  [${marketplace}] No active campaigns. Skipping.`);
+          continue;
         }
+
+        const stats = {
+          campaignsProcessed: 0,
+          campaignsInWarmup: 0,
+          func1Executed: 0,
+          func2Executed: 0,
+          func3Executed: 0,
+          func4Executed: 0,
+          func5Executed: 0,
+          errors: 0
+        };
+
+        // Process each active campaign
+        for (const campaign of activeCampaigns) {
+          try {
+            await processCampaignWithApiService(campaign, stats, apiService, marketplace);
+          } catch (error) {
+            stats.errors++;
+            console.error(`❌ [${marketplace}] Error processing campaign ${campaign.name}:`, error);
+          }
+        }
+
+        // Accumulate stats
+        globalStats.totalCampaignsProcessed += stats.campaignsProcessed;
+        globalStats.totalCampaignsInWarmup += stats.campaignsInWarmup;
+        globalStats.func1Executed += stats.func1Executed;
+        globalStats.func2Executed += stats.func2Executed;
+        globalStats.func3Executed += stats.func3Executed;
+        globalStats.func4Executed += stats.func4Executed;
+        globalStats.func5Executed += stats.func5Executed;
+        globalStats.errors += stats.errors;
+        globalStats.byMarketplace[marketplace].functions =
+          stats.func1Executed + stats.func2Executed + stats.func3Executed +
+          stats.func4Executed + stats.func5Executed;
+
+        console.log(`✅ [${marketplace}] Completed: ${stats.campaignsProcessed} campaigns processed`);
+
+      } catch (error: any) {
+        globalStats.errors++;
+        console.error(`❌ [${marketplace}] Marketplace error: ${error.message}`);
       }
 
-      // Small delay between marketplaces to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Delay between marketplaces to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
-    // Summary
+    // Final summary
     console.log('\n' + '='.repeat(60));
     console.log(`📊 AUTOMATION SUMMARY FOR USER ${userId}`);
     console.log('='.repeat(60));
-    console.log(`Campaigns processed: ${stats.campaignsProcessed}`);
-    console.log(`Campaigns in warmup (skipped): ${stats.campaignsInWarmup}`);
-    console.log(`\nBy marketplace:`);
-    Object.entries(stats.byMarketplace).forEach(([mp, count]) => {
-      console.log(`   - ${mp}: ${count} functions executed`);
+    console.log(`Marketplaces processed: ${configuredMarketplaces.length}`);
+    console.log(`Total campaigns processed: ${globalStats.totalCampaignsProcessed}`);
+    console.log(`Campaigns in warmup (skipped): ${globalStats.totalCampaignsInWarmup}`);
+    console.log(`\nPer marketplace:`);
+    Object.entries(globalStats.byMarketplace).forEach(([mp, data]) => {
+      console.log(`   - ${mp}: ${data.campaigns} campaigns, ${data.functions} functions`);
     });
     console.log(`\nFunctions executed:`);
-    console.log(`  - Function 1 (Progressive Bidding): ${stats.func1Executed}`);
-    console.log(`  - Function 2 (Placement Optimization): ${stats.func2Executed}`);
-    console.log(`  - Function 3 (Targeting Optimization): ${stats.func3Executed}`);
-    console.log(`  - Function 4 (Auto Ad Optimization): ${stats.func4Executed}`);
-    console.log(`  - Function 5 (Campaign Feeding): ${stats.func5Executed}`);
-    console.log(`\nErrors: ${stats.errors}`);
+    console.log(`  - Function 1 (Progressive Bidding): ${globalStats.func1Executed}`);
+    console.log(`  - Function 2 (Placement Optimization): ${globalStats.func2Executed}`);
+    console.log(`  - Function 3 (Targeting Optimization): ${globalStats.func3Executed}`);
+    console.log(`  - Function 4 (Auto Ad Optimization): ${globalStats.func4Executed}`);
+    console.log(`  - Function 5 (Campaign Feeding): ${globalStats.func5Executed}`);
+    console.log(`\nTotal errors: ${globalStats.errors}`);
     console.log('='.repeat(60));
 
     console.log(`\n✅ Completed automations for user ${userId}\n`);
