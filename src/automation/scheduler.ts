@@ -144,7 +144,11 @@ class AutomationScheduler {
       console.log(`👥 Found ${users.length} active users with Amazon authentication`);
 
       if (users.length === 0) {
-        console.log('⚠️  No active users with Amazon auth. Nothing to do.');
+        console.log('⚠️  No active users with Amazon auth. Using global credentials fallback...');
+        console.log('🌍 Running global automation with environment variable credentials...');
+        await runAutomationRules();
+        const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(2);
+        console.log(`✅ Global automation completed in ${duration} minutes`);
         return;
       }
 
