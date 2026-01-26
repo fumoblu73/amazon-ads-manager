@@ -16,7 +16,7 @@ import {
 } from '../services/MarketplaceApiFactory';
 import { AppDataSource } from '../config/database';
 import { Campaign } from '../models/Campaign';
-import { isInWarmupPeriod } from '../utils/timeframe';
+import { isInWarmupPeriod, getCampaignCreatedAt } from '../utils/timeframe';
 import { automationScheduler } from './scheduler';
 
 // Import delle 5 funzioni
@@ -171,7 +171,7 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
   const campaignName = campaign.name;
   const campaignType = determineCampaignType(campaign);
   const marketplace = campaign.marketplace || campaign.countryCode || 'US';
-  const createdAt = new Date(campaign.startDate || campaign.creationDate || Date.now());
+  const createdAt = getCampaignCreatedAt(campaign);
 
   console.log(`\n${'─'.repeat(60)}`);
   console.log(`📢 Campagna: ${campaignName}`);
@@ -444,19 +444,24 @@ async function processCampaignWithApiService(
   const campaignId = campaign.campaignId;
   const campaignName = campaign.name;
   const campaignType = determineCampaignType(campaign);
-  const createdAt = new Date(campaign.startDate || campaign.creationDate || Date.now());
+  const createdAt = getCampaignCreatedAt(campaign);
+
+  const daysSinceCreation = Math.floor((new Date().getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24));
 
   console.log(`\n${'─'.repeat(50)}`);
   console.log(`📢 [${marketplace}] Campagna: ${campaignName}`);
   console.log(`   Tipo: ${campaignType} | ID: ${campaignId}`);
+  console.log(`   Creata: ${createdAt.toISOString().split('T')[0]} (${daysSinceCreation} giorni fa)`);
   console.log(`${'─'.repeat(50)}`);
 
   // Controllo periodo di warmup
   if (isInWarmupPeriod(createdAt)) {
-    console.log(`⏳ [${marketplace}] Campagna in warmup (< 7 giorni). Skip.`);
+    console.log(`⏳ [${marketplace}] Campagna in warmup (< 7 giorni). Skip automazioni.`);
     stats.campaignsInWarmup++;
     return;
   }
+
+  console.log(`✅ [${marketplace}] Campagna fuori warmup, procedo con automazioni...`);
 
   // Configurazione mock (in produzione: recuperare da database)
   const mockBook = {

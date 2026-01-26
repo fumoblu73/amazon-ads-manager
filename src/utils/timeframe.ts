@@ -190,6 +190,72 @@ export function formatDateForAmazon(date: Date): string {
 }
 
 /**
+ * Parsa una data dal formato Amazon API (YYYYMMDD) a Date object
+ *
+ * @param amazonDate - Stringa data in formato YYYYMMDD (es: "20250120")
+ * @returns Date object, o null se formato non valido
+ *
+ * @example
+ * const date = parseAmazonDate("20250120");
+ * // date = new Date('2025-01-20')
+ */
+export function parseAmazonDate(amazonDate: string | undefined | null): Date | null {
+  if (!amazonDate || typeof amazonDate !== 'string') {
+    return null;
+  }
+
+  // Se è nel formato YYYYMMDD (8 cifre)
+  if (/^\d{8}$/.test(amazonDate)) {
+    const year = parseInt(amazonDate.substring(0, 4), 10);
+    const month = parseInt(amazonDate.substring(4, 6), 10) - 1; // mesi 0-indexed
+    const day = parseInt(amazonDate.substring(6, 8), 10);
+    const date = new Date(year, month, day);
+
+    // Verifica che la data sia valida
+    if (!isNaN(date.getTime())) {
+      return date;
+    }
+  }
+
+  // Prova parsing standard ISO (YYYY-MM-DD o timestamp)
+  const standardDate = new Date(amazonDate);
+  if (!isNaN(standardDate.getTime())) {
+    return standardDate;
+  }
+
+  return null;
+}
+
+/**
+ * Ottiene la data di creazione di una campagna con fallback
+ * Gestisce vari formati di data restituiti dall'API Amazon
+ *
+ * @param campaign - Oggetto campagna dall'API Amazon
+ * @param fallbackDaysAgo - Giorni fa da usare come fallback (default: 30)
+ * @returns Date object per la data di creazione
+ */
+export function getCampaignCreatedAt(campaign: any, fallbackDaysAgo: number = 30): Date {
+  // Prova diversi campi possibili
+  const possibleFields = ['startDate', 'creationDate', 'createDate', 'createdAt'];
+
+  for (const field of possibleFields) {
+    const value = campaign[field];
+    const parsed = parseAmazonDate(value);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  // Fallback: usa N giorni fa per evitare che tutte le campagne siano in warmup
+  // Questo permette alle automazioni di eseguirsi su campagne esistenti
+  const fallbackDate = new Date();
+  fallbackDate.setDate(fallbackDate.getDate() - fallbackDaysAgo);
+  console.log(`⚠️  Nessuna data creazione trovata per campagna "${campaign.name}", usando fallback (${fallbackDaysAgo} giorni fa)`);
+
+  return fallbackDate;
+}
+
+/**
  * Verifica se una campagna è nel periodo di riscaldamento
  * Le automazioni partono 7 giorni dopo la creazione della campagna
  *
