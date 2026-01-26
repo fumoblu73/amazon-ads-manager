@@ -7,11 +7,11 @@ import {
   Index
 } from 'typeorm';
 
-@Entity('kdp_daily_stats')
+@Entity('kdp_user_stats')
 @Index(['userId', 'date', 'asin'], { unique: true })
 @Index(['date'])
 @Index(['asin'])
-export class KdpDailyStats {
+export class KdpUserStats {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -64,6 +64,9 @@ export class KdpDailyStats {
   @UpdateDateColumn()
   updatedAt: Date;
 }
+
+// Re-export with old name for backward compatibility
+export { KdpUserStats as KdpDailyStats };
 
 export interface CreateKdpDailyStatsInput {
   userId: string;
