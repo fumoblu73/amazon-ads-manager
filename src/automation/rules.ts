@@ -16,6 +16,7 @@ import {
 } from '../services/MarketplaceApiFactory';
 import { AppDataSource } from '../config/database';
 import { Campaign } from '../models/Campaign';
+import { AutomationSettings } from '../entities/AutomationSettings';
 import { isInWarmupPeriod, getCampaignCreatedAt } from '../utils/timeframe';
 import { automationScheduler } from './scheduler';
 
@@ -25,6 +26,138 @@ import { executeFunc2, shouldExecuteFunc2 } from './functions/func2';
 import { executeFunc3, shouldExecuteFunc3 } from './functions/func3';
 import { executeFunc4, shouldExecuteFunc4 } from './functions/func4';
 import { executeFunc5, shouldExecuteFunc5, CampaignMapping } from './functions/func5';
+
+/**
+ * Configurazione automazione (dal database o default)
+ */
+interface AutomationConfig {
+  func1_enabled: boolean;
+  func1_bidIncrease: number;
+  func1_frequency: number;
+  func1_impressions: number;
+  func1_clicks: number;
+  func2_enabled: boolean;
+  func2_frequency: number;
+  func2_timeframeWeeks: number;
+  func3_enabled: boolean;
+  func3_frequency: number;
+  func3_timeframeA: number;
+  func3_timeframeB: number;
+  func3_timeframeC: number;
+  func3_clicksPause: number;
+  func3_clicks65days: number;
+  func4_enabled: boolean;
+  func4_frequency: number;
+  func4_timeframeA: number;
+  func4_timeframeB: number;
+  func4_timeframeC: number;
+  func4_clicksNegative: number;
+  func4_spendNegative: number;
+  func5_enabled: boolean;
+  func5_frequency: number;
+  func5_minOrders: number;
+  func5_bidBroad: number;
+  func5_bidExact: number;
+  func5_bidPhrase: number;
+  func5_bidExpanded: number;
+}
+
+/**
+ * Configurazione di default (usata se non ci sono impostazioni nel database)
+ */
+const DEFAULT_CONFIG: AutomationConfig = {
+  func1_enabled: true,
+  func1_bidIncrease: 0.02,
+  func1_frequency: 3,
+  func1_impressions: 20,
+  func1_clicks: 0,
+  func2_enabled: true,
+  func2_frequency: 7,
+  func2_timeframeWeeks: 4,
+  func3_enabled: true,
+  func3_frequency: 3,
+  func3_timeframeA: 2000,
+  func3_timeframeB: 3000,
+  func3_timeframeC: 5000,
+  func3_clicksPause: 10,
+  func3_clicks65days: 30,
+  func4_enabled: true,
+  func4_frequency: 7,
+  func4_timeframeA: 1000,
+  func4_timeframeB: 3000,
+  func4_timeframeC: 5000,
+  func4_clicksNegative: 10,
+  func4_spendNegative: 10,
+  func5_enabled: true,
+  func5_frequency: 7,
+  func5_minOrders: 1,
+  func5_bidBroad: 0.30,
+  func5_bidExact: 0.50,
+  func5_bidPhrase: 0.40,
+  func5_bidExpanded: 0.30
+};
+
+/**
+ * Recupera le impostazioni di automazione per un utente dal database
+ */
+async function getUserAutomationSettings(userId: string): Promise<AutomationConfig> {
+  try {
+    if (!AppDataSource.isInitialized) {
+      console.log('⚠️  Database non inizializzato, uso configurazione default');
+      return DEFAULT_CONFIG;
+    }
+
+    const settingsRepo = AppDataSource.getRepository(AutomationSettings);
+    const userSettings = await settingsRepo.findOne({ where: { userId } });
+
+    if (!userSettings) {
+      console.log(`⚠️  Nessuna impostazione trovata per utente ${userId}, uso default`);
+      return DEFAULT_CONFIG;
+    }
+
+    console.log(`✅ Impostazioni caricate per utente ${userId}`);
+    console.log(`   F1: freq=${userSettings.func1Frequency}gg, enabled=${userSettings.func1Enabled}`);
+    console.log(`   F2: freq=${userSettings.func2Frequency}gg, enabled=${userSettings.func2Enabled}`);
+    console.log(`   F3: freq=${userSettings.func3Frequency}gg, enabled=${userSettings.func3Enabled}`);
+    console.log(`   F4: freq=${userSettings.func4Frequency}gg, enabled=${userSettings.func4Enabled}`);
+    console.log(`   F5: freq=${userSettings.func5Frequency}gg, enabled=${userSettings.func5Enabled}`);
+
+    return {
+      func1_enabled: userSettings.func1Enabled,
+      func1_bidIncrease: Number(userSettings.func1BidIncrease),
+      func1_frequency: userSettings.func1Frequency,
+      func1_impressions: userSettings.func1Impressions,
+      func1_clicks: userSettings.func1Clicks,
+      func2_enabled: userSettings.func2Enabled,
+      func2_frequency: userSettings.func2Frequency,
+      func2_timeframeWeeks: userSettings.func2TimeframeWeeks,
+      func3_enabled: userSettings.func3Enabled,
+      func3_frequency: userSettings.func3Frequency,
+      func3_timeframeA: userSettings.func3TimeframeA,
+      func3_timeframeB: userSettings.func3TimeframeB,
+      func3_timeframeC: userSettings.func3TimeframeC,
+      func3_clicksPause: userSettings.func3ClicksPause,
+      func3_clicks65days: userSettings.func3Clicks65days,
+      func4_enabled: userSettings.func4Enabled,
+      func4_frequency: userSettings.func4Frequency,
+      func4_timeframeA: userSettings.func4TimeframeA,
+      func4_timeframeB: userSettings.func4TimeframeB,
+      func4_timeframeC: userSettings.func4TimeframeC,
+      func4_clicksNegative: userSettings.func4ClicksNegative,
+      func4_spendNegative: Number(userSettings.func4SpendNegative),
+      func5_enabled: userSettings.func5Enabled,
+      func5_frequency: userSettings.func5Frequency,
+      func5_minOrders: userSettings.func5MinOrders,
+      func5_bidBroad: Number(userSettings.func5BidBroad),
+      func5_bidExact: Number(userSettings.func5BidExact),
+      func5_bidPhrase: Number(userSettings.func5BidPhrase),
+      func5_bidExpanded: Number(userSettings.func5BidExpanded)
+    };
+  } catch (error: any) {
+    console.error(`❌ Errore recupero impostazioni: ${error.message}`);
+    return DEFAULT_CONFIG;
+  }
+}
 
 /**
  * FUNZIONE PRINCIPALE (MULTI-MARKETPLACE)
@@ -201,41 +334,8 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
     royaltyPercentage: 60
   };
 
-  const mockConfig = {
-    func1_enabled: true,
-    func1_bidIncrease: 0.02,
-    func1_frequency: 3,
-    func1_impressions: 20,
-    func1_clicks: 0,
-
-    func2_enabled: true,
-    func2_frequency: 7,
-    func2_timeframeWeeks: 4,
-
-    func3_enabled: true,
-    func3_frequency: 3,
-    func3_timeframeA: 2000,
-    func3_timeframeB: 3000,
-    func3_timeframeC: 5000,
-    func3_clicksPause: 10,
-    func3_clicks65days: 30,
-
-    func4_enabled: true,
-    func4_frequency: 7,
-    func4_timeframeA: 1000,
-    func4_timeframeB: 3000,
-    func4_timeframeC: 5000,
-    func4_clicksNegative: 10,
-    func4_spendNegative: 10,
-
-    func5_enabled: true,
-    func5_frequency: 7,
-    func5_minOrders: 1,
-    func5_bidBroad: 0.30,
-    func5_bidExact: 0.50,
-    func5_bidPhrase: 0.40,
-    func5_bidExpanded: 0.30
-  };
+  // Per runAutomationRules (globale) usa DEFAULT_CONFIG
+  const config = DEFAULT_CONFIG;
 
   const mockPlacements = {
     topOfSearch: 0,
@@ -254,20 +354,20 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
   // ================================================
 
   // FUNZIONE 1: Progressive Bidding Increase
-  if (shouldExecuteFunc1(campaignType) && mockConfig.func1_enabled) {
+  if (shouldExecuteFunc1(campaignType) && config.func1_enabled) {
     const shouldRun = automationScheduler.shouldExecuteFunction(
       `func1_${campaignId}`,
-      mockConfig.func1_frequency,
+      config.func1_frequency,
       createdAt
     );
 
     if (shouldRun) {
       try {
         await executeFunc1(campaignId, campaignType as any, campaignName, marketplace, amazonApiService, {
-          bidIncrease: mockConfig.func1_bidIncrease,
-          frequency: mockConfig.func1_frequency,
-          maxImpressions: mockConfig.func1_impressions,
-          maxClicks: mockConfig.func1_clicks
+          bidIncrease: config.func1_bidIncrease,
+          frequency: config.func1_frequency,
+          maxImpressions: config.func1_impressions,
+          maxClicks: config.func1_clicks
         });
         automationScheduler.markFunctionExecuted(`func1_${campaignId}`);
         stats.func1Executed++;
@@ -279,10 +379,10 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
 
   // FUNZIONE 3: Targeting Optimization (DOPO Funzione 1)
   // NOTA: Deve avere stessa frequency di Funzione 1
-  if (shouldExecuteFunc3(campaignType) && mockConfig.func3_enabled) {
+  if (shouldExecuteFunc3(campaignType) && config.func3_enabled) {
     const shouldRun = automationScheduler.shouldExecuteFunction(
       `func3_${campaignId}`,
-      mockConfig.func3_frequency,
+      config.func3_frequency,
       createdAt
     );
 
@@ -297,12 +397,12 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
           mockTotalImpressions,
           amazonApiService,
           {
-            frequency: mockConfig.func3_frequency,
-            timeframeA: mockConfig.func3_timeframeA,
-            timeframeB: mockConfig.func3_timeframeB,
-            timeframeC: mockConfig.func3_timeframeC,
-            clicksPause: mockConfig.func3_clicksPause,
-            clicks65days: mockConfig.func3_clicks65days
+            frequency: config.func3_frequency,
+            timeframeA: config.func3_timeframeA,
+            timeframeB: config.func3_timeframeB,
+            timeframeC: config.func3_timeframeC,
+            clicksPause: config.func3_clicksPause,
+            clicks65days: config.func3_clicks65days
           }
         );
         automationScheduler.markFunctionExecuted(`func3_${campaignId}`);
@@ -314,10 +414,10 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
   }
 
   // FUNZIONE 2: Placement Optimization
-  if (shouldExecuteFunc2(campaignType) && mockConfig.func2_enabled) {
+  if (shouldExecuteFunc2(campaignType) && config.func2_enabled) {
     const shouldRun = automationScheduler.shouldExecuteFunction(
       `func2_${campaignId}`,
-      mockConfig.func2_frequency,
+      config.func2_frequency,
       createdAt
     );
 
@@ -331,8 +431,8 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
           mockPlacements,
           amazonApiService,
           {
-            frequency: mockConfig.func2_frequency,
-            placementTimeframeWeeks: mockConfig.func2_timeframeWeeks
+            frequency: config.func2_frequency,
+            placementTimeframeWeeks: config.func2_timeframeWeeks
           }
         );
         automationScheduler.markFunctionExecuted(`func2_${campaignId}`);
@@ -344,10 +444,10 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
   }
 
   // FUNZIONE 4: Auto Ad Optimization (SOLO campagna 5)
-  if (shouldExecuteFunc4(campaignType) && mockConfig.func4_enabled) {
+  if (shouldExecuteFunc4(campaignType) && config.func4_enabled) {
     const shouldRun = automationScheduler.shouldExecuteFunction(
       `func4_${campaignId}`,
-      mockConfig.func4_frequency,
+      config.func4_frequency,
       createdAt
     );
 
@@ -362,12 +462,12 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
           mockTotalImpressions,
           amazonApiService,
           {
-            frequency: mockConfig.func4_frequency,
-            timeframeA: mockConfig.func4_timeframeA,
-            timeframeB: mockConfig.func4_timeframeB,
-            timeframeC: mockConfig.func4_timeframeC,
-            clicksNegative: mockConfig.func4_clicksNegative,
-            spendNegative: mockConfig.func4_spendNegative
+            frequency: config.func4_frequency,
+            timeframeA: config.func4_timeframeA,
+            timeframeB: config.func4_timeframeB,
+            timeframeC: config.func4_timeframeC,
+            clicksNegative: config.func4_clicksNegative,
+            spendNegative: config.func4_spendNegative
           }
         );
         automationScheduler.markFunctionExecuted(`func4_${campaignId}`);
@@ -379,10 +479,10 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
   }
 
   // FUNZIONE 5: Campaign Feeding
-  if (shouldExecuteFunc5(campaignType) && mockConfig.func5_enabled) {
+  if (shouldExecuteFunc5(campaignType) && config.func5_enabled) {
     const shouldRun = automationScheduler.shouldExecuteFunction(
       `func5_${campaignId}`,
-      mockConfig.func5_frequency,
+      config.func5_frequency,
       createdAt
     );
 
@@ -409,12 +509,12 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
           mockCampaignMapping,
           amazonApiService,
           {
-            frequency: mockConfig.func5_frequency,
-            minOrders: mockConfig.func5_minOrders,
-            bidBroad: mockConfig.func5_bidBroad,
-            bidExact: mockConfig.func5_bidExact,
-            bidPhrase: mockConfig.func5_bidPhrase,
-            bidExpanded: mockConfig.func5_bidExpanded
+            frequency: config.func5_frequency,
+            minOrders: config.func5_minOrders,
+            bidBroad: config.func5_bidBroad,
+            bidExact: config.func5_bidExact,
+            bidPhrase: config.func5_bidPhrase,
+            bidExpanded: config.func5_bidExpanded
           }
         );
         automationScheduler.markFunctionExecuted(`func5_${campaignId}`);
@@ -437,7 +537,8 @@ async function processCampaignWithApiService(
   campaign: any,
   stats: any,
   apiService: any,
-  marketplace: string
+  marketplace: string,
+  config: AutomationConfig = DEFAULT_CONFIG
 ): Promise<void> {
   stats.campaignsProcessed++;
 
@@ -463,68 +564,31 @@ async function processCampaignWithApiService(
 
   console.log(`✅ [${marketplace}] Campagna fuori warmup, procedo con automazioni...`);
 
-  // Configurazione mock (in produzione: recuperare da database)
+  // Dati mock (in futuro: recuperare dal database libro associato)
   const mockBook = {
     price: 15,
     printingCost: 3,
     royaltyPercentage: 60
   };
-
-  const mockConfig = {
-    func1_enabled: true,
-    func1_bidIncrease: 0.02,
-    func1_frequency: 3,
-    func1_impressions: 20,
-    func1_clicks: 0,
-
-    func2_enabled: true,
-    func2_frequency: 7,
-    func2_timeframeWeeks: 4,
-
-    func3_enabled: true,
-    func3_frequency: 3,
-    func3_timeframeA: 2000,
-    func3_timeframeB: 3000,
-    func3_timeframeC: 5000,
-    func3_clicksPause: 10,
-    func3_clicks65days: 30,
-
-    func4_enabled: true,
-    func4_frequency: 7,
-    func4_timeframeA: 1000,
-    func4_timeframeB: 3000,
-    func4_timeframeC: 5000,
-    func4_clicksNegative: 10,
-    func4_spendNegative: 10,
-
-    func5_enabled: true,
-    func5_frequency: 7,
-    func5_minOrders: 1,
-    func5_bidBroad: 0.30,
-    func5_bidExact: 0.50,
-    func5_bidPhrase: 0.40,
-    func5_bidExpanded: 0.30
-  };
-
   const mockPlacements = { topOfSearch: 0, restOfSearch: 10, productPages: 5 };
   const mockTotalImpressions = 50000;
   const mockAdGroupId = campaign.adGroupId || 'mock-adgroup-id';
 
   // FUNZIONE 1: Progressive Bidding Increase
-  if (shouldExecuteFunc1(campaignType) && mockConfig.func1_enabled) {
+  if (shouldExecuteFunc1(campaignType) && config.func1_enabled) {
     const shouldRun = automationScheduler.shouldExecuteFunction(
       `func1_${marketplace}_${campaignId}`,
-      mockConfig.func1_frequency,
+      config.func1_frequency,
       createdAt
     );
 
     if (shouldRun) {
       try {
         await executeFunc1(campaignId, campaignType as any, campaignName, marketplace, apiService, {
-          bidIncrease: mockConfig.func1_bidIncrease,
-          frequency: mockConfig.func1_frequency,
-          maxImpressions: mockConfig.func1_impressions,
-          maxClicks: mockConfig.func1_clicks
+          bidIncrease: config.func1_bidIncrease,
+          frequency: config.func1_frequency,
+          maxImpressions: config.func1_impressions,
+          maxClicks: config.func1_clicks
         });
         automationScheduler.markFunctionExecuted(`func1_${marketplace}_${campaignId}`);
         stats.func1Executed++;
@@ -535,10 +599,10 @@ async function processCampaignWithApiService(
   }
 
   // FUNZIONE 3: Targeting Optimization
-  if (shouldExecuteFunc3(campaignType) && mockConfig.func3_enabled) {
+  if (shouldExecuteFunc3(campaignType) && config.func3_enabled) {
     const shouldRun = automationScheduler.shouldExecuteFunction(
       `func3_${marketplace}_${campaignId}`,
-      mockConfig.func3_frequency,
+      config.func3_frequency,
       createdAt
     );
 
@@ -548,12 +612,12 @@ async function processCampaignWithApiService(
           campaignId, campaignType as any, campaignName, marketplace,
           mockBook, mockTotalImpressions, apiService,
           {
-            frequency: mockConfig.func3_frequency,
-            timeframeA: mockConfig.func3_timeframeA,
-            timeframeB: mockConfig.func3_timeframeB,
-            timeframeC: mockConfig.func3_timeframeC,
-            clicksPause: mockConfig.func3_clicksPause,
-            clicks65days: mockConfig.func3_clicks65days
+            frequency: config.func3_frequency,
+            timeframeA: config.func3_timeframeA,
+            timeframeB: config.func3_timeframeB,
+            timeframeC: config.func3_timeframeC,
+            clicksPause: config.func3_clicksPause,
+            clicks65days: config.func3_clicks65days
           }
         );
         automationScheduler.markFunctionExecuted(`func3_${marketplace}_${campaignId}`);
@@ -565,10 +629,10 @@ async function processCampaignWithApiService(
   }
 
   // FUNZIONE 2: Placement Optimization
-  if (shouldExecuteFunc2(campaignType) && mockConfig.func2_enabled) {
+  if (shouldExecuteFunc2(campaignType) && config.func2_enabled) {
     const shouldRun = automationScheduler.shouldExecuteFunction(
       `func2_${marketplace}_${campaignId}`,
-      mockConfig.func2_frequency,
+      config.func2_frequency,
       createdAt
     );
 
@@ -578,8 +642,8 @@ async function processCampaignWithApiService(
           campaignId, campaignName, marketplace,
           mockBook, mockPlacements, apiService,
           {
-            frequency: mockConfig.func2_frequency,
-            placementTimeframeWeeks: mockConfig.func2_timeframeWeeks
+            frequency: config.func2_frequency,
+            placementTimeframeWeeks: config.func2_timeframeWeeks
           }
         );
         automationScheduler.markFunctionExecuted(`func2_${marketplace}_${campaignId}`);
@@ -591,10 +655,10 @@ async function processCampaignWithApiService(
   }
 
   // FUNZIONE 4: Auto Ad Optimization
-  if (shouldExecuteFunc4(campaignType) && mockConfig.func4_enabled) {
+  if (shouldExecuteFunc4(campaignType) && config.func4_enabled) {
     const shouldRun = automationScheduler.shouldExecuteFunction(
       `func4_${marketplace}_${campaignId}`,
-      mockConfig.func4_frequency,
+      config.func4_frequency,
       createdAt
     );
 
@@ -604,12 +668,12 @@ async function processCampaignWithApiService(
           campaignId, campaignName, marketplace,
           mockAdGroupId, mockBook, mockTotalImpressions, apiService,
           {
-            frequency: mockConfig.func4_frequency,
-            timeframeA: mockConfig.func4_timeframeA,
-            timeframeB: mockConfig.func4_timeframeB,
-            timeframeC: mockConfig.func4_timeframeC,
-            clicksNegative: mockConfig.func4_clicksNegative,
-            spendNegative: mockConfig.func4_spendNegative
+            frequency: config.func4_frequency,
+            timeframeA: config.func4_timeframeA,
+            timeframeB: config.func4_timeframeB,
+            timeframeC: config.func4_timeframeC,
+            clicksNegative: config.func4_clicksNegative,
+            spendNegative: config.func4_spendNegative
           }
         );
         automationScheduler.markFunctionExecuted(`func4_${marketplace}_${campaignId}`);
@@ -621,10 +685,10 @@ async function processCampaignWithApiService(
   }
 
   // FUNZIONE 5: Campaign Feeding
-  if (shouldExecuteFunc5(campaignType) && mockConfig.func5_enabled) {
+  if (shouldExecuteFunc5(campaignType) && config.func5_enabled) {
     const shouldRun = automationScheduler.shouldExecuteFunction(
       `func5_${marketplace}_${campaignId}`,
-      mockConfig.func5_frequency,
+      config.func5_frequency,
       createdAt
     );
 
@@ -647,12 +711,12 @@ async function processCampaignWithApiService(
           campaignId, campaignType as any, marketplace,
           mockCampaignMapping, apiService,
           {
-            frequency: mockConfig.func5_frequency,
-            minOrders: mockConfig.func5_minOrders,
-            bidBroad: mockConfig.func5_bidBroad,
-            bidExact: mockConfig.func5_bidExact,
-            bidPhrase: mockConfig.func5_bidPhrase,
-            bidExpanded: mockConfig.func5_bidExpanded
+            frequency: config.func5_frequency,
+            minOrders: config.func5_minOrders,
+            bidBroad: config.func5_bidBroad,
+            bidExact: config.func5_bidExact,
+            bidPhrase: config.func5_bidPhrase,
+            bidExpanded: config.func5_bidExpanded
           }
         );
         automationScheduler.markFunctionExecuted(`func5_${marketplace}_${campaignId}`);
@@ -693,6 +757,9 @@ export async function runAutomationRulesForUser(userId: string): Promise<void> {
   console.log(`\n🤖 Running automations for user ${userId}...`);
 
   try {
+    // Carica le impostazioni utente dal database
+    const userConfig = await getUserAutomationSettings(userId);
+
     // Get configured marketplaces
     const configuredMarketplaces = getConfiguredMarketplaces();
     console.log(`🌍 Configured marketplaces: ${configuredMarketplaces.join(', ')}`);
@@ -759,10 +826,10 @@ export async function runAutomationRulesForUser(userId: string): Promise<void> {
           errors: 0
         };
 
-        // Process each active campaign
+        // Process each active campaign with user settings
         for (const campaign of activeCampaigns) {
           try {
-            await processCampaignWithApiService(campaign, stats, apiService, marketplace);
+            await processCampaignWithApiService(campaign, stats, apiService, marketplace, userConfig);
           } catch (error) {
             stats.errors++;
             console.error(`❌ [${marketplace}] Error processing campaign ${campaign.name}:`, error);
