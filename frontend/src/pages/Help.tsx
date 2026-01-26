@@ -132,6 +132,118 @@ export default function Help() {
           </div>
         </section>
 
+        {/* Automation Schedule Section */}
+        <section className="bg-black rounded-xl p-6">
+          <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
+            <svg className="w-8 h-8 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Orari Automazioni
+          </h2>
+          <div className="text-gray-300 space-y-4">
+            <p><strong>Programmazione esecuzione automatica delle funzioni F1-F5</strong></p>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-700">
+                    <th className="text-left py-2 px-3 text-orange-500">Giorno</th>
+                    <th className="text-left py-2 px-3 text-orange-500">Orario (IT)</th>
+                    <th className="text-left py-2 px-3 text-orange-500">Funzioni</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-gray-800">
+                    <td className="py-2 px-3">Lunedì</td>
+                    <td className="py-2 px-3">10:20</td>
+                    <td className="py-2 px-3">F1, F2, F3, F4, F5</td>
+                  </tr>
+                  <tr className="border-b border-gray-800">
+                    <td className="py-2 px-3">Lunedì</td>
+                    <td className="py-2 px-3">11:20</td>
+                    <td className="py-2 px-3">F1, F2, F3, F4, F5</td>
+                  </tr>
+                  <tr className="border-b border-gray-800">
+                    <td className="py-2 px-3">Mercoledì</td>
+                    <td className="py-2 px-3">10:20</td>
+                    <td className="py-2 px-3">F1, F2, F3, F4, F5</td>
+                  </tr>
+                  <tr className="border-b border-gray-800">
+                    <td className="py-2 px-3">Venerdì</td>
+                    <td className="py-2 px-3">10:20</td>
+                    <td className="py-2 px-3">F1, F2, F3, F4, F5</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-4">
+              <h3 className="font-bold text-white mb-2">Funzioni per Tipo Campagna</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-700">
+                      <th className="text-left py-2 px-3 text-orange-500">Tipo Campagna</th>
+                      <th className="text-center py-2 px-3 text-orange-500">F1</th>
+                      <th className="text-center py-2 px-3 text-orange-500">F2</th>
+                      <th className="text-center py-2 px-3 text-orange-500">F3</th>
+                      <th className="text-center py-2 px-3 text-orange-500">F4</th>
+                      <th className="text-center py-2 px-3 text-orange-500">F5</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b border-gray-800">
+                      <td className="py-2 px-3">1 - Keyword Targeting</td>
+                      <td className="text-center py-2 px-3 text-green-500">✓</td>
+                      <td className="text-center py-2 px-3 text-green-500">✓</td>
+                      <td className="text-center py-2 px-3 text-green-500">✓</td>
+                      <td className="text-center py-2 px-3 text-gray-600">-</td>
+                      <td className="text-center py-2 px-3 text-green-500">✓</td>
+                    </tr>
+                    <tr className="border-b border-gray-800">
+                      <td className="py-2 px-3">2 - Product Targeting</td>
+                      <td className="text-center py-2 px-3 text-green-500">✓</td>
+                      <td className="text-center py-2 px-3 text-green-500">✓</td>
+                      <td className="text-center py-2 px-3 text-green-500">✓</td>
+                      <td className="text-center py-2 px-3 text-gray-600">-</td>
+                      <td className="text-center py-2 px-3 text-green-500">✓</td>
+                    </tr>
+                    <tr className="border-b border-gray-800">
+                      <td className="py-2 px-3">3 - Keyword Super</td>
+                      <td className="text-center py-2 px-3 text-green-500">✓</td>
+                      <td className="text-center py-2 px-3 text-green-500">✓</td>
+                      <td className="text-center py-2 px-3 text-green-500">✓</td>
+                      <td className="text-center py-2 px-3 text-gray-600">-</td>
+                      <td className="text-center py-2 px-3 text-green-500">✓</td>
+                    </tr>
+                    <tr className="border-b border-gray-800">
+                      <td className="py-2 px-3">4 - Product Super</td>
+                      <td className="text-center py-2 px-3 text-green-500">✓</td>
+                      <td className="text-center py-2 px-3 text-green-500">✓</td>
+                      <td className="text-center py-2 px-3 text-green-500">✓</td>
+                      <td className="text-center py-2 px-3 text-gray-600">-</td>
+                      <td className="text-center py-2 px-3 text-green-500">✓</td>
+                    </tr>
+                    <tr className="border-b border-gray-800">
+                      <td className="py-2 px-3">5 - Auto</td>
+                      <td className="text-center py-2 px-3 text-gray-600">-</td>
+                      <td className="text-center py-2 px-3 text-green-500">✓</td>
+                      <td className="text-center py-2 px-3 text-gray-600">-</td>
+                      <td className="text-center py-2 px-3 text-green-500">✓</td>
+                      <td className="text-center py-2 px-3 text-green-500">✓</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <p className="text-sm italic mt-3">
+              Le automazioni vengono eseguite automaticamente tramite cron job esterni.
+              Il Lunedì ha doppia esecuzione per garantire l'esecuzione completa di tutte le funzioni.
+            </p>
+          </div>
+        </section>
+
         {/* FAST ACoS Info */}
         <section className="bg-black border-2 border-orange-500 rounded-xl p-6">
           <h3 className="font-bold text-lg text-white mb-3">Formula FAST ACoS</h3>
