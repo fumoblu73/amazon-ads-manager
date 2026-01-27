@@ -246,59 +246,130 @@ class AmazonApiService {
   }
 
   // ================================================
-  // METODI PER REPORT E METRICHE
+  // METODI PER REPORT E METRICHE (API v3)
   // ================================================
 
-  // Richiede un report delle performance
-  // Amazon genera il report in modo asincrono
-  async requestReport(reportDate: string, metrics: string[]): Promise<string> {
+  /**
+   * Richiede un report delle performance usando l'API v3
+   * Amazon genera il report in modo asincrono
+   * @param startDate - Data inizio (formato: YYYY-MM-DD)
+   * @param endDate - Data fine (formato: YYYY-MM-DD)
+   * @param reportType - Tipo report: 'spTargeting' | 'spCampaigns' | 'spSearchTerm'
+   * @param columns - Colonne da includere
+   */
+  async requestReportV3(
+    startDate: string,
+    endDate: string,
+    reportType: 'spTargeting' | 'spCampaigns' | 'spSearchTerm' = 'spTargeting',
+    columns: string[] = ['impressions', 'clicks', 'cost', 'sales14d', 'orders14d']
+  ): Promise<string> {
     try {
-      console.log(`📊 Richiesta report per ${reportDate}...`);
+      console.log(`📊 [API v3] Richiesta report ${reportType} dal ${startDate} al ${endDate}...`);
 
-      const response = await this.client.post('/v2/sp/keywords/report', {
-        reportDate: reportDate,  // Formato: YYYYMMDD
-        metrics: metrics  // Es: ['impressions', 'clicks', 'cost', 'sales']
+      // Mappa le colonne per API v3 (alcune hanno nomi diversi)
+      const v3Columns = columns.map(col => {
+        const mapping: Record<string, string> = {
+          'sales': 'sales14d',
+          'orders': 'orders14d',
+          'cost': 'spend'
+        };
+        return mapping[col] || col;
       });
 
-      // Ritorna l'ID del report (da usare per scaricarlo dopo)
+      // Aggiungi colonne obbligatorie per l'identificazione
+      const requiredCols = ['campaignId', 'adGroupId'];
+      if (reportType === 'spTargeting') {
+        requiredCols.push('keywordId', 'targetId');
+      }
+      if (reportType === 'spSearchTerm') {
+        requiredCols.push('searchTerm');
+      }
+
+      const allColumns = [...new Set([...requiredCols, ...v3Columns])];
+
+      const requestBody = {
+        name: `Automation Report ${new Date().toISOString()}`,
+        startDate: startDate,
+        endDate: endDate,
+        configuration: {
+          adProduct: 'SPONSORED_PRODUCTS',
+          groupBy: reportType === 'spSearchTerm' ? ['searchTerm'] : ['targeting'],
+          columns: allColumns,
+          reportTypeId: reportType,
+          timeUnit: 'SUMMARY',
+          format: 'GZIP_JSON'
+        }
+      };
+
+      console.log(`📋 Request body:`, JSON.stringify(requestBody, null, 2));
+
+      const response = await this.client.post('/reporting/reports', requestBody);
+
       const reportId = response.data.reportId;
-      console.log(`✅ Report richiesto. ID: ${reportId}`);
+      console.log(`✅ [API v3] Report richiesto. ID: ${reportId}`);
 
       return reportId;
-    } catch (error) {
-      console.error('❌ Errore richiesta report:', error);
+    } catch (error: any) {
+      console.error('❌ [API v3] Errore richiesta report:', error.response?.data || error.message);
       throw error;
     }
   }
 
-  // Controlla lo stato di un report
+  // Metodo legacy per compatibilità - converte al nuovo formato
+  async requestReport(reportDate: string, metrics: string[]): Promise<string> {
+    // Converte da formato YYYYMMDD a YYYY-MM-DD
+    const year = reportDate.substring(0, 4);
+    const month = reportDate.substring(4, 6);
+    const day = reportDate.substring(6, 8);
+    const formattedDate = `${year}-${month}-${day}`;
+
+    // Usa lo stesso giorno come start e end per report giornaliero
+    return this.requestReportV3(formattedDate, formattedDate, 'spTargeting', metrics);
+  }
+
+  // Controlla lo stato di un report (API v3)
   async getReportStatus(reportId: string): Promise<any> {
     try {
-      const response = await this.client.get(`/v2/reports/${reportId}`);
+      const response = await this.client.get(`/reporting/reports/${reportId}`);
+      console.log(`📊 [API v3] Stato report ${reportId}: ${response.data.status}`);
       return response.data;
-    } catch (error) {
-      console.error(`❌ Errore controllo stato report ${reportId}:`, error);
+    } catch (error: any) {
+      console.error(`❌ [API v3] Errore controllo stato report ${reportId}:`, error.response?.data || error.message);
       throw error;
     }
   }
 
-  // Scarica un report completato
-  async downloadReport(reportId: string): Promise<any> {
+  // Scarica un report completato (API v3)
+  async downloadReport(reportId: string): Promise<any[]> {
     try {
       // Prima controlla lo stato
       const status = await this.getReportStatus(reportId);
 
-      if (status.status !== 'SUCCESS') {
+      if (status.status !== 'COMPLETED') {
         throw new Error(`Report non pronto. Stato: ${status.status}`);
       }
 
-      // Scarica il report dall'URL fornito
-      const reportData = await axios.get(status.location);
+      if (!status.url) {
+        throw new Error('URL download non disponibile');
+      }
 
-      console.log(`✅ Report scaricato`);
-      return reportData.data;
-    } catch (error) {
-      console.error(`❌ Errore download report ${reportId}:`, error);
+      console.log(`📥 [API v3] Scaricamento report da: ${status.url.substring(0, 100)}...`);
+
+      // Scarica il file GZIP
+      const reportResponse = await axios.get(status.url, {
+        responseType: 'arraybuffer',
+        decompress: true
+      });
+
+      // Decomprimi e parse JSON
+      const zlib = require('zlib');
+      const decompressed = zlib.gunzipSync(reportResponse.data);
+      const jsonData = JSON.parse(decompressed.toString('utf-8'));
+
+      console.log(`✅ [API v3] Report scaricato: ${Array.isArray(jsonData) ? jsonData.length : 0} righe`);
+      return Array.isArray(jsonData) ? jsonData : [];
+    } catch (error: any) {
+      console.error(`❌ [API v3] Errore download report ${reportId}:`, error.message);
       throw error;
     }
   }
@@ -509,7 +580,7 @@ class AmazonApiService {
   // ================================================
 
   /**
-   * Richiede un report dei search terms
+   * Richiede un report dei search terms (API v3)
    */
   async requestSearchTermsReport(
     startDate: string,
@@ -517,36 +588,48 @@ class AmazonApiService {
     campaignIdFilter?: string
   ): Promise<string> {
     try {
-      console.log(`📊 Richiesta report search terms ${startDate} - ${endDate}...`);
+      console.log(`📊 [API v3] Richiesta report search terms ${startDate} - ${endDate}...`);
 
-      const body: any = {
-        reportDate: startDate,
-        metrics: [
-          'campaignId',
-          'adGroupId',
-          'keywordId',
-          'targetId',
-          'searchTerm',
-          'impressions',
-          'clicks',
-          'cost',
-          'sales',
-          'orders'
-        ]
+      const columns = [
+        'campaignId',
+        'adGroupId',
+        'keywordId',
+        'targetId',
+        'searchTerm',
+        'impressions',
+        'clicks',
+        'spend',
+        'sales14d',
+        'orders14d'
+      ];
+
+      const requestBody: any = {
+        name: `Search Terms Report ${new Date().toISOString()}`,
+        startDate: startDate,
+        endDate: endDate,
+        configuration: {
+          adProduct: 'SPONSORED_PRODUCTS',
+          groupBy: ['searchTerm'],
+          columns: columns,
+          reportTypeId: 'spSearchTerm',
+          timeUnit: 'SUMMARY',
+          format: 'GZIP_JSON'
+        }
       };
 
+      // Nota: API v3 non supporta campaignIdFilter nel corpo, filtrare dopo il download
       if (campaignIdFilter) {
-        body.campaignIdFilter = campaignIdFilter;
+        console.log(`   [API v3] Filtro campagna: ${campaignIdFilter} (applicato post-download)`);
       }
 
-      const response = await this.client.post('/v2/sp/targets/report', body);
+      const response = await this.client.post('/reporting/reports', requestBody);
 
       const reportId = response.data.reportId;
-      console.log(`✅ Report search terms richiesto. ID: ${reportId}`);
+      console.log(`✅ [API v3] Report search terms richiesto. ID: ${reportId}`);
 
       return reportId;
-    } catch (error) {
-      console.error('❌ Errore richiesta report search terms:', error);
+    } catch (error: any) {
+      console.error('❌ [API v3] Errore richiesta report search terms:', error.response?.data || error.message);
       throw error;
     }
   }
@@ -627,34 +710,34 @@ class AmazonApiService {
   // ================================================
 
   /**
-   * Recupera le performance di keyword/target da un report
+   * Recupera le performance di keyword/target da un report (API v3)
    * Aspetta che il report sia pronto e lo scarica
    */
-  async waitAndDownloadReport(reportId: string, maxAttempts: number = 10): Promise<any> {
+  async waitAndDownloadReport(reportId: string, maxAttempts: number = 30): Promise<any[]> {
     try {
-      console.log(`⏳ Attendo completamento report ${reportId}...`);
+      console.log(`⏳ [API v3] Attendo completamento report ${reportId}...`);
 
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         const status = await this.getReportStatus(reportId);
 
-        if (status.status === 'SUCCESS') {
-          console.log(`✅ Report pronto, scarico...`);
-          const reportData = await axios.get(status.location);
-          return reportData.data;
+        // API v3 usa 'COMPLETED' invece di 'SUCCESS'
+        if (status.status === 'COMPLETED') {
+          console.log(`✅ [API v3] Report pronto, scarico...`);
+          return await this.downloadReport(reportId);
         }
 
-        if (status.status === 'FAILURE') {
-          throw new Error(`Report fallito: ${status.statusDetails || 'Unknown error'}`);
+        if (status.status === 'FAILURE' || status.status === 'FAILED') {
+          throw new Error(`Report fallito: ${status.failureReason || status.statusDetails || 'Unknown error'}`);
         }
 
-        // Aspetta 5 secondi prima di riprovare
-        console.log(`   Tentativo ${attempt}/${maxAttempts}: status=${status.status}`);
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        // Aspetta 3 secondi prima di riprovare (ridotto per API v3 che è più veloce)
+        console.log(`   [API v3] Tentativo ${attempt}/${maxAttempts}: status=${status.status}`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
       }
 
       throw new Error(`Report non pronto dopo ${maxAttempts} tentativi`);
-    } catch (error) {
-      console.error(`❌ Errore attesa/download report:`, error);
+    } catch (error: any) {
+      console.error(`❌ [API v3] Errore attesa/download report:`, error.message);
       throw error;
     }
   }
