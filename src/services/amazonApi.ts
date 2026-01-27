@@ -261,7 +261,7 @@ class AmazonApiService {
     startDate: string,
     endDate: string,
     reportType: 'spTargeting' | 'spCampaigns' | 'spSearchTerm' = 'spTargeting',
-    columns: string[] = ['impressions', 'clicks', 'cost', 'sales14d', 'orders14d']
+    columns: string[] = ['impressions', 'clicks', 'cost', 'sales14d', 'purchases14d']
   ): Promise<string> {
     try {
       console.log(`📊 [API v3] Richiesta report ${reportType} dal ${startDate} al ${endDate}...`);
@@ -270,19 +270,22 @@ class AmazonApiService {
       const v3Columns = columns.map(col => {
         const mapping: Record<string, string> = {
           'sales': 'sales14d',
-          'orders': 'orders14d',
-          'cost': 'spend'
+          'orders': 'purchases14d',
+          'orders14d': 'purchases14d',
+          'spend': 'cost',
+          'targetId': 'targeting',
+          'bid': 'keywordBid'
         };
         return mapping[col] || col;
       });
 
-      // Aggiungi colonne obbligatorie per l'identificazione
+      // Aggiungi colonne obbligatorie per l'identificazione (nomi corretti API v3)
       const requiredCols = ['campaignId', 'adGroupId'];
       if (reportType === 'spTargeting') {
-        requiredCols.push('keywordId', 'targetId');
+        requiredCols.push('keywordId', 'targeting');
       }
       if (reportType === 'spSearchTerm') {
-        requiredCols.push('searchTerm');
+        requiredCols.push('keyword');
       }
 
       const allColumns = [...new Set([...requiredCols, ...v3Columns])];
@@ -594,13 +597,13 @@ class AmazonApiService {
         'campaignId',
         'adGroupId',
         'keywordId',
-        'targetId',
-        'searchTerm',
+        'targeting',
+        'keyword',
         'impressions',
         'clicks',
-        'spend',
+        'cost',
         'sales14d',
-        'orders14d'
+        'purchases14d'
       ];
 
       const requestBody: any = {
