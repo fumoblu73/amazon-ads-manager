@@ -675,6 +675,11 @@ export class UserAmazonApiService {
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         const status = await this.getReportStatus(reportId);
 
+        // Log risposta completa per i primi tentativi (debug)
+        if (attempt <= 2) {
+          console.log(`   [API v3] DEBUG - Full response:`, JSON.stringify(status, null, 2));
+        }
+
         // API v3 usa 'COMPLETED' invece di 'SUCCESS'
         if (status.status === 'COMPLETED') {
           console.log(`✅ [API v3] Report ready after ${attempt} attempts, downloading...`);

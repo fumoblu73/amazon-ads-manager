@@ -336,7 +336,7 @@ class AmazonApiService {
   async getReportStatus(reportId: string): Promise<any> {
     try {
       const response = await this.client.get(`/reporting/reports/${reportId}`);
-      // Non loggare ogni check per evitare spam nei log
+      // Log la risposta completa per debug (solo primi 3 tentativi)
       return response.data;
     } catch (error: any) {
       console.error(`❌ [API v3] Errore controllo stato report ${reportId}:`, error.response?.data || error.message);
@@ -727,6 +727,11 @@ class AmazonApiService {
 
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         const status = await this.getReportStatus(reportId);
+
+        // Log risposta completa per i primi tentativi (debug)
+        if (attempt <= 2) {
+          console.log(`   [API v3] DEBUG - Full response:`, JSON.stringify(status, null, 2));
+        }
 
         // API v3 usa 'COMPLETED' invece di 'SUCCESS'
         if (status.status === 'COMPLETED') {
