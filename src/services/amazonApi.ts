@@ -326,10 +326,16 @@ class AmazonApiService {
     const year = reportDate.substring(0, 4);
     const month = reportDate.substring(4, 6);
     const day = reportDate.substring(6, 8);
-    const formattedDate = `${year}-${month}-${day}`;
+    const endDate = `${year}-${month}-${day}`;
 
-    // Usa lo stesso giorno come start e end per report giornaliero
-    return this.requestReportV3(formattedDate, formattedDate, 'spTargeting', metrics);
+    // Amazon API v3 funziona meglio con range di date più ampi
+    // Usa gli ultimi 7 giorni invece di un singolo giorno
+    const startDateObj = new Date(endDate);
+    startDateObj.setDate(startDateObj.getDate() - 6); // 7 giorni totali
+    const startDate = startDateObj.toISOString().split('T')[0];
+
+    console.log(`📅 [API v3] Date range: ${startDate} to ${endDate} (7 giorni)`);
+    return this.requestReportV3(startDate, endDate, 'spTargeting', metrics);
   }
 
   // Controlla lo stato di un report (API v3)
