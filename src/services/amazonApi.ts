@@ -307,13 +307,8 @@ class AmazonApiService {
 
       console.log(`📋 [API v3] Request body:`, JSON.stringify(requestBody, null, 2));
 
-      // API v3 richiede header specifici
-      const response = await this.client.post('/reporting/reports', requestBody, {
-        headers: {
-          'Content-Type': 'application/vnd.createasyncreportrequest.v3+json',
-          'Accept': 'application/vnd.createasyncreportrequest.v3+json'
-        }
-      });
+      // API v3 usa header JSON standard
+      const response = await this.client.post('/reporting/reports', requestBody);
 
       const reportId = response.data.reportId;
       console.log(`✅ [API v3] Report richiesto. ID: ${reportId}`);
@@ -340,11 +335,7 @@ class AmazonApiService {
   // Controlla lo stato di un report (API v3)
   async getReportStatus(reportId: string): Promise<any> {
     try {
-      const response = await this.client.get(`/reporting/reports/${reportId}`, {
-        headers: {
-          'Accept': 'application/vnd.createasyncreportrequest.v3+json'
-        }
-      });
+      const response = await this.client.get(`/reporting/reports/${reportId}`);
       // Non loggare ogni check per evitare spam nei log
       return response.data;
     } catch (error: any) {
@@ -637,12 +628,7 @@ class AmazonApiService {
 
       console.log(`📋 [API v3] Request body:`, JSON.stringify(requestBody, null, 2));
 
-      const response = await this.client.post('/reporting/reports', requestBody, {
-        headers: {
-          'Content-Type': 'application/vnd.createasyncreportrequest.v3+json',
-          'Accept': 'application/vnd.createasyncreportrequest.v3+json'
-        }
-      });
+      const response = await this.client.post('/reporting/reports', requestBody);
 
       const reportId = response.data.reportId;
       console.log(`✅ [API v3] Report search terms richiesto. ID: ${reportId}`);
