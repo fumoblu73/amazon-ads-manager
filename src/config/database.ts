@@ -1,14 +1,10 @@
 import { DataSource } from 'typeorm';
 import dotenv from 'dotenv';
-// Import entities from models/
+// Import entities from models/ (legacy - keep for backward compatibility)
 import { AutomationLog } from '../models/AutomationLog';
 import { KeywordPerformance } from '../models/KeywordPerformance';
 import { Campaign } from '../models/Campaign';
 import { Book } from '../models/Book';
-import { KdpBook as KdpBookModel } from '../models/KdpBook';
-import { KdpUserStats } from '../models/KdpDailyStats';
-import { JournalEvent as JournalEventModel } from '../models/JournalEvent';
-import { KdpSyncLog as KdpSyncLogModel } from '../models/KdpSyncLog';
 // Import entities from entities/ (newer structure with relations)
 import { User } from '../entities/User';
 import { KdpBook } from '../entities/KdpBook';
@@ -22,13 +18,29 @@ dotenv.config();
 
 // Supporta sia DATABASE_URL (Supabase/Render) che variabili separate (locale)
 const getDatabaseConfig = () => {
+  // IMPORTANTE: Non usare duplicate entities - causa conflitti di schema!
+  // Usare SOLO entities/ per le nuove tabelle KDP
+  const entities = [
+    User,
+    AutomationLog,
+    KeywordPerformance,
+    Campaign,
+    Book,
+    KdpBook,
+    KdpDailyStats,
+    JournalEvent,
+    KdpSyncLog,
+    AutomationSettings,
+    KdpSalesSnapshot
+  ];
+
   if (process.env.DATABASE_URL) {
     return {
       type: 'postgres' as const,
       url: process.env.DATABASE_URL,
-      synchronize: true, // Abilitato per creare nuove tabelle automaticamente
+      synchronize: false, // DISABILITATO in produzione - usare migrations!
       logging: process.env.NODE_ENV === 'development',
-      entities: [User, AutomationLog, KeywordPerformance, Campaign, Book, KdpBook, KdpDailyStats, JournalEvent, KdpSyncLog, AutomationSettings, KdpSalesSnapshot, KdpBookModel, KdpUserStats, JournalEventModel, KdpSyncLogModel],
+      entities,
       migrations: ['src/migrations/**/*.ts'],
       ssl: {
         rejectUnauthorized: false // Necessario per Supabase
@@ -45,7 +57,7 @@ const getDatabaseConfig = () => {
     database: process.env.DB_DATABASE || 'amazon_ads_manager',
     synchronize: process.env.NODE_ENV === 'development',
     logging: process.env.NODE_ENV === 'development',
-    entities: [User, AutomationLog, KeywordPerformance, Campaign, Book, KdpBook, KdpDailyStats, JournalEvent, KdpSyncLog, AutomationSettings, KdpSalesSnapshot, KdpBookModel, KdpUserStats, JournalEventModel, KdpSyncLogModel],
+    entities,
     migrations: ['src/migrations/**/*.ts'],
   };
 };
