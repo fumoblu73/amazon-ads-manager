@@ -4,6 +4,8 @@ import { EventEmitter } from 'events';
 import { runAutomationRules, runAutomationRulesForUser } from '../automation/rules';
 import { authMiddleware } from '../middleware/auth';
 import { requireAmazonAuth, AuthRequest } from '../middleware/requireAmazonAuth';
+import { submitReportsForAllUsers } from '../services/reportSubmitter';
+import { processCompletedReports } from '../services/reportProcessor';
 
 const router = Router();
 
@@ -329,6 +331,81 @@ router.post('/scheduler/restart', (req: Request, res: Response) => {
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
+});
+
+// ================================================
+// ENDPOINT: FASE 1 - SUBMIT REPORTS (Async Architecture)
+// ================================================
+// Sottomette i report ad Amazon e salva i reportId nel DB.
+// Chiamato da cron alle 8:30 UTC (9:30 IT)
+router.post('/submit-reports', async (req: Request, res: Response) => {
+  const secret = req.query.secret || req.body.secret;
+  const expectedSecret = process.env.AUTOMATION_SECRET || 'change-me-in-production';
+
+  if (secret !== expectedSecret) {
+    return res.status(401).json({ error: 'Unauthorized', message: 'Invalid secret' });
+  }
+
+  // Pre-warm database
+  try {
+    const { AppDataSource } = await import('../config/database');
+    await AppDataSource.query('SELECT 1');
+    console.log('✅ Database pre-warmed for submit-reports');
+  } catch (error) {
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      const { AppDataSource } = await import('../config/database');
+      await AppDataSource.query('SELECT 1');
+    } catch (retryError) {
+      console.error('❌ Database pre-warm failed');
+    }
+  }
+
+  // Respond immediately
+  res.json({
+    success: true,
+    message: 'Report submission started (Phase 1)',
+    timestamp: new Date().toISOString()
+  });
+
+  // Run in background
+  submitReportsForAllUsers()
+    .then((stats) => {
+      console.log(`✅ Phase 1 completed: ${stats.reportsSubmitted} reports submitted`);
+    })
+    .catch((error) => {
+      console.error('❌ Phase 1 failed:', error);
+    });
+});
+
+// ================================================
+// ENDPOINT: FASE 2 - PROCESS COMPLETED REPORTS (Async Architecture)
+// ================================================
+// Controlla report pendenti, scarica completati, esegue automazioni.
+// Chiamato internamente da cron ogni 15 minuti
+router.post('/process-reports', async (req: Request, res: Response) => {
+  const secret = req.query.secret || req.body.secret;
+  const expectedSecret = process.env.AUTOMATION_SECRET || 'change-me-in-production';
+
+  if (secret !== expectedSecret) {
+    return res.status(401).json({ error: 'Unauthorized', message: 'Invalid secret' });
+  }
+
+  // Respond immediately
+  res.json({
+    success: true,
+    message: 'Report processing started (Phase 2)',
+    timestamp: new Date().toISOString()
+  });
+
+  // Run in background
+  processCompletedReports()
+    .then((stats) => {
+      console.log(`✅ Phase 2 completed: ${stats.processed} reports processed, ${stats.stillPending} still pending`);
+    })
+    .catch((error) => {
+      console.error('❌ Phase 2 failed:', error);
+    });
 });
 
 export default router;

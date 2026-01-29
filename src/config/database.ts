@@ -13,6 +13,7 @@ import { JournalEvent } from '../entities/JournalEvent';
 import { KdpSyncLog } from '../entities/KdpSyncLog';
 import { AutomationSettings } from '../entities/AutomationSettings';
 import { KdpSalesSnapshot } from '../entities/KdpSalesSnapshot';
+import { PendingReport } from '../entities/PendingReport';
 
 dotenv.config();
 
@@ -31,7 +32,8 @@ const getDatabaseConfig = () => {
     JournalEvent,
     KdpSyncLog,
     AutomationSettings,
-    KdpSalesSnapshot
+    KdpSalesSnapshot,
+    PendingReport
   ];
 
   if (process.env.DATABASE_URL) {

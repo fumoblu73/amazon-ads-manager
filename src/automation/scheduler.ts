@@ -10,6 +10,7 @@ import { runAutomationRules, runAutomationRulesForUser } from './rules';
 import { AppDataSource } from '../config/database';
 import { User } from '../entities/User';
 import { IsNull, Not } from 'typeorm';
+import { processCompletedReports } from '../services/reportProcessor';
 
 // Interfaccia per configurazione scheduling
 interface ScheduleConfig {
@@ -78,6 +79,20 @@ class AutomationScheduler {
       this.tasks.push(task2and4and5);
       console.log('✅ Cron job Funzioni 2+4+5 attivato');
     }
+
+    // Cron job per Fase 2: Process Completed Reports (ogni 15 minuti)
+    const taskProcessReports = cron.schedule('*/15 * * * *', async () => {
+      console.log('⏰ Trigger automatico: Fase 2 - Process Completed Reports');
+      try {
+        await processCompletedReports();
+      } catch (error) {
+        console.error('❌ Errore Fase 2 (process reports):', error);
+      }
+    }, {
+      timezone: 'UTC'
+    });
+    this.tasks.push(taskProcessReports);
+    console.log('✅ Cron job Fase 2 (process reports) attivato - ogni 15 minuti');
 
     this.isRunning = true;
     console.log('✅ Scheduler interno avviato con successo');
@@ -287,7 +302,8 @@ class AutomationScheduler {
       lastExecutionTimes: Object.fromEntries(this.lastExecutionTimes),
       nextScheduledRuns: {
         func1and3: this.config.func1and3_schedule + ' (Lun/Mer/Ven 10:30 IT)',
-        func2and4and5: this.config.func2and4and5_schedule + ' (Lunedì 11:30 IT)'
+        func2and4and5: this.config.func2and4and5_schedule + ' (Lunedì 11:30 IT)',
+        processReports: '*/15 * * * * (ogni 15 minuti - Fase 2 async)'
       }
     };
   }
