@@ -13,6 +13,20 @@ import { createMarketplaceApiService, getConfiguredMarketplaces } from './Market
 import { createUserAmazonApiService } from './UserAmazonApiFactory';
 import { isInWarmupPeriod, getCampaignCreatedAt, formatDateForAmazon } from '../utils/timeframe';
 import { automationScheduler } from '../automation/scheduler';
+
+/**
+ * Extracts reportId from a 425 duplicate error response.
+ * Amazon returns: "The Request is a duplicate of : <reportId>"
+ */
+function extractReportIdFrom425(error: any): string | null {
+  try {
+    const detail = error?.response?.data?.detail || error?.message || '';
+    const match = detail.match(/duplicate of\s*:\s*(.+)$/i);
+    return match ? match[1].trim() : null;
+  } catch {
+    return null;
+  }
+}
 import { shouldExecuteFunc1 } from '../automation/functions/func1';
 import { shouldExecuteFunc2 } from '../automation/functions/func2';
 import { shouldExecuteFunc3 } from '../automation/functions/func3';
@@ -209,9 +223,20 @@ async function submitReportsForCampaign(
       const endDateStr = now.toISOString().split('T')[0];
 
       const columns = ['impressions', 'clicks', 'cost', 'purchases14d'];
-      const reportId = await apiService.requestReportV3(
-        startDateStr, endDateStr, 'spTargeting', columns
-      );
+      let reportId: string;
+      try {
+        reportId = await apiService.requestReportV3(
+          startDateStr, endDateStr, 'spTargeting', columns
+        );
+      } catch (submitError: any) {
+        const duplicateId = extractReportIdFrom425(submitError);
+        if (duplicateId) {
+          reportId = duplicateId;
+          console.log(`     ♻️ spTargeting duplicate, reusing: ${reportId}`);
+        } else {
+          throw submitError;
+        }
+      }
 
       const pendingReport = reportRepo.create({
         userId,
@@ -241,14 +266,25 @@ async function submitReportsForCampaign(
   if (functionsToRun.includes(3)) {
     try {
       const startDate65 = new Date();
-      startDate65.setDate(startDate65.getDate() - 65);
+      startDate65.setDate(startDate65.getDate() - 31); // Amazon API v3 max range is 31 days
       const startDateStr = startDate65.toISOString().split('T')[0];
       const endDateStr = now.toISOString().split('T')[0];
 
       const columns = ['clicks', 'purchases14d'];
-      const reportId = await apiService.requestReportV3(
-        startDateStr, endDateStr, 'spTargeting', columns
-      );
+      let reportId: string;
+      try {
+        reportId = await apiService.requestReportV3(
+          startDateStr, endDateStr, 'spTargeting', columns
+        );
+      } catch (submitError: any) {
+        const duplicateId = extractReportIdFrom425(submitError);
+        if (duplicateId) {
+          reportId = duplicateId;
+          console.log(`     ♻️ spTargeting_31d duplicate, reusing: ${reportId}`);
+        } else {
+          throw submitError;
+        }
+      }
 
       const pendingReport = reportRepo.create({
         userId,
@@ -283,7 +319,18 @@ async function submitReportsForCampaign(
       const startDateStr = startDate.toISOString().split('T')[0];
       const endDateStr = now.toISOString().split('T')[0];
 
-      const reportId = await apiService.requestSearchTermsReport(startDateStr, endDateStr, campaignId);
+      let reportId: string;
+      try {
+        reportId = await apiService.requestSearchTermsReport(startDateStr, endDateStr, campaignId);
+      } catch (submitError: any) {
+        const duplicateId = extractReportIdFrom425(submitError);
+        if (duplicateId) {
+          reportId = duplicateId;
+          console.log(`     ♻️ spSearchTerm duplicate, reusing: ${reportId}`);
+        } else {
+          throw submitError;
+        }
+      }
 
       const pendingReport = reportRepo.create({
         userId,
