@@ -261,12 +261,12 @@ class AmazonApiService {
     startDate: string,
     endDate: string,
     reportType: 'spTargeting' | 'spCampaigns' | 'spSearchTerm' = 'spTargeting',
-    columns: string[] = ['impressions', 'clicks', 'cost', 'sales14d', 'purchases14d']
+    columns: string[] = ['impressions', 'clicks', 'cost', 'purchases14d']
   ): Promise<string> {
     try {
       console.log(`📊 [API v3] Richiesta report ${reportType} dal ${startDate} al ${endDate}...`);
 
-      // Mappa le colonne per API v3 (alcune hanno nomi diversi)
+      // Mappa colonne legacy → nomi API v3
       const v3Columns = columns.map(col => {
         const mapping: Record<string, string> = {
           'sales': 'sales14d',
@@ -279,17 +279,18 @@ class AmazonApiService {
         return mapping[col] || col;
       });
 
-      // Colonne valide per API v3 spTargeting (non include keywordId separato!)
-      // Il targeting ID è incluso nella colonna 'targeting'
-      const requiredCols = ['campaignId', 'adGroupId', 'targeting'];
+      // Colonne obbligatorie per identificare keyword/target (da documentazione Amazon staff)
+      // keywordId E keyword sono validi per spTargeting!
+      const requiredCols = ['campaignId', 'adGroupId', 'keywordId', 'keyword'];
       if (reportType === 'spSearchTerm') {
+        // Per search term reports, aggiungi searchTerm
         requiredCols.push('searchTerm');
       }
 
       const allColumns = [...new Set([...requiredCols, ...v3Columns])];
 
-      // Rimuovi colonne non valide per API v3
-      const invalidColumns = ['keywordId', 'targetId', 'keyword'];
+      // Rimuovi solo colonne sicuramente non valide
+      const invalidColumns = ['targetId', 'bid', 'orders14d', 'spend'];
       const validColumns = allColumns.filter(col => !invalidColumns.includes(col));
 
       const requestBody = {
@@ -307,8 +308,12 @@ class AmazonApiService {
 
       console.log(`📋 [API v3] Request body:`, JSON.stringify(requestBody, null, 2));
 
-      // API v3 usa header JSON standard
-      const response = await this.client.post('/reporting/reports', requestBody);
+      // Content-Type v3 RICHIESTO da Amazon (da documentazione ufficiale)
+      const response = await this.client.post('/reporting/reports', requestBody, {
+        headers: {
+          'Content-Type': 'application/vnd.createasyncreportrequest.v3+json'
+        }
+      });
 
       const reportId = response.data.reportId;
       console.log(`✅ [API v3] Report richiesto. ID: ${reportId}`);
@@ -605,12 +610,12 @@ class AmazonApiService {
       const columns = [
         'campaignId',
         'adGroupId',
-        'targeting',
+        'keywordId',
+        'keyword',
         'searchTerm',
         'impressions',
         'clicks',
         'cost',
-        'sales14d',
         'purchases14d'
       ];
 
@@ -627,14 +632,18 @@ class AmazonApiService {
         }
       };
 
-      // Nota: API v3 non supporta campaignIdFilter nel corpo, filtrare dopo il download
       if (campaignIdFilter) {
         console.log(`   [API v3] Filtro campagna: ${campaignIdFilter} (applicato post-download)`);
       }
 
       console.log(`📋 [API v3] Request body:`, JSON.stringify(requestBody, null, 2));
 
-      const response = await this.client.post('/reporting/reports', requestBody);
+      // Content-Type v3 RICHIESTO da Amazon
+      const response = await this.client.post('/reporting/reports', requestBody, {
+        headers: {
+          'Content-Type': 'application/vnd.createasyncreportrequest.v3+json'
+        }
+      });
 
       const reportId = response.data.reportId;
       console.log(`✅ [API v3] Report search terms richiesto. ID: ${reportId}`);
