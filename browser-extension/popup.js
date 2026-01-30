@@ -5,6 +5,7 @@ const API_URL = PRODUCTION_URL || 'http://localhost:3000';
 
 // Elementi DOM
 const syncButton = document.getElementById('syncButton');
+const syncBooksButton = document.getElementById('syncBooksButton');
 const syncSalesButton = document.getElementById('syncSalesButton');
 const checkStatusButton = document.getElementById('checkStatus');
 const statusDiv = document.getElementById('status');
@@ -272,6 +273,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     showStatus(`❌ Errore: ${request.error}`, 'error');
     setButtonsEnabled(true);
   }
+
+  // Bookshelf sync handlers
+  if (request.action === 'bookshelfSyncComplete') {
+    showProgress(false);
+    if (request.success) {
+      showStatus(`📚 Libri sincronizzati!\n${request.booksCount} libri trovati, ${request.booksUpdated} aggiornati`, 'success');
+    } else {
+      showStatus(`❌ Errore: ${request.error || 'Sincronizzazione libri fallita'}`, 'error');
+    }
+    setButtonsEnabled(true);
+  }
+
+  if (request.action === 'bookshelfSyncError') {
+    showProgress(false);
+    showStatus(`❌ Errore libri: ${request.error}`, 'error');
+    setButtonsEnabled(true);
+  }
 });
 
 // Funzione per sincronizzare dati vendite
@@ -315,8 +333,45 @@ async function syncSalesData() {
   }
 }
 
+// Funzione per sincronizzare libri dal bookshelf
+async function syncBooksData() {
+  try {
+    setButtonsEnabled(false);
+    showStatus('📚 Avvio sincronizzazione libri...', 'syncing');
+    showProgress(true, 5, 'Preparazione...');
+
+    const storageData = await chrome.storage.local.get(['jwtToken']);
+    const jwtToken = storageData.jwtToken;
+
+    if (!jwtToken) {
+      showStatus('❌ Non sei autenticato. Apri l\'app e fai login, poi riprova.', 'error');
+      showProgress(false);
+      setButtonsEnabled(true);
+      return;
+    }
+
+    const marketplace = await detectMarketplace();
+
+    showStatus('📚 Apertura KDP Bookshelf...\nScraping catalogo libri...', 'syncing');
+    showProgress(true, 10, 'Apertura bookshelf...');
+
+    chrome.runtime.sendMessage({
+      action: 'startBookshelfScraping',
+      jwtToken: jwtToken,
+      marketplace: marketplace
+    });
+
+  } catch (error) {
+    console.error('Books sync error:', error);
+    showStatus(`❌ Errore: ${error.message}`, 'error');
+    showProgress(false);
+    setButtonsEnabled(true);
+  }
+}
+
 // Event listeners
 syncButton.addEventListener('click', syncKdpCookies);
+syncBooksButton.addEventListener('click', syncBooksData);
 syncSalesButton.addEventListener('click', syncSalesData);
 checkStatusButton.addEventListener('click', checkSyncStatus);
 

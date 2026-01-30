@@ -4,6 +4,7 @@ import { KdpBook } from '../../entities/KdpBook';
 import { KdpDailyStats } from '../../entities/KdpDailyStats';
 import { KdpSyncLog } from '../../entities/KdpSyncLog';
 import { authMiddleware, AuthRequest } from '../../middleware/auth';
+import { kdpSyncScheduler } from '../../services/kdp-sync-scheduler';
 
 const router = Router();
 
@@ -161,6 +162,15 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
       } catch (error) {
         console.error(`Errore nel processare il libro ${bookData.asin}:`, error);
       }
+    }
+
+    // Enrich books with page count from Google Books API (async, non-blocking)
+    if (booksUpdated > 0 && req.userId) {
+      kdpSyncScheduler.enrichBooksWithPageCount(req.userId)
+        .then(enriched => {
+          if (enriched > 0) console.log(`[KDP Sync] Enriched ${enriched} books with page count`);
+        })
+        .catch(err => console.warn('[KDP Sync] PageCount enrichment error:', err.message));
     }
 
     const durationMs = Date.now() - startTime;
