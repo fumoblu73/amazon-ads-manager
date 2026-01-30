@@ -55,6 +55,15 @@ export class KdpBook {
   @Column({ type: 'uuid', nullable: true, name: 'linked_campaign_id' })
   linkedCampaignId: string;
 
+  @Column({ type: 'integer', nullable: true, name: 'page_count' })
+  pageCount: number;
+
+  @Column({ type: 'varchar', length: 20, default: 'black_white', name: 'ink_type' })
+  inkType: string;
+
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 60, name: 'royalty_percentage' })
+  royaltyPercentage: number;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

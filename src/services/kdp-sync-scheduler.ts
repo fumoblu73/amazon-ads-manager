@@ -1,9 +1,11 @@
 import cron from 'node-cron';
 import { AppDataSource } from '../config/database';
 import { User } from '../entities/User';
+import { KdpBook } from '../models/KdpBook';
 import { Not, IsNull, MoreThan } from 'typeorm';
 import { kdpScraperService } from './kdp-scraper.service';
 import { kdpReportsScraperService } from './kdp-reports-scraper.service';
+import { fetchPageCount } from './googleBooksService';
 
 export class KdpSyncScheduler {
   private isRunning = false;
@@ -67,6 +69,11 @@ export class KdpSyncScheduler {
         const salesResult = await kdpReportsScraperService.syncSalesAndRoyalties(user.id, false);
         console.log(`✅ Sales: ${salesResult.salesRecords} sales, ${salesResult.royaltiesRecords} royalties`);
 
+        // 3. Enrich books with page count from Google Books
+        console.log('📖 Step 3/3: Fetching page counts from Google Books...');
+        const enriched = await this.enrichBooksWithPageCount(user.id);
+        console.log(`✅ Page counts: ${enriched} books enriched`);
+
         console.log(`✅ User ${user.email} fully synced`);
       } catch (error: any) {
         console.error(`❌ Failed to sync user ${user.email}:`, error.message);
@@ -93,6 +100,10 @@ export class KdpSyncScheduler {
     // Sync sales & royalties
     const salesResult = await kdpReportsScraperService.syncSalesAndRoyalties(userId, false);
 
+    // Enrich books with page count from Google Books API
+    const enriched = await this.enrichBooksWithPageCount(userId);
+    console.log(`[KdpSync] Page counts enriched: ${enriched} books`);
+
     return {
       books: bookResult.books,
       stats: salesResult.salesRecords + salesResult.royaltiesRecords
@@ -102,6 +113,30 @@ export class KdpSyncScheduler {
   /**
    * Import dati storici da CSV per un utente
    */
+  /**
+   * Fetch page counts from Google Books API for books missing pageCount
+   */
+  async enrichBooksWithPageCount(userId: string): Promise<number> {
+    const bookRepo = AppDataSource.getRepository(KdpBook);
+    const booksWithoutPageCount = await bookRepo.find({
+      where: { userId, pageCount: IsNull() as any }
+    });
+
+    if (booksWithoutPageCount.length === 0) return 0;
+
+    let enriched = 0;
+    for (const book of booksWithoutPageCount) {
+      const pageCount = await fetchPageCount(book.asin);
+      if (pageCount !== null) {
+        book.pageCount = pageCount;
+        await bookRepo.save(book);
+        enriched++;
+      }
+    }
+
+    return enriched;
+  }
+
   async importHistoricalData(userId: string): Promise<number> {
     const result = await kdpReportsScraperService.syncSalesAndRoyalties(userId, true);
     return result.historicalMonths;

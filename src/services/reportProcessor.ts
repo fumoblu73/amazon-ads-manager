@@ -6,8 +6,10 @@
 
 import { AppDataSource } from '../config/database';
 import { PendingReport } from '../entities/PendingReport';
+import { KdpBook } from '../models/KdpBook';
 import { createMarketplaceApiService } from './MarketplaceApiFactory';
-import { In } from 'typeorm';
+import { In, IsNull } from 'typeorm';
+import { parseKdpPrice, calculateBookFastAcos, InkType } from '../utils/printingCost';
 
 import { executeFunc1 } from '../automation/functions/func1';
 import { executeFunc2 } from '../automation/functions/func2';
@@ -195,8 +197,40 @@ async function executeAutomationFunctions(
   const functionNumbers: number[] = JSON.parse(report.functionNumbers);
   const cachedApiService = createCachedApiService(apiService, reportData);
 
-  // Mock data (same as in rules.ts - in future should come from DB)
-  const mockBook = { price: 15, printingCost: 3, royaltyPercentage: 60 };
+  // Load real book data from kdp_books via linkedCampaignId
+  const fallbackBook = { price: 15, printingCost: 3, royaltyPercentage: 60 };
+  let book = fallbackBook;
+
+  try {
+    const kdpBookRepo = AppDataSource.getRepository(KdpBook);
+    const kdpBook = await kdpBookRepo.findOne({
+      where: { linkedCampaignId: report.campaignId }
+    });
+
+    if (kdpBook && kdpBook.price && kdpBook.pageCount) {
+      const price = parseKdpPrice(kdpBook.price);
+      if (price) {
+        const inkType = (kdpBook.inkType || 'black_white') as InkType;
+        const royaltyPct = Number(kdpBook.royaltyPercentage) || 60;
+        const result = calculateBookFastAcos(price, kdpBook.pageCount, marketplace, inkType, royaltyPct);
+        if (result) {
+          book = { price, printingCost: result.printingCost, royaltyPercentage: royaltyPct };
+          console.log(`     📖 Book data: price=${price}, printingCost=${result.printingCost}, royalty%=${royaltyPct}, fastAcos=${result.fastAcos}%`);
+        } else {
+          console.warn(`     ⚠️ FAST ACOS calculation failed for campaign ${report.campaignName}, using fallback`);
+        }
+      } else {
+        console.warn(`     ⚠️ Could not parse price "${kdpBook.price}" for campaign ${report.campaignName}, using fallback`);
+      }
+    } else if (kdpBook) {
+      console.warn(`     ⚠️ Book found but missing price or pageCount for campaign ${report.campaignName}, using fallback`);
+    } else {
+      console.warn(`     ⚠️ No kdp_book linked to campaign ${report.campaignName}, using fallback`);
+    }
+  } catch (err: any) {
+    console.warn(`     ⚠️ Error loading book data for campaign ${report.campaignName}: ${err.message}, using fallback`);
+  }
+
   const mockPlacements = { topOfSearch: 0, restOfSearch: 10, productPages: 5 };
   const mockTotalImpressions = 50000;
   const mockAdGroupId = 'mock-adgroup-id';
@@ -222,7 +256,7 @@ async function executeAutomationFunctions(
             report.campaignId,
             report.campaignName,
             marketplace,
-            mockBook,
+            book,
             mockPlacements,
             cachedApiService,
             { frequency: 7, placementTimeframeWeeks: 4 }
@@ -238,7 +272,7 @@ async function executeAutomationFunctions(
             report.campaignType as 1 | 2 | 3 | 4,
             report.campaignName,
             marketplace,
-            mockBook,
+            book,
             mockTotalImpressions,
             cachedApiService,
             { frequency: 3, timeframeA: 2000, timeframeB: 3000, timeframeC: 5000, clicksPause: 10, clicks65days: 30 }
@@ -251,7 +285,7 @@ async function executeAutomationFunctions(
             report.campaignName,
             marketplace,
             mockAdGroupId,
-            mockBook,
+            book,
             mockTotalImpressions,
             cachedApiService,
             { frequency: 7, timeframeA: 1000, timeframeB: 3000, timeframeC: 5000, clicksNegative: 10, spendNegative: 10 }

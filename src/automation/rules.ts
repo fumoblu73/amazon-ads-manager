@@ -16,8 +16,10 @@ import {
 } from '../services/MarketplaceApiFactory';
 import { AppDataSource } from '../config/database';
 import { Campaign } from '../models/Campaign';
+import { KdpBook } from '../models/KdpBook';
 import { AutomationSettings } from '../entities/AutomationSettings';
 import { isInWarmupPeriod, getCampaignCreatedAt } from '../utils/timeframe';
+import { parseKdpPrice, calculateBookFastAcos, InkType } from '../utils/printingCost';
 import { automationScheduler } from './scheduler';
 
 // Import delle 5 funzioni
@@ -320,21 +322,34 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
     return;
   }
 
-  // ================================================
-  // RECUPERA CONFIGURAZIONE E DATI DEL LIBRO
-  // ================================================
-  // NOTA: In un'app reale, dovresti recuperare da database:
-  // - AutomationConfig per questa campagna
-  // - Book associato per calcolare FAST ACoS
-  // Per ora usiamo dati mock
+  // Load real book data from kdp_books via linkedCampaignId
+  const fallbackBook = { price: 15, printingCost: 3, royaltyPercentage: 60 };
+  let book = fallbackBook;
 
-  const mockBook = {
-    price: 15,
-    printingCost: 3,
-    royaltyPercentage: 60
-  };
+  try {
+    const kdpBookRepo = AppDataSource.getRepository(KdpBook);
+    const kdpBook = await kdpBookRepo.findOne({
+      where: { linkedCampaignId: campaignId }
+    });
 
-  // Per runAutomationRules (globale) usa DEFAULT_CONFIG
+    if (kdpBook && kdpBook.price && kdpBook.pageCount) {
+      const price = parseKdpPrice(kdpBook.price);
+      if (price) {
+        const inkType = (kdpBook.inkType || 'black_white') as InkType;
+        const royaltyPct = Number(kdpBook.royaltyPercentage) || 60;
+        const result = calculateBookFastAcos(price, kdpBook.pageCount, marketplace, inkType, royaltyPct);
+        if (result) {
+          book = { price, printingCost: result.printingCost, royaltyPercentage: royaltyPct };
+          console.log(`  📖 Book data: price=${price}, printingCost=${result.printingCost}, fastAcos=${result.fastAcos}%`);
+        }
+      }
+    } else if (!kdpBook) {
+      console.warn(`  ⚠️ No kdp_book linked to campaign ${campaignName}, using fallback`);
+    }
+  } catch (err: any) {
+    console.warn(`  ⚠️ Error loading book data: ${err.message}, using fallback`);
+  }
+
   const config = DEFAULT_CONFIG;
 
   const mockPlacements = {
@@ -343,10 +358,7 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
     productPages: 5
   };
 
-  // Mock impressions totali ultimi 30 giorni (per calcolo timeframe dinamico)
   const mockTotalImpressions = 50000;
-
-  // Mock ad group ID (necessario per alcune funzioni)
   const mockAdGroupId = campaign.adGroupId || 'mock-adgroup-id';
 
   // ================================================
@@ -393,7 +405,7 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
           campaignType as any,
           campaignName,
           marketplace,
-          mockBook,
+          book,
           mockTotalImpressions,
           amazonApiService,
           {
@@ -427,7 +439,7 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
           campaignId,
           campaignName,
           marketplace,
-          mockBook,
+          book,
           mockPlacements,
           amazonApiService,
           {
@@ -458,7 +470,7 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
           campaignName,
           marketplace,
           mockAdGroupId,
-          mockBook,
+          book,
           mockTotalImpressions,
           amazonApiService,
           {
@@ -564,12 +576,40 @@ async function processCampaignWithApiService(
 
   console.log(`✅ [${marketplace}] Campagna fuori warmup, procedo con automazioni...`);
 
-  // Dati mock (in futuro: recuperare dal database libro associato)
-  const mockBook = {
-    price: 15,
-    printingCost: 3,
-    royaltyPercentage: 60
-  };
+  // Load real book data from kdp_books via linkedCampaignId
+  const fallbackBook = { price: 15, printingCost: 3, royaltyPercentage: 60 };
+  let book = fallbackBook;
+
+  try {
+    const kdpBookRepo = AppDataSource.getRepository(KdpBook);
+    const kdpBook = await kdpBookRepo.findOne({
+      where: { linkedCampaignId: campaignId }
+    });
+
+    if (kdpBook && kdpBook.price && kdpBook.pageCount) {
+      const price = parseKdpPrice(kdpBook.price);
+      if (price) {
+        const inkType = (kdpBook.inkType || 'black_white') as InkType;
+        const royaltyPct = Number(kdpBook.royaltyPercentage) || 60;
+        const result = calculateBookFastAcos(price, kdpBook.pageCount, marketplace, inkType, royaltyPct);
+        if (result) {
+          book = { price, printingCost: result.printingCost, royaltyPercentage: royaltyPct };
+          console.log(`  📖 Book data: price=${price}, printingCost=${result.printingCost}, royalty%=${royaltyPct}, fastAcos=${result.fastAcos}%`);
+        } else {
+          console.warn(`  ⚠️ FAST ACOS calc failed for ${campaignName}, using fallback`);
+        }
+      } else {
+        console.warn(`  ⚠️ Could not parse price "${kdpBook.price}" for ${campaignName}, using fallback`);
+      }
+    } else if (kdpBook) {
+      console.warn(`  ⚠️ Book missing price or pageCount for ${campaignName}, using fallback`);
+    } else {
+      console.warn(`  ⚠️ No kdp_book linked to campaign ${campaignName}, using fallback`);
+    }
+  } catch (err: any) {
+    console.warn(`  ⚠️ Error loading book data for ${campaignName}: ${err.message}, using fallback`);
+  }
+
   const mockPlacements = { topOfSearch: 0, restOfSearch: 10, productPages: 5 };
   const mockTotalImpressions = 50000;
   const mockAdGroupId = campaign.adGroupId || 'mock-adgroup-id';
@@ -610,7 +650,7 @@ async function processCampaignWithApiService(
       try {
         await executeFunc3(
           campaignId, campaignType as any, campaignName, marketplace,
-          mockBook, mockTotalImpressions, apiService,
+          book, mockTotalImpressions, apiService,
           {
             frequency: config.func3_frequency,
             timeframeA: config.func3_timeframeA,
@@ -640,7 +680,7 @@ async function processCampaignWithApiService(
       try {
         await executeFunc2(
           campaignId, campaignName, marketplace,
-          mockBook, mockPlacements, apiService,
+          book, mockPlacements, apiService,
           {
             frequency: config.func2_frequency,
             placementTimeframeWeeks: config.func2_timeframeWeeks
@@ -666,7 +706,7 @@ async function processCampaignWithApiService(
       try {
         await executeFunc4(
           campaignId, campaignName, marketplace,
-          mockAdGroupId, mockBook, mockTotalImpressions, apiService,
+          mockAdGroupId, book, mockTotalImpressions, apiService,
           {
             frequency: config.func4_frequency,
             timeframeA: config.func4_timeframeA,
