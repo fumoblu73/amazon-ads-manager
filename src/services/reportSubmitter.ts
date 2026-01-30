@@ -18,6 +18,18 @@ import { automationScheduler } from '../automation/scheduler';
  * Extracts reportId from a 425 duplicate error response.
  * Amazon returns: "The Request is a duplicate of : <reportId>"
  */
+/**
+ * Check if a pending report already exists to avoid duplicates.
+ */
+async function pendingReportExists(
+  reportRepo: any, reportId: string, campaignId: string, reportType: string
+): Promise<boolean> {
+  const existing = await reportRepo.findOne({
+    where: { reportId, campaignId, reportType, status: 'submitted' }
+  });
+  return !!existing;
+}
+
 function extractReportIdFrom425(error: any): string | null {
   try {
     const detail = error?.response?.data?.detail || error?.message || '';
@@ -238,25 +250,29 @@ async function submitReportsForCampaign(
         }
       }
 
-      const pendingReport = reportRepo.create({
-        userId,
-        marketplace,
-        campaignId,
-        campaignName,
-        campaignType,
-        reportId,
-        reportType: 'spTargeting',
-        columns: JSON.stringify(columns),
-        startDate: startDateStr,
-        endDate: endDateStr,
-        status: 'submitted',
-        functionNumbers: JSON.stringify(functionsToRun.filter(f => [1, 2, 3, 4].includes(f))),
-        attempts: 0,
-        maxAttempts: 20
-      });
-      await reportRepo.save(pendingReport);
-      submitted++;
-      console.log(`     ✅ spTargeting report submitted: ${reportId}`);
+      if (await pendingReportExists(reportRepo, reportId, campaignId, 'spTargeting')) {
+        console.log(`     ⏭️ spTargeting already pending, skipping: ${reportId}`);
+      } else {
+        const pendingReport = reportRepo.create({
+          userId,
+          marketplace,
+          campaignId,
+          campaignName,
+          campaignType,
+          reportId,
+          reportType: 'spTargeting',
+          columns: JSON.stringify(columns),
+          startDate: startDateStr,
+          endDate: endDateStr,
+          status: 'submitted',
+          functionNumbers: JSON.stringify(functionsToRun.filter(f => [1, 2, 3, 4].includes(f))),
+          attempts: 0,
+          maxAttempts: 20
+        });
+        await reportRepo.save(pendingReport);
+        submitted++;
+        console.log(`     ✅ spTargeting report submitted: ${reportId}`);
+      }
     } catch (error: any) {
       console.error(`     ❌ spTargeting submit failed: ${error.message}`);
     }
@@ -286,25 +302,29 @@ async function submitReportsForCampaign(
         }
       }
 
-      const pendingReport = reportRepo.create({
-        userId,
-        marketplace,
-        campaignId,
-        campaignName,
-        campaignType,
-        reportId,
-        reportType: 'spTargeting_65d',
-        columns: JSON.stringify(columns),
-        startDate: startDateStr,
-        endDate: endDateStr,
-        status: 'submitted',
-        functionNumbers: JSON.stringify([3]),
-        attempts: 0,
-        maxAttempts: 20
-      });
-      await reportRepo.save(pendingReport);
-      submitted++;
-      console.log(`     ✅ spTargeting 65d report submitted: ${reportId}`);
+      if (await pendingReportExists(reportRepo, reportId, campaignId, 'spTargeting_65d')) {
+        console.log(`     ⏭️ spTargeting_65d already pending, skipping: ${reportId}`);
+      } else {
+        const pendingReport = reportRepo.create({
+          userId,
+          marketplace,
+          campaignId,
+          campaignName,
+          campaignType,
+          reportId,
+          reportType: 'spTargeting_65d',
+          columns: JSON.stringify(columns),
+          startDate: startDateStr,
+          endDate: endDateStr,
+          status: 'submitted',
+          functionNumbers: JSON.stringify([3]),
+          attempts: 0,
+          maxAttempts: 20
+        });
+        await reportRepo.save(pendingReport);
+        submitted++;
+        console.log(`     ✅ spTargeting 65d report submitted: ${reportId}`);
+      }
     } catch (error: any) {
       console.error(`     ❌ spTargeting 65d submit failed: ${error.message}`);
     }
@@ -332,25 +352,29 @@ async function submitReportsForCampaign(
         }
       }
 
-      const pendingReport = reportRepo.create({
-        userId,
-        marketplace,
-        campaignId,
-        campaignName,
-        campaignType,
-        reportId,
-        reportType: 'spSearchTerm',
-        columns: JSON.stringify(['searchTerm', 'impressions', 'clicks', 'cost', 'purchases14d']),
-        startDate: startDateStr,
-        endDate: endDateStr,
-        status: 'submitted',
-        functionNumbers: JSON.stringify(functionsToRun.filter(f => [4, 5].includes(f))),
-        attempts: 0,
-        maxAttempts: 20
-      });
-      await reportRepo.save(pendingReport);
-      submitted++;
-      console.log(`     ✅ spSearchTerm report submitted: ${reportId}`);
+      if (await pendingReportExists(reportRepo, reportId, campaignId, 'spSearchTerm')) {
+        console.log(`     ⏭️ spSearchTerm already pending, skipping: ${reportId}`);
+      } else {
+        const pendingReport = reportRepo.create({
+          userId,
+          marketplace,
+          campaignId,
+          campaignName,
+          campaignType,
+          reportId,
+          reportType: 'spSearchTerm',
+          columns: JSON.stringify(['searchTerm', 'impressions', 'clicks', 'cost', 'purchases14d']),
+          startDate: startDateStr,
+          endDate: endDateStr,
+          status: 'submitted',
+          functionNumbers: JSON.stringify(functionsToRun.filter(f => [4, 5].includes(f))),
+          attempts: 0,
+          maxAttempts: 20
+        });
+        await reportRepo.save(pendingReport);
+        submitted++;
+        console.log(`     ✅ spSearchTerm report submitted: ${reportId}`);
+      }
     } catch (error: any) {
       console.error(`     ❌ spSearchTerm submit failed: ${error.message}`);
     }
