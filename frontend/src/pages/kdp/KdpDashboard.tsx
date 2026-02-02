@@ -376,7 +376,7 @@ export default function KdpDashboard() {
       {/* Header with dynamic period */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white mb-1">KDP Analytics Dashboard</h1>
+          <h1 className="text-2xl font-bold text-white mb-1">KDP Overview</h1>
           <p className="text-gray-400 text-sm">
             {summary.period.label || `${summary.period.startDate} - ${summary.period.endDate}`}
           </p>
