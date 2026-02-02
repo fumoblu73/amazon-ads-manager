@@ -14,6 +14,7 @@ import { KdpSyncLog } from '../entities/KdpSyncLog';
 import { AutomationSettings } from '../entities/AutomationSettings';
 import { KdpSalesSnapshot } from '../entities/KdpSalesSnapshot';
 import { PendingReport } from '../entities/PendingReport';
+import { KdpUserStats } from '../models/KdpDailyStats';
 
 dotenv.config();
 
@@ -33,7 +34,8 @@ const getDatabaseConfig = () => {
     KdpSyncLog,
     AutomationSettings,
     KdpSalesSnapshot,
-    PendingReport
+    PendingReport,
+    KdpUserStats
   ];
 
   if (process.env.DATABASE_URL) {
