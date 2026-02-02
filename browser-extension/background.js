@@ -531,7 +531,13 @@ async function startBookshelfScraping(marketplace) {
 
 // Funzione per inviare libri al server
 async function sendBooksToServer(books, jwtToken, marketplace) {
-  console.log('[Background] Sending', books.length, 'books to server...');
+  console.log('[Background] Sending', books.length, 'books to server, marketplace:', marketplace);
+
+  // Inject marketplace into each book (scraper detects it from URL but backend requires it per-book)
+  const booksWithMarketplace = books.map(book => ({
+    ...book,
+    marketplace: book.marketplace || marketplace || 'IT'
+  }));
 
   const response = await fetch(`${API_URL}/api/kdp/sync`, {
     method: 'POST',
@@ -539,7 +545,7 @@ async function sendBooksToServer(books, jwtToken, marketplace) {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${jwtToken}`
     },
-    body: JSON.stringify({ books })
+    body: JSON.stringify({ books: booksWithMarketplace })
   });
 
   if (!response.ok) {

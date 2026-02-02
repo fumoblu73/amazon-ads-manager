@@ -245,14 +245,15 @@
 
   function detectMarketplace() {
     const url = window.location.href;
-    if (url.includes('.it/')) return 'IT';
-    if (url.includes('.co.uk/')) return 'UK';
-    if (url.includes('.de/')) return 'DE';
-    if (url.includes('.fr/')) return 'FR';
-    if (url.includes('.es/')) return 'ES';
-    if (url.includes('.ca/')) return 'CA';
-    if (url.includes('.com.au/')) return 'AU';
-    if (url.includes('.co.jp/')) return 'JP';
+    // KDP URLs use locale format: kdp.amazon.com/it_IT/bookshelf
+    if (url.includes('/it_IT/') || url.includes('.it/')) return 'IT';
+    if (url.includes('/en_GB/') || url.includes('.co.uk/')) return 'UK';
+    if (url.includes('/de_DE/') || url.includes('.de/')) return 'DE';
+    if (url.includes('/fr_FR/') || url.includes('.fr/')) return 'FR';
+    if (url.includes('/es_ES/') || url.includes('.es/')) return 'ES';
+    if (url.includes('/en_CA/') || url.includes('.ca/')) return 'CA';
+    if (url.includes('/en_AU/') || url.includes('.com.au/')) return 'AU';
+    if (url.includes('/ja_JP/') || url.includes('.co.jp/')) return 'JP';
     return 'US';
   }
 
