@@ -83,11 +83,11 @@
 
       showNotification('🔄 Avvio sincronizzazione KDP...', 'info');
 
-      // Invia richiesta al background script
+      // Invia richiesta al background script (combined sync: bookshelf + vendite)
       chrome.runtime.sendMessage({
-        action: 'startClientScraping',
+        action: 'startCombinedSync',
         jwtToken: storageData.jwtToken,
-        marketplace: 'US'
+        marketplace: 'IT'
       });
 
       window.postMessage({ type: 'KDP_SYNC_RESPONSE', success: true, message: 'Sync started' }, '*');
@@ -95,13 +95,15 @@
 
     // L'app chiede lo stato dell'estensione
     if (type === 'KDP_EXTENSION_CHECK') {
-      const storageData = await chrome.storage.local.get(['jwtToken', 'lastSalesSync', 'lastSalesSyncSuccess']);
+      const storageData = await chrome.storage.local.get(['jwtToken', 'lastSalesSync', 'lastSalesSyncSuccess', 'lastBookshelfSync', 'lastBookshelfSyncSuccess']);
       window.postMessage({
         type: 'KDP_EXTENSION_STATUS',
         installed: true,
         authenticated: !!storageData.jwtToken,
         lastSync: storageData.lastSalesSync,
-        lastSyncSuccess: storageData.lastSalesSyncSuccess
+        lastSyncSuccess: storageData.lastSalesSyncSuccess,
+        lastBookshelfSync: storageData.lastBookshelfSync,
+        lastBookshelfSyncSuccess: storageData.lastBookshelfSyncSuccess
       }, '*');
     }
   });
@@ -137,6 +139,19 @@
         type: 'KDP_SYNC_ERROR',
         error: request.error
       }, '*');
+    }
+
+    // Bookshelf sync messages (forwarded as progress to app)
+    if (request.action === 'bookshelfSyncComplete') {
+      if (request.success) {
+        console.log(`[Auth Helper] Bookshelf sync: ${request.booksCount} books`);
+      }
+      // Progress is already forwarded via syncProgress messages
+    }
+
+    if (request.action === 'bookshelfSyncError') {
+      console.warn('[Auth Helper] Bookshelf sync error:', request.error);
+      // In combined mode this is non-fatal, sales will continue
     }
   });
 

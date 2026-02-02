@@ -17,6 +17,9 @@ let bookshelfTabId = null;
 let bookshelfJwtToken = null;
 let bookshelfMarketplace = null;
 
+// Combined sync state (bookshelf + sales in sequence)
+let combinedSyncActive = false;
+
 // Helper per inviare messaggi al popup (se aperto) E ai content scripts dell'app
 async function sendToPopup(message) {
   // Invia al popup
@@ -72,12 +75,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   // Progresso scraping dal content script
   if (request.action === 'kdpScrapingProgress') {
-    const percent = 20 + Math.round((request.monthIndex / 12) * 60); // 20-80%
-    sendToPopup({
-      action: 'syncProgress',
-      percent: percent,
-      text: `Scaricamento ${request.monthLabel}... (${request.monthIndex + 1}/12)`
-    });
+    const rawPercent = 20 + Math.round((request.monthIndex / 12) * 60); // 20-80%
+    const percent = combinedSyncActive
+      ? 40 + Math.round(rawPercent * 0.6) // 40-88% range in combined mode
+      : rawPercent;
+    const text = combinedSyncActive
+      ? `Fase 2/2: ${request.monthLabel}... (${request.monthIndex + 1}/12)`
+      : `Scaricamento ${request.monthLabel}... (${request.monthIndex + 1}/12)`;
+    sendToPopup({ action: 'syncProgress', percent, text });
   }
 
   // Dati catturati dal content script
@@ -140,6 +145,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         .finally(() => {
           pendingSyncJwtToken = null;
           pendingSyncMarketplace = null;
+          combinedSyncActive = false;
 
           // Chiudi il tab di kdpreports dopo il sync (successo o errore)
           if (scrapeTabId) {
@@ -216,6 +222,35 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ data: scrapedData });
   }
 
+  // ========== COMBINED SYNC (Bookshelf + Sales) ==========
+
+  if (request.action === 'startCombinedSync') {
+    combinedSyncActive = true;
+    pendingSyncJwtToken = request.jwtToken;
+    pendingSyncMarketplace = request.marketplace || 'IT';
+    bookshelfJwtToken = request.jwtToken;
+    bookshelfMarketplace = request.marketplace || 'IT';
+    console.log('[Background] Starting combined sync, marketplace:', pendingSyncMarketplace);
+
+    sendResponse({ success: true, message: 'Combined sync started' });
+
+    sendToPopup({ action: 'syncProgress', percent: 5, text: 'Fase 1/2: Sincronizzazione libri...' });
+
+    startBookshelfScraping(pendingSyncMarketplace)
+      .catch(error => {
+        console.error('[Background] Bookshelf scraping failed in combined sync:', error.message);
+        // Continue with sales even if bookshelf fails
+        sendToPopup({ action: 'syncProgress', percent: 40, text: 'Fase 2/2: Sincronizzazione vendite...' });
+        startClientSideScraping().catch(err => {
+          console.error('[Background] Sales scraping also failed:', err.message);
+          combinedSyncActive = false;
+          sendToPopup({ action: 'syncError', error: err.message });
+        });
+      });
+
+    return false;
+  }
+
   // ========== BOOKSHELF SCRAPING ==========
 
   // Popup richiede scraping bookshelf
@@ -249,11 +284,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   // Bookshelf scraping progress
   if (request.action === 'kdpBookshelfProgress') {
-    sendToPopup({
-      action: 'syncProgress',
-      percent: request.percent,
-      text: request.text
-    });
+    const percent = combinedSyncActive
+      ? 5 + Math.round(request.percent * 0.35) // 5-40% range in combined mode
+      : request.percent;
+    const text = combinedSyncActive
+      ? `Fase 1/2: ${request.text}`
+      : request.text;
+    sendToPopup({ action: 'syncProgress', percent, text });
   }
 
   // Bookshelf scraping complete
@@ -261,12 +298,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('[Background] Bookshelf data complete:', request.success, 'Books:', request.data?.books?.length);
 
     if (request.success && bookshelfJwtToken) {
-      sendToPopup({ action: 'syncProgress', percent: 85, text: 'Invio libri al server...' });
+      const progressText = combinedSyncActive ? 'Fase 1/2: Invio libri al server...' : 'Invio libri al server...';
+      const progressPercent = combinedSyncActive ? 35 : 85;
+      sendToPopup({ action: 'syncProgress', percent: progressPercent, text: progressText });
 
       sendBooksToServer(request.data.books, bookshelfJwtToken, request.data.marketplace)
         .then(result => {
           console.log('[Background] Books sent to server:', result);
-          updateBadge('✓', '#00aa00');
 
           sendToPopup({
             action: 'bookshelfSyncComplete',
@@ -281,11 +319,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             lastBookshelfBooksCount: request.data.books.length
           });
 
-          setTimeout(() => updateBadge('', '#ff9900'), 5000);
+          if (!combinedSyncActive) {
+            updateBadge('✓', '#00aa00');
+            setTimeout(() => updateBadge('', '#ff9900'), 5000);
+          }
         })
         .catch(error => {
           console.error('[Background] Failed to send books:', error);
-          updateBadge('!', '#ff0000');
 
           sendToPopup({
             action: 'bookshelfSyncComplete',
@@ -298,6 +338,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             lastBookshelfSyncSuccess: false,
             lastBookshelfSyncError: error.message
           });
+
+          if (!combinedSyncActive) {
+            updateBadge('!', '#ff0000');
+          }
         })
         .finally(() => {
           bookshelfJwtToken = null;
@@ -310,18 +354,51 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             }, 2000);
           }
           bookshelfTabId = null;
+
+          // In combined mode, proceed to sales scraping
+          if (combinedSyncActive) {
+            console.log('[Background] Combined sync: bookshelf done, starting sales...');
+            sendToPopup({ action: 'syncProgress', percent: 40, text: 'Fase 2/2: Sincronizzazione vendite...' });
+            startClientSideScraping().catch(err => {
+              console.error('[Background] Sales scraping failed:', err.message);
+              combinedSyncActive = false;
+              sendToPopup({ action: 'syncError', error: err.message });
+            });
+          }
         });
     } else {
       bookshelfTabId = null;
+      // If bookshelf had no data but combined sync, still proceed to sales
+      if (combinedSyncActive) {
+        console.log('[Background] Combined sync: bookshelf skipped, starting sales...');
+        sendToPopup({ action: 'syncProgress', percent: 40, text: 'Fase 2/2: Sincronizzazione vendite...' });
+        startClientSideScraping().catch(err => {
+          console.error('[Background] Sales scraping failed:', err.message);
+          combinedSyncActive = false;
+          sendToPopup({ action: 'syncError', error: err.message });
+        });
+      }
     }
   }
 
   // Bookshelf scraping failed
   if (request.action === 'kdpBookshelfScrapeFailed') {
     console.error('[Background] Bookshelf scrape failed:', request.error);
-    sendToPopup({ action: 'bookshelfSyncError', error: request.error });
     bookshelfTabId = null;
     bookshelfJwtToken = null;
+
+    if (combinedSyncActive) {
+      // In combined mode, log warning and proceed to sales
+      console.warn('[Background] Combined sync: bookshelf failed, continuing with sales...');
+      sendToPopup({ action: 'syncProgress', percent: 40, text: 'Fase 2/2: Sincronizzazione vendite...' });
+      startClientSideScraping().catch(err => {
+        console.error('[Background] Sales scraping failed:', err.message);
+        combinedSyncActive = false;
+        sendToPopup({ action: 'syncError', error: err.message });
+      });
+    } else {
+      sendToPopup({ action: 'bookshelfSyncError', error: request.error });
+    }
   }
 });
 

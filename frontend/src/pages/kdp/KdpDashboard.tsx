@@ -382,11 +382,10 @@ export default function KdpDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Sync button sempre visibile */}
           <button
             onClick={startAutoSync}
             disabled={!extensionStatus.installed || syncProgress.active}
-            title={extensionStatus.installed ? 'Sincronizza dati KDP' : 'Estensione non installata'}
+            title={extensionStatus.installed ? 'Sincronizza libri e vendite KDP' : 'Estensione non installata'}
             className="px-4 py-2 bg-orange-500/20 text-orange-500 rounded-lg hover:bg-orange-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             <svg className={`w-4 h-4 ${syncProgress.active ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
