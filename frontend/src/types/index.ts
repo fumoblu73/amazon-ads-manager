@@ -121,6 +121,7 @@ export interface KdpBook {
   coverUrl?: string;
   bsrRank?: number;
   bsrCategory?: string;
+  pageCount?: number;
   kenpc?: number;
   lastSyncDate?: string;
   createdAt: string;

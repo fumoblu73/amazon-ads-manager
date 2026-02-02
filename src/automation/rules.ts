@@ -550,7 +550,8 @@ async function processCampaignWithApiService(
   stats: any,
   apiService: any,
   marketplace: string,
-  config: AutomationConfig = DEFAULT_CONFIG
+  config: AutomationConfig = DEFAULT_CONFIG,
+  userId?: string
 ): Promise<void> {
   stats.campaignsProcessed++;
 
@@ -576,16 +577,66 @@ async function processCampaignWithApiService(
 
   console.log(`✅ [${marketplace}] Campagna fuori warmup, procedo con automazioni...`);
 
-  // Load real book data from kdp_books via linkedCampaignId
+  // Load real book data from kdp_books
   const fallbackBook = { price: 15, printingCost: 3, royaltyPercentage: 60 };
   let book = fallbackBook;
 
   try {
     const kdpBookRepo = AppDataSource.getRepository(KdpBook);
-    const kdpBook = await kdpBookRepo.findOne({
-      where: { linkedCampaignId: campaignId }
-    });
+    let kdpBook: KdpBook | null = null;
 
+    // Step 1: Try finding book by linkedCampaignId (cached link from previous run)
+    const campaignRepo = AppDataSource.getRepository(Campaign);
+    const campaignRecord = await campaignRepo.findOne({
+      where: { amazonCampaignId: campaignId, marketplace }
+    });
+    if (campaignRecord) {
+      kdpBook = await kdpBookRepo.findOne({
+        where: { linkedCampaignId: campaignRecord.id }
+      });
+    }
+
+    // Step 2: If not linked, auto-link via Amazon Ads API targets
+    if (!kdpBook && userId) {
+      try {
+        const targets = await apiService.getTargets(campaignId);
+        const asins: string[] = [];
+        for (const target of targets) {
+          if (target.expression) {
+            for (const expr of target.expression) {
+              if (expr.type === 'asinSameAs' && expr.value) {
+                asins.push(expr.value);
+              }
+            }
+          }
+        }
+        if (asins.length > 0) {
+          // Search for a matching book in kdp_books
+          for (const asin of asins) {
+            const matchedBook = await kdpBookRepo.findOne({
+              where: { userId, asin, marketplace }
+            });
+            if (matchedBook) {
+              kdpBook = matchedBook;
+              // Save the link for next time
+              if (campaignRecord) {
+                kdpBook.linkedCampaignId = campaignRecord.id;
+                await kdpBookRepo.save(kdpBook);
+                console.log(`  🔗 Auto-linked book "${kdpBook.title}" (${asin}) to campaign "${campaignName}"`);
+              }
+              break;
+            }
+          }
+          if (!kdpBook) {
+            console.warn(`  ⚠️ Targets ASINs [${asins.join(', ')}] not found in kdp_books for ${campaignName}`);
+          }
+        }
+      } catch (targetErr: any) {
+        console.warn(`  ⚠️ Could not fetch targets for auto-link: ${targetErr.message}`);
+      }
+    }
+
+    // Step 3: Use book data for FAST ACOS calculation
     if (kdpBook && kdpBook.price && kdpBook.pageCount) {
       const price = parseKdpPrice(kdpBook.price);
       if (price) {
@@ -602,9 +653,9 @@ async function processCampaignWithApiService(
         console.warn(`  ⚠️ Could not parse price "${kdpBook.price}" for ${campaignName}, using fallback`);
       }
     } else if (kdpBook) {
-      console.warn(`  ⚠️ Book missing price or pageCount for ${campaignName}, using fallback`);
+      console.warn(`  ⚠️ Book linked but missing price or pageCount for ${campaignName}, using fallback`);
     } else {
-      console.warn(`  ⚠️ No kdp_book linked to campaign ${campaignName}, using fallback`);
+      console.warn(`  ⚠️ No kdp_book found for campaign ${campaignName}, using fallback`);
     }
   } catch (err: any) {
     console.warn(`  ⚠️ Error loading book data for ${campaignName}: ${err.message}, using fallback`);
@@ -869,7 +920,7 @@ export async function runAutomationRulesForUser(userId: string): Promise<void> {
         // Process each active campaign with user settings
         for (const campaign of activeCampaigns) {
           try {
-            await processCampaignWithApiService(campaign, stats, apiService, marketplace, userConfig);
+            await processCampaignWithApiService(campaign, stats, apiService, marketplace, userConfig, userId);
           } catch (error) {
             stats.errors++;
             console.error(`❌ [${marketplace}] Error processing campaign ${campaign.name}:`, error);

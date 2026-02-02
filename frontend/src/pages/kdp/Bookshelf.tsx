@@ -17,6 +17,7 @@ export default function Bookshelf() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cookieStatus, setCookieStatus] = useState<CookieStatus | null>(null);
+  const [savingPageCount, setSavingPageCount] = useState<string | null>(null);
   const [filters, setFilters] = useState<BookshelfFilters>({
     status: 'all',
     page: 1,
@@ -51,6 +52,21 @@ export default function Bookshelf() {
       setCookieStatus(response.data || null);
     } catch (err) {
       console.error('Failed to check cookie status:', err);
+    }
+  };
+
+  const savePageCount = async (bookId: string, pageCount: number) => {
+    try {
+      setSavingPageCount(bookId);
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      await kdpBooksApi.update(bookId, { pageCount } as any, token);
+      setBooks(prev => prev.map(b => b.id === bookId ? { ...b, pageCount } : b));
+    } catch (err: any) {
+      console.error('Failed to save page count:', err);
+      setError('Failed to save page count');
+    } finally {
+      setSavingPageCount(null);
     }
   };
 
@@ -150,6 +166,39 @@ export default function Bookshelf() {
       sortable: true,
       render: (value) => (
         <span className="font-semibold text-orange-500">{value}</span>
+      )
+    },
+    {
+      key: 'pageCount',
+      header: 'Pages',
+      accessor: (book) => book.pageCount || null,
+      sortable: true,
+      render: (value, book) => (
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            min="1"
+            max="9999"
+            defaultValue={value || ''}
+            placeholder="—"
+            className="w-16 px-1.5 py-1 bg-gray-800 border border-gray-700 rounded text-white text-sm text-center focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none"
+            onBlur={(e) => {
+              const val = parseInt(e.target.value);
+              if (val > 0 && val !== book.pageCount) {
+                savePageCount(book.id, val);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+            disabled={savingPageCount === book.id}
+          />
+          {savingPageCount === book.id && (
+            <div className="w-3 h-3 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+          )}
+        </div>
       )
     },
     {

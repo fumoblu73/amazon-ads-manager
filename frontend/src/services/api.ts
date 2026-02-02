@@ -239,7 +239,7 @@ export const kdpBooksApi = {
   },
 
   update: async (id: string, book: Partial<KdpBook>, token: string) => {
-    const response = await apiClient.patch<ApiResponse<KdpBook>>(`/api/kdp/books/${id}`, book, {
+    const response = await apiClient.put<ApiResponse<KdpBook>>(`/api/kdp/books/${id}`, book, {
       headers: { Authorization: `Bearer ${token}` },
     });
     return response.data;
