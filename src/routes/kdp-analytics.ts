@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { AppDataSource } from '../config/database';
 import { KdpDailyStats } from '../models/KdpDailyStats';
-import { KdpBook } from '../models/KdpBook';
+import { KdpBook } from '../entities/KdpBook';
 import { KdpSalesSnapshot } from '../entities/KdpSalesSnapshot';
 import { Between, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
 import {

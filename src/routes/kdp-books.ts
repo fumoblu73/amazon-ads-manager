@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { AppDataSource } from '../config/database';
-import { KdpBook, CreateKdpBookInput, UpdateKdpBookInput, BookshelfFilters } from '../models/KdpBook';
+import { KdpBook } from '../entities/KdpBook';
+import { CreateKdpBookInput, UpdateKdpBookInput, BookshelfFilters } from '../models/KdpBook';
 import { KdpSyncLog } from '../models/KdpSyncLog';
 import { Like } from 'typeorm';
 import { mockBooks } from '../utils/mock-kdp-data';

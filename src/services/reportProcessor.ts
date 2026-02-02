@@ -6,7 +6,7 @@
 
 import { AppDataSource } from '../config/database';
 import { PendingReport } from '../entities/PendingReport';
-import { KdpBook } from '../models/KdpBook';
+import { KdpBook } from '../entities/KdpBook';
 import { createMarketplaceApiService } from './MarketplaceApiFactory';
 import { In, IsNull } from 'typeorm';
 import { parseKdpPrice, calculateBookFastAcos, InkType } from '../utils/printingCost';

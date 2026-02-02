@@ -1,5 +1,5 @@
 import { AppDataSource } from '../config/database';
-import { KdpBook } from '../models/KdpBook';
+import { KdpBook } from '../entities/KdpBook';
 import { KdpDailyStats } from '../models/KdpDailyStats';
 import { JournalEvent } from '../models/JournalEvent';
 

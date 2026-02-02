@@ -1,7 +1,7 @@
 import puppeteer, { Browser, Page } from 'puppeteer';
 import { AppDataSource } from '../config/database';
 import { User } from '../entities/User';
-import { KdpBook } from '../models/KdpBook';
+import { KdpBook } from '../entities/KdpBook';
 import { KdpDailyStats } from '../models/KdpDailyStats';
 import { KdpSyncLog } from '../models/KdpSyncLog';
 import { decryptCookies, Cookie, cookiesToHeaderString } from '../utils/encryption';

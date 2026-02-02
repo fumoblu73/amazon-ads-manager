@@ -16,7 +16,7 @@ import {
 } from '../services/MarketplaceApiFactory';
 import { AppDataSource } from '../config/database';
 import { Campaign } from '../models/Campaign';
-import { KdpBook } from '../models/KdpBook';
+import { KdpBook } from '../entities/KdpBook';
 import { AutomationSettings } from '../entities/AutomationSettings';
 import { isInWarmupPeriod, getCampaignCreatedAt } from '../utils/timeframe';
 import { parseKdpPrice, calculateBookFastAcos, InkType } from '../utils/printingCost';

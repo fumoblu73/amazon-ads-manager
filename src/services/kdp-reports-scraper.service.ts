@@ -2,7 +2,7 @@ import puppeteer, { Browser, Page, HTTPResponse } from 'puppeteer';
 import { AppDataSource } from '../config/database';
 import { User } from '../entities/User';
 import { KdpDailyStats } from '../models/KdpDailyStats';
-import { KdpBook } from '../models/KdpBook';
+import { KdpBook } from '../entities/KdpBook';
 import { KdpSyncLog } from '../models/KdpSyncLog';
 import { decryptCookies, Cookie } from '../utils/encryption';
 import * as csv from 'csv-parse/sync';

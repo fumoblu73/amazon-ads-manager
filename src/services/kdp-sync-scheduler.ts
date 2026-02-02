@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import { AppDataSource } from '../config/database';
 import { User } from '../entities/User';
-import { KdpBook } from '../models/KdpBook';
+import { KdpBook } from '../entities/KdpBook';
 import { Not, IsNull, MoreThan } from 'typeorm';
 import { kdpScraperService } from './kdp-scraper.service';
 import { kdpReportsScraperService } from './kdp-reports-scraper.service';

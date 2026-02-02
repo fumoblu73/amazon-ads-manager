@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { AppDataSource } from '../config/database';
-import { KdpBook } from '../models/KdpBook';
+import { KdpBook } from '../entities/KdpBook';
 import { authMiddleware } from '../middleware/auth';
 
 const router = Router();
