@@ -20,6 +20,8 @@ interface BookData {
   seriesPosition?: number;
   publishDate?: string;
   coverUrl?: string;
+  price?: string;
+  format?: string;
 }
 
 interface DailyStatsData {
@@ -91,6 +93,8 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
           book.seriesPosition = bookData.seriesPosition || book.seriesPosition;
           book.publishDate = bookData.publishDate || book.publishDate;
           book.coverUrl = bookData.coverUrl || book.coverUrl;
+          book.price = bookData.price || book.price;
+          book.format = bookData.format || book.format;
         } else {
           // Crea un nuovo libro
           book = bookRepo.create({
@@ -102,7 +106,9 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
             seriesName: bookData.seriesName,
             seriesPosition: bookData.seriesPosition,
             publishDate: bookData.publishDate,
-            coverUrl: bookData.coverUrl
+            coverUrl: bookData.coverUrl,
+            price: bookData.price,
+            format: bookData.format
           });
         }
 
