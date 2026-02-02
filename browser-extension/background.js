@@ -236,8 +236,31 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     sendToPopup({ action: 'syncProgress', percent: 5, text: 'Fase 1/2: Sincronizzazione libri...' });
 
+    // Timeout: if bookshelf doesn't complete within 60s, skip to sales
+    const bookshelfTimeout = setTimeout(() => {
+      if (combinedSyncActive && bookshelfTabId) {
+        console.warn('[Background] Bookshelf scraping timeout, skipping to sales...');
+        if (bookshelfTabId) {
+          chrome.tabs.remove(bookshelfTabId).catch(() => {});
+          bookshelfTabId = null;
+        }
+        bookshelfJwtToken = null;
+        bookshelfMarketplace = null;
+        sendToPopup({ action: 'syncProgress', percent: 40, text: 'Fase 2/2: Sincronizzazione vendite...' });
+        startClientSideScraping().catch(err => {
+          console.error('[Background] Sales scraping failed:', err.message);
+          combinedSyncActive = false;
+          sendToPopup({ action: 'syncError', error: err.message });
+        });
+      }
+    }, 60000);
+
+    // Store timeout so it can be cleared when bookshelf completes
+    globalThis._bookshelfTimeout = bookshelfTimeout;
+
     startBookshelfScraping(pendingSyncMarketplace)
       .catch(error => {
+        clearTimeout(globalThis._bookshelfTimeout);
         console.error('[Background] Bookshelf scraping failed in combined sync:', error.message);
         // Continue with sales even if bookshelf fails
         sendToPopup({ action: 'syncProgress', percent: 40, text: 'Fase 2/2: Sincronizzazione vendite...' });
@@ -295,6 +318,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   // Bookshelf scraping complete
   if (request.action === 'kdpBookshelfDataComplete') {
+    clearTimeout(globalThis._bookshelfTimeout);
     console.log('[Background] Bookshelf data complete:', request.success, 'Books:', request.data?.books?.length);
 
     if (request.success && bookshelfJwtToken) {
@@ -383,6 +407,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   // Bookshelf scraping failed
   if (request.action === 'kdpBookshelfScrapeFailed') {
+    clearTimeout(globalThis._bookshelfTimeout);
     console.error('[Background] Bookshelf scrape failed:', request.error);
     bookshelfTabId = null;
     bookshelfJwtToken = null;
@@ -504,29 +529,23 @@ async function startBookshelfScraping(marketplace) {
   const locale = localeMap[marketplace] || 'en_US';
   const bookshelfUrl = `https://kdp.amazon.com/${locale}/bookshelf`;
 
-  // Check for existing tab
+  // Always open a fresh bookshelf tab to ensure content script is loaded
+  // (reusing existing tabs fails if extension was updated or content script not injected)
   const existingTabs = await chrome.tabs.query({ url: 'https://kdp.amazon.com/*/bookshelf*' });
-
-  let tab;
-  if (existingTabs.length > 0) {
-    tab = existingTabs[0];
-    bookshelfTabId = tab.id;
-    sendToPopup({ action: 'syncProgress', percent: 12, text: 'Usando tab bookshelf esistente...' });
-    setTimeout(() => {
-      chrome.tabs.sendMessage(bookshelfTabId, { action: 'startBookshelfScraping' });
-    }, 2000);
-  } else {
-    sendToPopup({ action: 'syncProgress', percent: 10, text: 'Apertura KDP Bookshelf...' });
-    const currentWindow = await chrome.windows.getCurrent();
-    tab = await chrome.tabs.create({
-      url: bookshelfUrl,
-      active: false,
-      windowId: currentWindow.id
-    });
-    bookshelfTabId = tab.id;
-    console.log('[Background] Opened bookshelf tab:', tab.id);
-    // startBookshelfScraping will be sent when kdpBookshelfScraperReady fires
+  for (const t of existingTabs) {
+    chrome.tabs.remove(t.id).catch(() => {});
   }
+
+  sendToPopup({ action: 'syncProgress', percent: 10, text: 'Apertura KDP Bookshelf...' });
+  const currentWindow = await chrome.windows.getCurrent();
+  const tab = await chrome.tabs.create({
+    url: bookshelfUrl,
+    active: false,
+    windowId: currentWindow.id
+  });
+  bookshelfTabId = tab.id;
+  console.log('[Background] Opened bookshelf tab:', tab.id);
+  // startBookshelfScraping will be sent when kdpBookshelfScraperReady fires
 }
 
 // Funzione per inviare libri al server
