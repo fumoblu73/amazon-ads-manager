@@ -42,6 +42,10 @@ export default function Settings() {
       bidPhrase: 0.40,
       bidExpanded: 0.30,
     },
+    fastAcos: {
+      useVat: true,
+      vatPercentage: 22,
+    },
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -372,7 +376,7 @@ export default function Settings() {
         </div>
 
         {/* Function 5 */}
-        <div className="bg-black border-2 border-orange-500 rounded-xl p-4 flex flex-col col-span-2">
+        <div className="bg-black border-2 border-orange-500 rounded-xl p-4 flex flex-col">
           <div className="flex items-center justify-between mb-2">
             <div>
               <h2 className="text-base font-bold text-white">F5: Campaign Feeding</h2>
@@ -388,7 +392,7 @@ export default function Settings() {
               <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
             </label>
           </div>
-          <div className="grid grid-cols-6 gap-1.5">
+          <div className="grid grid-cols-3 gap-1.5">
             <div>
               <label className="block text-xs font-medium text-gray-300 mb-0.5">Freq. (gg)</label>
               <input
@@ -446,6 +450,49 @@ export default function Settings() {
                 onChange={(e) => updateSetting('func5', 'bidExpanded', parseFloat(e.target.value))}
                 className="w-full px-2 py-1 text-sm border border-gray-600 bg-gray-900 text-white rounded"
               />
+            </div>
+          </div>
+        </div>
+
+        {/* FAST ACOS Settings */}
+        <div className="bg-black border-2 border-green-500 rounded-xl p-4 flex flex-col">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h2 className="text-base font-bold text-white">FAST ACOS</h2>
+              <p className="text-sm text-gray-300">Calcolo target ACoS</p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-sm text-gray-300">Includi IVA nel calcolo</label>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.fastAcos?.useVat ?? true}
+                  onChange={(e) => updateSetting('fastAcos', 'useVat', e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-600"></div>
+              </label>
+            </div>
+            {(settings.fastAcos?.useVat ?? true) && (
+              <div>
+                <label className="block text-xs font-medium text-gray-300 mb-0.5">Percentuale IVA (%)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={settings.fastAcos?.vatPercentage ?? 22}
+                  onChange={(e) => updateSetting('fastAcos', 'vatPercentage', parseFloat(e.target.value))}
+                  className="w-full px-2 py-1 text-sm border border-gray-600 bg-gray-900 text-white rounded"
+                />
+              </div>
+            )}
+            <div className="text-xs text-gray-400 mt-2">
+              {(settings.fastAcos?.useVat ?? true) ? (
+                <span>Formula: FAST ACOS = Royalty / (Prezzo x {(1 + (settings.fastAcos?.vatPercentage ?? 22) / 100).toFixed(2)})</span>
+              ) : (
+                <span>Formula: FAST ACOS = Royalty / Prezzo</span>
+              )}
             </div>
           </div>
         </div>

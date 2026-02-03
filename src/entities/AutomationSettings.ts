@@ -105,6 +105,13 @@ export class AutomationSettings {
   @Column({ name: 'func5_bid_expanded', type: 'decimal', precision: 10, scale: 2, default: 0.30 })
   func5BidExpanded: number;
 
+  // FAST ACOS VAT Settings
+  @Column({ name: 'use_vat_in_fast_acos', default: true })
+  useVatInFastAcos: boolean;
+
+  @Column({ name: 'vat_percentage', type: 'decimal', precision: 5, scale: 2, default: 22 })
+  vatPercentage: number;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

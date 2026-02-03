@@ -137,7 +137,19 @@ export function parseKdpPrice(priceStr: string | null | undefined): number | nul
 }
 
 /**
+ * VAT settings for FAST ACOS calculation
+ */
+export interface VatSettings {
+  useVat: boolean;
+  vatPercentage: number; // e.g., 22 for 22%
+}
+
+/**
  * Calculate FAST ACOS for a book given its data.
+ *
+ * With VAT:    FAST ACOS = (royalty / (price × (1 + VAT/100))) × 100
+ * Without VAT: FAST ACOS = (royalty / price) × 100
+ *
  * @returns { fastAcos, royalty, printingCost } or null if data insufficient
  */
 export function calculateBookFastAcos(
@@ -145,7 +157,8 @@ export function calculateBookFastAcos(
   pageCount: number,
   marketplace: string,
   inkType: InkType = 'black_white',
-  royaltyPercentage: number = 60
+  royaltyPercentage: number = 60,
+  vatSettings: VatSettings = { useVat: true, vatPercentage: 22 }
 ): { fastAcos: number; royalty: number; printingCost: number } | null {
   const printingCost = calculatePrintingCost(pageCount, marketplace, inkType);
   if (printingCost === null) return null;
@@ -153,7 +166,16 @@ export function calculateBookFastAcos(
   const royalty = (royaltyPercentage / 100 * price) - printingCost;
   if (royalty <= 0) return null;
 
-  const fastAcos = (royalty / (price * 1.22)) * 100;
+  // Calculate FAST ACOS based on VAT settings
+  let fastAcos: number;
+  if (vatSettings.useVat) {
+    // With VAT: FAST ACOS = (royalty / (price × (1 + VAT/100))) × 100
+    const vatMultiplier = 1 + (vatSettings.vatPercentage / 100);
+    fastAcos = (royalty / (price * vatMultiplier)) * 100;
+  } else {
+    // Without VAT: FAST ACOS = (royalty / price) × 100
+    fastAcos = (royalty / price) * 100;
+  }
 
   return {
     fastAcos: Math.round(fastAcos * 100) / 100,

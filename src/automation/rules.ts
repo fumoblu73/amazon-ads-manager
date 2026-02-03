@@ -19,7 +19,7 @@ import { Campaign } from '../models/Campaign';
 import { KdpBook } from '../entities/KdpBook';
 import { AutomationSettings } from '../entities/AutomationSettings';
 import { isInWarmupPeriod, getCampaignCreatedAt } from '../utils/timeframe';
-import { parseKdpPrice, calculateBookFastAcos, InkType } from '../utils/printingCost';
+import { parseKdpPrice, calculateBookFastAcos, InkType, VatSettings } from '../utils/printingCost';
 import { automationScheduler } from './scheduler';
 
 // Import delle 5 funzioni
@@ -62,6 +62,9 @@ interface AutomationConfig {
   func5_bidExact: number;
   func5_bidPhrase: number;
   func5_bidExpanded: number;
+  // VAT settings for FAST ACOS
+  useVatInFastAcos: boolean;
+  vatPercentage: number;
 }
 
 /**
@@ -96,7 +99,10 @@ const DEFAULT_CONFIG: AutomationConfig = {
   func5_bidBroad: 0.30,
   func5_bidExact: 0.50,
   func5_bidPhrase: 0.40,
-  func5_bidExpanded: 0.30
+  func5_bidExpanded: 0.30,
+  // VAT settings (default: IVA 22%)
+  useVatInFastAcos: true,
+  vatPercentage: 22
 };
 
 /**
@@ -123,6 +129,7 @@ async function getUserAutomationSettings(userId: string): Promise<AutomationConf
     console.log(`   F3: freq=${userSettings.func3Frequency}gg, enabled=${userSettings.func3Enabled}`);
     console.log(`   F4: freq=${userSettings.func4Frequency}gg, enabled=${userSettings.func4Enabled}`);
     console.log(`   F5: freq=${userSettings.func5Frequency}gg, enabled=${userSettings.func5Enabled}`);
+    console.log(`   VAT: useVat=${userSettings.useVatInFastAcos}, vatPct=${userSettings.vatPercentage}%`);
 
     return {
       func1_enabled: userSettings.func1Enabled,
@@ -153,7 +160,9 @@ async function getUserAutomationSettings(userId: string): Promise<AutomationConf
       func5_bidBroad: Number(userSettings.func5BidBroad),
       func5_bidExact: Number(userSettings.func5BidExact),
       func5_bidPhrase: Number(userSettings.func5BidPhrase),
-      func5_bidExpanded: Number(userSettings.func5BidExpanded)
+      func5_bidExpanded: Number(userSettings.func5BidExpanded),
+      useVatInFastAcos: userSettings.useVatInFastAcos ?? true,
+      vatPercentage: Number(userSettings.vatPercentage) || 22
     };
   } catch (error: any) {
     console.error(`❌ Errore recupero impostazioni: ${error.message}`);
@@ -183,6 +192,7 @@ export async function runAutomationRules(): Promise<void> {
     const globalStats = {
       totalCampaignsProcessed: 0,
       totalCampaignsInWarmup: 0,
+      totalCampaignsSkipped: 0,
       func1Executed: 0,
       func2Executed: 0,
       func3Executed: 0,
@@ -224,6 +234,7 @@ export async function runAutomationRules(): Promise<void> {
         const stats = {
           campaignsProcessed: 0,
           campaignsInWarmup: 0,
+          campaignsSkipped: 0,
           func1Executed: 0,
           func2Executed: 0,
           func3Executed: 0,
@@ -245,6 +256,7 @@ export async function runAutomationRules(): Promise<void> {
         // Accumula statistiche
         globalStats.totalCampaignsProcessed += stats.campaignsProcessed;
         globalStats.totalCampaignsInWarmup += stats.campaignsInWarmup;
+        globalStats.totalCampaignsSkipped += stats.campaignsSkipped;
         globalStats.func1Executed += stats.func1Executed;
         globalStats.func2Executed += stats.func2Executed;
         globalStats.func3Executed += stats.func3Executed;
@@ -255,7 +267,7 @@ export async function runAutomationRules(): Promise<void> {
           stats.func1Executed + stats.func2Executed + stats.func3Executed +
           stats.func4Executed + stats.func5Executed;
 
-        console.log(`✅ [${marketplace}] Completato: ${stats.campaignsProcessed} campagne processate`);
+        console.log(`✅ [${marketplace}] Completato: ${stats.campaignsProcessed} campagne processate, ${stats.campaignsSkipped} saltate (dati libro mancanti)`);
 
       } catch (error: any) {
         globalStats.errors++;
@@ -275,6 +287,9 @@ export async function runAutomationRules(): Promise<void> {
     console.log(`Marketplace processati: ${configuredMarketplaces.length}`);
     console.log(`Campagne totali processate: ${globalStats.totalCampaignsProcessed}`);
     console.log(`Campagne in warmup (saltate): ${globalStats.totalCampaignsInWarmup}`);
+    if (globalStats.totalCampaignsSkipped > 0) {
+      console.log(`⚠️  Campagne saltate (dati libro mancanti): ${globalStats.totalCampaignsSkipped}`);
+    }
     console.log(`\nPer marketplace:`);
     Object.entries(globalStats.byMarketplace).forEach(([mp, data]) => {
       console.log(`   - ${mp}: ${data.campaigns} campagne, ${data.functions} funzioni`);
@@ -322,9 +337,11 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
     return;
   }
 
+  const config = DEFAULT_CONFIG;
+
   // Load real book data from kdp_books via linkedCampaignId
-  const fallbackBook = { price: 15, printingCost: 3, royaltyPercentage: 60 };
-  let book = fallbackBook;
+  // NO FALLBACK: if book data is missing, we skip automations
+  let book: { price: number; printingCost: number; royaltyPercentage: number } | null = null;
 
   try {
     const kdpBookRepo = AppDataSource.getRepository(KdpBook);
@@ -337,20 +354,36 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
       if (price) {
         const inkType = (kdpBook.inkType || 'black_white') as InkType;
         const royaltyPct = Number(kdpBook.royaltyPercentage) || 60;
-        const result = calculateBookFastAcos(price, kdpBook.pageCount, marketplace, inkType, royaltyPct);
+        const vatSettings: VatSettings = {
+          useVat: config.useVatInFastAcos,
+          vatPercentage: config.vatPercentage
+        };
+        const result = calculateBookFastAcos(price, kdpBook.pageCount, marketplace, inkType, royaltyPct, vatSettings);
         if (result) {
           book = { price, printingCost: result.printingCost, royaltyPercentage: royaltyPct };
-          console.log(`  📖 Book data: price=${price}, printingCost=${result.printingCost}, fastAcos=${result.fastAcos}%`);
+          const vatInfo = vatSettings.useVat ? `(IVA ${vatSettings.vatPercentage}%)` : '(senza IVA)';
+          console.log(`  📖 Book data: price=${price}, printingCost=${result.printingCost}, fastAcos=${result.fastAcos}% ${vatInfo}`);
+        } else {
+          console.error(`  ❌ FAST ACOS CALC FAILED: royalty<=0 for "${campaignName}"`);
         }
+      } else {
+        console.error(`  ❌ BOOK DATA MISSING: Cannot parse price "${kdpBook.price}" for "${campaignName}"`);
       }
-    } else if (!kdpBook) {
-      console.warn(`  ⚠️ No kdp_book linked to campaign ${campaignName}, using fallback`);
+    } else if (kdpBook) {
+      console.error(`  ❌ BOOK DATA INCOMPLETE: price=${kdpBook.price || 'NULL'}, pageCount=${kdpBook.pageCount || 'NULL'} for "${campaignName}"`);
+    } else {
+      console.error(`  ❌ NO BOOK LINKED: No kdp_book linked to campaign "${campaignName}" (campaignId: ${campaignId})`);
     }
   } catch (err: any) {
-    console.warn(`  ⚠️ Error loading book data: ${err.message}, using fallback`);
+    console.error(`  ❌ BOOK DATA ERROR: ${err.message} for "${campaignName}"`);
   }
 
-  const config = DEFAULT_CONFIG;
+  // Skip automations if book data is missing
+  if (!book) {
+    console.warn(`  ⚠️ SKIPPING AUTOMATIONS for "${campaignName}" - book data required for FAST ACOS calculation`);
+    stats.campaignsSkipped = (stats.campaignsSkipped || 0) + 1;
+    return;
+  }
 
   const mockPlacements = {
     topOfSearch: 0,
@@ -578,8 +611,8 @@ async function processCampaignWithApiService(
   console.log(`✅ [${marketplace}] Campagna fuori warmup, procedo con automazioni...`);
 
   // Load real book data from kdp_books
-  const fallbackBook = { price: 15, printingCost: 3, royaltyPercentage: 60 };
-  let book = fallbackBook;
+  // NO FALLBACK: if book data is missing, we skip automations
+  let book: { price: number; printingCost: number; royaltyPercentage: number } | null = null;
 
   try {
     const kdpBookRepo = AppDataSource.getRepository(KdpBook);
@@ -628,7 +661,7 @@ async function processCampaignWithApiService(
             }
           }
           if (!kdpBook) {
-            console.warn(`  ⚠️ Targets ASINs [${asins.join(', ')}] not found in kdp_books for ${campaignName}`);
+            console.error(`  ❌ NO BOOK FOUND: Targets ASINs [${asins.join(', ')}] not found in kdp_books for "${campaignName}"`);
           }
         }
       } catch (targetErr: any) {
@@ -642,23 +675,35 @@ async function processCampaignWithApiService(
       if (price) {
         const inkType = (kdpBook.inkType || 'black_white') as InkType;
         const royaltyPct = Number(kdpBook.royaltyPercentage) || 60;
-        const result = calculateBookFastAcos(price, kdpBook.pageCount, marketplace, inkType, royaltyPct);
+        const vatSettings: VatSettings = {
+          useVat: config.useVatInFastAcos,
+          vatPercentage: config.vatPercentage
+        };
+        const result = calculateBookFastAcos(price, kdpBook.pageCount, marketplace, inkType, royaltyPct, vatSettings);
         if (result) {
           book = { price, printingCost: result.printingCost, royaltyPercentage: royaltyPct };
-          console.log(`  📖 Book data: price=${price}, printingCost=${result.printingCost}, royalty%=${royaltyPct}, fastAcos=${result.fastAcos}%`);
+          const vatInfo = vatSettings.useVat ? `(IVA ${vatSettings.vatPercentage}%)` : '(senza IVA)';
+          console.log(`  📖 Book data: price=${price}, printingCost=${result.printingCost}, royalty%=${royaltyPct}, fastAcos=${result.fastAcos}% ${vatInfo}`);
         } else {
-          console.warn(`  ⚠️ FAST ACOS calc failed for ${campaignName}, using fallback`);
+          console.error(`  ❌ FAST ACOS CALC FAILED: royalty<=0 for "${campaignName}" (price=${price}, pageCount=${kdpBook.pageCount})`);
         }
       } else {
-        console.warn(`  ⚠️ Could not parse price "${kdpBook.price}" for ${campaignName}, using fallback`);
+        console.error(`  ❌ BOOK DATA MISSING: Cannot parse price "${kdpBook.price}" for "${campaignName}"`);
       }
     } else if (kdpBook) {
-      console.warn(`  ⚠️ Book linked but missing price or pageCount for ${campaignName}, using fallback`);
+      console.error(`  ❌ BOOK DATA INCOMPLETE: price=${kdpBook.price || 'NULL'}, pageCount=${kdpBook.pageCount || 'NULL'} for "${campaignName}"`);
     } else {
-      console.warn(`  ⚠️ No kdp_book found for campaign ${campaignName}, using fallback`);
+      console.error(`  ❌ NO BOOK LINKED: No kdp_book linked to campaign "${campaignName}"`);
     }
   } catch (err: any) {
-    console.warn(`  ⚠️ Error loading book data for ${campaignName}: ${err.message}, using fallback`);
+    console.error(`  ❌ BOOK DATA ERROR: ${err.message} for "${campaignName}"`);
+  }
+
+  // Skip automations if book data is missing
+  if (!book) {
+    console.warn(`  ⚠️ SKIPPING AUTOMATIONS for "${campaignName}" - book data required for FAST ACOS calculation`);
+    stats.campaignsSkipped = (stats.campaignsSkipped || 0) + 1;
+    return;
   }
 
   const mockPlacements = { topOfSearch: 0, restOfSearch: 10, productPages: 5 };
@@ -863,6 +908,7 @@ export async function runAutomationRulesForUser(userId: string): Promise<void> {
     const globalStats = {
       totalCampaignsProcessed: 0,
       totalCampaignsInWarmup: 0,
+      totalCampaignsSkipped: 0,
       func1Executed: 0,
       func2Executed: 0,
       func3Executed: 0,
@@ -909,6 +955,7 @@ export async function runAutomationRulesForUser(userId: string): Promise<void> {
         const stats = {
           campaignsProcessed: 0,
           campaignsInWarmup: 0,
+          campaignsSkipped: 0,
           func1Executed: 0,
           func2Executed: 0,
           func3Executed: 0,
@@ -930,6 +977,7 @@ export async function runAutomationRulesForUser(userId: string): Promise<void> {
         // Accumulate stats
         globalStats.totalCampaignsProcessed += stats.campaignsProcessed;
         globalStats.totalCampaignsInWarmup += stats.campaignsInWarmup;
+        globalStats.totalCampaignsSkipped += stats.campaignsSkipped;
         globalStats.func1Executed += stats.func1Executed;
         globalStats.func2Executed += stats.func2Executed;
         globalStats.func3Executed += stats.func3Executed;
@@ -940,7 +988,7 @@ export async function runAutomationRulesForUser(userId: string): Promise<void> {
           stats.func1Executed + stats.func2Executed + stats.func3Executed +
           stats.func4Executed + stats.func5Executed;
 
-        console.log(`✅ [${marketplace}] Completed: ${stats.campaignsProcessed} campaigns processed`);
+        console.log(`✅ [${marketplace}] Completed: ${stats.campaignsProcessed} campaigns processed, ${stats.campaignsSkipped} skipped (missing book data)`);
 
       } catch (error: any) {
         globalStats.errors++;
@@ -958,6 +1006,9 @@ export async function runAutomationRulesForUser(userId: string): Promise<void> {
     console.log(`Marketplaces processed: ${configuredMarketplaces.length}`);
     console.log(`Total campaigns processed: ${globalStats.totalCampaignsProcessed}`);
     console.log(`Campaigns in warmup (skipped): ${globalStats.totalCampaignsInWarmup}`);
+    if (globalStats.totalCampaignsSkipped > 0) {
+      console.log(`⚠️  Campaigns skipped (missing book data): ${globalStats.totalCampaignsSkipped}`);
+    }
     console.log(`\nPer marketplace:`);
     Object.entries(globalStats.byMarketplace).forEach(([mp, data]) => {
       console.log(`   - ${mp}: ${data.campaigns} campaigns, ${data.functions} functions`);

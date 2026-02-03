@@ -67,6 +67,10 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         bidPhrase: parseFloat(settings.func5BidPhrase.toString()),
         bidExpanded: parseFloat(settings.func5BidExpanded.toString()),
       },
+      fastAcos: {
+        useVat: settings.useVatInFastAcos ?? true,
+        vatPercentage: parseFloat((settings.vatPercentage ?? 22).toString()),
+      },
     };
 
     res.json({
@@ -100,7 +104,7 @@ router.put('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     }
 
     // Aggiorna i valori dai dati ricevuti
-    const { func1, func2, func3, func4, func5 } = req.body;
+    const { func1, func2, func3, func4, func5, fastAcos } = req.body;
 
     if (func1) {
       settings.func1Enabled = func1.enabled ?? settings.func1Enabled;
@@ -144,6 +148,11 @@ router.put('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       settings.func5BidExact = func5.bidExact ?? settings.func5BidExact;
       settings.func5BidPhrase = func5.bidPhrase ?? settings.func5BidPhrase;
       settings.func5BidExpanded = func5.bidExpanded ?? settings.func5BidExpanded;
+    }
+
+    if (fastAcos) {
+      settings.useVatInFastAcos = fastAcos.useVat ?? settings.useVatInFastAcos;
+      settings.vatPercentage = fastAcos.vatPercentage ?? settings.vatPercentage;
     }
 
     await settingsRepository.save(settings);
