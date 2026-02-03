@@ -245,7 +245,7 @@ export class UserAmazonApiService {
   async requestReportV3(
     startDate: string,
     endDate: string,
-    reportType: 'spTargeting' | 'spCampaigns' | 'spSearchTerm' = 'spTargeting',
+    reportType: 'spTargeting' | 'spCampaigns' | 'spSearchTerm' | 'spAdvertisedProduct' = 'spTargeting',
     columns: string[] = ['impressions', 'clicks', 'cost', 'purchases14d']
   ): Promise<string> {
     try {
@@ -264,10 +264,21 @@ export class UserAmazonApiService {
         return mapping[col] || col;
       });
 
-      // Colonne obbligatorie (da documentazione Amazon staff)
-      const requiredCols = ['campaignId', 'adGroupId', 'keywordId', 'keyword'];
-      if (reportType === 'spSearchTerm') {
-        requiredCols.push('searchTerm');
+      // Colonne obbligatorie e groupBy dipendono dal tipo di report
+      let requiredCols: string[];
+      let groupBy: string[];
+
+      if (reportType === 'spAdvertisedProduct') {
+        // Per spAdvertisedProduct: raggruppa per ASIN, include productName e productCategory
+        requiredCols = ['advertisedAsin'];
+        groupBy = ['advertiserProduct'];
+      } else if (reportType === 'spSearchTerm') {
+        requiredCols = ['campaignId', 'adGroupId', 'keywordId', 'keyword', 'searchTerm'];
+        groupBy = ['searchTerm'];
+      } else {
+        // spTargeting, spCampaigns
+        requiredCols = ['campaignId', 'adGroupId', 'keywordId', 'keyword'];
+        groupBy = ['targeting'];
       }
 
       const allColumns = [...new Set([...requiredCols, ...v3Columns])];
@@ -281,7 +292,7 @@ export class UserAmazonApiService {
         endDate: endDate,
         configuration: {
           adProduct: 'SPONSORED_PRODUCTS',
-          groupBy: ['targeting'],
+          groupBy: groupBy,
           columns: validColumns,
           reportTypeId: reportType,
           timeUnit: 'SUMMARY',
@@ -544,6 +555,45 @@ export class UserAmazonApiService {
       return response.data;
     } catch (error) {
       console.error(`❌ Error adding negative target:`, error);
+      throw error;
+    }
+  }
+
+  // ================================================
+  // ADVERTISED PRODUCT REPORT (V3 - productName, productCategory)
+  // ================================================
+
+  /**
+   * Richiede un report spAdvertisedProduct per ottenere productName e productCategory per ASIN.
+   * Questo report fornisce metadati aggiuntivi sui prodotti pubblicizzati.
+   */
+  async requestAdvertisedProductReport(
+    startDate: string,
+    endDate: string
+  ): Promise<string> {
+    try {
+      console.log(`📊 [API v3] Requesting advertised product report ${startDate} - ${endDate}...`);
+
+      // Colonne disponibili per spAdvertisedProduct
+      const columns = [
+        'advertisedAsin',
+        'advertisedSku',
+        'campaignId',
+        'campaignName',
+        'adGroupId',
+        'adGroupName',
+        'productName',
+        'productCategory',
+        'impressions',
+        'clicks',
+        'cost',
+        'purchases14d',
+        'sales14d'
+      ];
+
+      return this.requestReportV3(startDate, endDate, 'spAdvertisedProduct', columns);
+    } catch (error: any) {
+      console.error('❌ [API v3] Error requesting advertised product report:', error.response?.data || error.message);
       throw error;
     }
   }

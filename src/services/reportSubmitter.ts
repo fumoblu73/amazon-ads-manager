@@ -164,6 +164,17 @@ async function submitReportsForUser(userId: string): Promise<{ reportsSubmitted:
 
       console.log(`🌍 [${marketplace}] ${activeCampaigns.length} active campaigns`);
 
+      // Submit spAdvertisedProduct report once per marketplace (for all ASINs)
+      try {
+        const productReportSubmitted = await submitAdvertisedProductReport(
+          userId, marketplace, apiService
+        );
+        stats.reportsSubmitted += productReportSubmitted;
+      } catch (error: any) {
+        stats.errors++;
+        console.error(`❌ [${marketplace}] Error submitting advertised product report: ${error.message}`);
+      }
+
       for (const campaign of activeCampaigns) {
         try {
           const submitted = await submitReportsForCampaign(
@@ -381,4 +392,73 @@ async function submitReportsForCampaign(
   }
 
   return submitted;
+}
+
+/**
+ * Submit spAdvertisedProduct report once per marketplace
+ * This report provides productName and productCategory for all advertised ASINs
+ * Used to enrich kdp_books table with Amazon catalog metadata
+ */
+async function submitAdvertisedProductReport(
+  userId: string,
+  marketplace: string,
+  apiService: any
+): Promise<number> {
+  const reportRepo = AppDataSource.getRepository(PendingReport);
+  const now = new Date();
+
+  // Use last 14 days for advertised product report
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - 14);
+  const startDateStr = startDate.toISOString().split('T')[0];
+  const endDateStr = now.toISOString().split('T')[0];
+
+  try {
+    let reportId: string;
+    try {
+      reportId = await apiService.requestAdvertisedProductReport(startDateStr, endDateStr);
+    } catch (submitError: any) {
+      const duplicateId = extractReportIdFrom425(submitError);
+      if (duplicateId) {
+        reportId = duplicateId;
+        console.log(`     ♻️ spAdvertisedProduct duplicate, reusing: ${reportId}`);
+      } else {
+        throw submitError;
+      }
+    }
+
+    // Check if already submitted (use 'global' as campaignId for marketplace-level reports)
+    if (await pendingReportExists(reportRepo, reportId, `${marketplace}_products`, 'spAdvertisedProduct')) {
+      console.log(`     ⏭️ spAdvertisedProduct already pending for ${marketplace}, skipping: ${reportId}`);
+      return 0;
+    }
+
+    const pendingReport = reportRepo.create({
+      userId,
+      marketplace,
+      campaignId: `${marketplace}_products`, // Special ID for marketplace-level report
+      campaignName: `All Advertised Products (${marketplace})`,
+      campaignType: 0, // 0 = special report, not a campaign
+      reportId,
+      reportType: 'spAdvertisedProduct',
+      columns: JSON.stringify([
+        'advertisedAsin', 'advertisedSku', 'campaignId', 'campaignName',
+        'adGroupId', 'adGroupName', 'productName', 'productCategory',
+        'impressions', 'clicks', 'cost', 'purchases14d', 'sales14d'
+      ]),
+      startDate: startDateStr,
+      endDate: endDateStr,
+      status: 'submitted',
+      functionNumbers: JSON.stringify([]), // No automation functions, just enrichment
+      attempts: 0,
+      maxAttempts: 20
+    });
+
+    await reportRepo.save(pendingReport);
+    console.log(`     ✅ spAdvertisedProduct report submitted for ${marketplace}: ${reportId}`);
+    return 1;
+  } catch (error: any) {
+    console.error(`     ❌ spAdvertisedProduct submit failed for ${marketplace}: ${error.message}`);
+    return 0;
+  }
 }

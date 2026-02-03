@@ -4,7 +4,6 @@ import { KdpBook } from '../../entities/KdpBook';
 import { KdpDailyStats } from '../../entities/KdpDailyStats';
 import { KdpSyncLog } from '../../entities/KdpSyncLog';
 import { authMiddleware, AuthRequest } from '../../middleware/auth';
-import { kdpSyncScheduler } from '../../services/kdp-sync-scheduler';
 
 const router = Router();
 
@@ -22,6 +21,7 @@ interface BookData {
   coverUrl?: string;
   price?: string;
   format?: string;
+  pageCount?: number;
 }
 
 interface DailyStatsData {
@@ -63,6 +63,18 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
       return;
     }
 
+    // Debug: log first book to see what fields are received
+    if (books.length > 0) {
+      const firstBook = books[0];
+      console.log(`[KDP Sync] Received ${books.length} books. First book sample:`, {
+        asin: firstBook.asin,
+        title: firstBook.title?.substring(0, 30),
+        pageCount: firstBook.pageCount,
+        price: firstBook.price,
+        format: firstBook.format
+      });
+    }
+
     const bookRepo = AppDataSource.getRepository(KdpBook);
     const statsRepo = AppDataSource.getRepository(KdpDailyStats);
     const syncLogRepo = AppDataSource.getRepository(KdpSyncLog);
@@ -95,8 +107,16 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
           book.coverUrl = bookData.coverUrl || book.coverUrl;
           book.price = bookData.price || book.price;
           book.format = bookData.format || book.format;
+          // Update pageCount if provided (overwrite or fill)
+          if (bookData.pageCount) {
+            console.log(`[KDP Sync] Updating pageCount for ${bookData.asin}: ${bookData.pageCount}`);
+            book.pageCount = bookData.pageCount;
+          }
         } else {
           // Crea un nuovo libro
+          if (bookData.pageCount) {
+            console.log(`[KDP Sync] Creating book ${bookData.asin} with pageCount: ${bookData.pageCount}`);
+          }
           book = bookRepo.create({
             userId: req.userId,
             asin: bookData.asin,
@@ -108,7 +128,8 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
             publishDate: bookData.publishDate,
             coverUrl: bookData.coverUrl,
             price: bookData.price,
-            format: bookData.format
+            format: bookData.format,
+            pageCount: bookData.pageCount
           });
         }
 
@@ -168,15 +189,6 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
       } catch (error) {
         console.error(`Errore nel processare il libro ${bookData.asin}:`, error);
       }
-    }
-
-    // Enrich books with page count from Google Books API (async, non-blocking)
-    if (booksUpdated > 0 && req.userId) {
-      kdpSyncScheduler.enrichBooksWithPageCount(req.userId)
-        .then(enriched => {
-          if (enriched > 0) console.log(`[KDP Sync] Enriched ${enriched} books with page count`);
-        })
-        .catch(err => console.warn('[KDP Sync] PageCount enrichment error:', err.message));
     }
 
     const durationMs = Date.now() - startTime;

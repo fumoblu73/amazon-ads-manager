@@ -74,6 +74,15 @@
         book.marketplace = marketplace;
       }
 
+      // Try to enrich books with pageCount from Amazon product pages (async)
+      chrome.runtime.sendMessage({
+        action: 'kdpBookshelfProgress',
+        percent: 85,
+        text: 'Recupero numero pagine...'
+      });
+
+      await enrichBooksWithPageCount(allBooks);
+
       chrome.runtime.sendMessage({
         action: 'kdpBookshelfDataComplete',
         success: true,
@@ -255,6 +264,87 @@
     if (url.includes('/en_AU/') || url.includes('.com.au/')) return 'AU';
     if (url.includes('/ja_JP/') || url.includes('.co.jp/')) return 'JP';
     return 'US';
+  }
+
+  /**
+   * Fetches pageCount from Amazon product page for a single ASIN.
+   * Uses the background script to make the request (content scripts can't do cross-origin).
+   * Returns null if not found or on error.
+   */
+  async function fetchPageCountFromAmazon(asin, marketplace) {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        { action: 'fetchPageCount', asin, marketplace },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            console.warn(`[KDP Bookshelf Scraper] Error fetching ${asin}:`, chrome.runtime.lastError.message);
+            resolve(null);
+            return;
+          }
+          if (response && response.success && response.pageCount) {
+            resolve(response.pageCount);
+          } else {
+            resolve(null);
+          }
+        }
+      );
+    });
+  }
+
+  /**
+   * Enriches books array with pageCount by fetching Amazon product pages.
+   * Processes books in batches to avoid overwhelming the server.
+   */
+  async function enrichBooksWithPageCount(books) {
+    console.log(`[KDP Bookshelf Scraper] Enriching ${books.length} books with pageCount...`);
+
+    const booksNeedingPageCount = books.filter(b => !b.pageCount && b.asin);
+    if (booksNeedingPageCount.length === 0) {
+      console.log('[KDP Bookshelf Scraper] All books already have pageCount or no ASINs');
+      return;
+    }
+
+    let enriched = 0;
+    let failed = 0;
+
+    // Process in small batches with delays to avoid rate limiting
+    const batchSize = 3;
+    for (let i = 0; i < booksNeedingPageCount.length; i += batchSize) {
+      const batch = booksNeedingPageCount.slice(i, i + batchSize);
+
+      // Update progress
+      const progress = Math.round(85 + (i / booksNeedingPageCount.length) * 10);
+      chrome.runtime.sendMessage({
+        action: 'kdpBookshelfProgress',
+        percent: progress,
+        text: `Pagine: ${enriched}/${booksNeedingPageCount.length}...`
+      });
+
+      // Process batch in parallel
+      const promises = batch.map(async (book) => {
+        try {
+          const pageCount = await fetchPageCountFromAmazon(book.asin, book.marketplace);
+          if (pageCount) {
+            book.pageCount = pageCount;
+            enriched++;
+            console.log(`[KDP Bookshelf Scraper] ${book.asin}: ${pageCount} pages`);
+          } else {
+            failed++;
+          }
+        } catch (error) {
+          failed++;
+        }
+      });
+
+      await Promise.all(promises);
+
+      // Small delay between batches to be respectful
+      if (i + batchSize < booksNeedingPageCount.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+
+    console.log(`[KDP Bookshelf Scraper] PageCount enrichment complete: ${enriched} found, ${failed} failed`);
   }
 
 })();

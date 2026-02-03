@@ -425,6 +425,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendToPopup({ action: 'bookshelfSyncError', error: request.error });
     }
   }
+
+  // ========== PAGE COUNT FETCH (for content script) ==========
+  // Content scripts cannot make cross-origin requests, so we handle it here
+  if (request.action === 'fetchPageCount') {
+    fetchPageCountFromAmazon(request.asin, request.marketplace)
+      .then(pageCount => sendResponse({ success: true, pageCount }))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true; // Keep channel open for async response
+  }
 });
 
 // Funzione per aprire tab kdpreports e fare scraping
@@ -577,3 +586,100 @@ async function sendBooksToServer(books, jwtToken, marketplace) {
 
 // Imposta badge iniziale
 updateBadge('', '#ff9900');
+
+// ========== PAGE COUNT FETCHING ==========
+
+/**
+ * Maps marketplace code to Amazon store domain
+ */
+function getAmazonDomain(marketplace) {
+  const domains = {
+    'US': 'www.amazon.com',
+    'UK': 'www.amazon.co.uk',
+    'DE': 'www.amazon.de',
+    'FR': 'www.amazon.fr',
+    'ES': 'www.amazon.es',
+    'IT': 'www.amazon.it',
+    'CA': 'www.amazon.ca',
+    'AU': 'www.amazon.com.au',
+    'JP': 'www.amazon.co.jp'
+  };
+  return domains[marketplace] || 'www.amazon.com';
+}
+
+/**
+ * Fetches pageCount from Amazon product page for a single ASIN.
+ * This runs in background script which has host_permissions for Amazon domains.
+ */
+async function fetchPageCountFromAmazon(asin, marketplace) {
+  const domain = getAmazonDomain(marketplace);
+  const url = `https://${domain}/dp/${asin}`;
+
+  console.log(`[Background] Fetching pageCount for ${asin} from ${url}`);
+
+  const response = await fetch(url, {
+    headers: {
+      'Accept': 'text/html,application/xhtml+xml',
+      'Accept-Language': 'en-US,en;q=0.9,it;q=0.8',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
+  });
+
+  if (!response.ok) {
+    console.warn(`[Background] Failed to fetch ${asin}: ${response.status}`);
+    return null;
+  }
+
+  const html = await response.text();
+  const pageCount = extractPageCountFromHtml(html);
+
+  console.log(`[Background] ${asin}: pageCount = ${pageCount}`);
+  return pageCount;
+}
+
+/**
+ * Extracts page count from Amazon product page HTML.
+ * Looks for patterns like "Print length: 320 pages" or "Pagine: 320"
+ */
+function extractPageCountFromHtml(html) {
+  // Common patterns for page count in product details
+  const patterns = [
+    // English patterns
+    /Print length[:\s<>\/\w]*?(\d+)\s*pages?/i,
+    /(\d+)\s*pages?<\/span>/i,
+    /"numberOfPages"\s*:\s*"?(\d+)"?/i,
+
+    // Italian
+    /Lunghezza stampa[:\s<>\/\w]*?(\d+)/i,
+    /(\d+)\s*pagine<\/span>/i,
+
+    // German
+    /Seitenzahl[:\s<>\/\w]*?(\d+)/i,
+    /(\d+)\s*Seiten<\/span>/i,
+
+    // French
+    /Nombre de pages[:\s<>\/\w]*?(\d+)/i,
+
+    // Spanish
+    /Longitud de impresi[óo]n[:\s<>\/\w]*?(\d+)/i,
+    /(\d+)\s*p[áa]ginas<\/span>/i,
+
+    // JSON-LD format (often in structured data)
+    /"numberOfPages"\s*:\s*(\d+)/i,
+
+    // Generic detail row pattern
+    />(\d{2,4})\s*(?:pages?|pagine|Seiten|páginas)<\/span>/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match && match[1]) {
+      const pageCount = parseInt(match[1]);
+      if (pageCount > 10 && pageCount < 10000) {
+        return pageCount;
+      }
+    }
+  }
+
+  return null;
+}
