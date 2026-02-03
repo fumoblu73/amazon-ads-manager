@@ -10,368 +10,416 @@
  * FORMULA
  * ============================================================================
  *
- * Printing Cost = Fixed Cost + (Per-Page Cost × Page Count)
+ * The formula depends on page count and ink type:
  *
- * Example: US marketplace, black & white ink, 200 pages
- *   $0.85 + ($0.012 × 200) = $0.85 + $2.40 = $3.25
- *
- * ============================================================================
- * FACTORS AFFECTING PRINTING COST
- * ============================================================================
- *
- * 1. INK TYPE
- *    - Black & white (interior): White paper or cream paper
- *    - Standard color: Available only for 72-600 pages
- *    - Premium color: Higher quality color printing
- *
- * 2. TRIM SIZE (Book dimensions)
- *    Regular trim sizes have lower costs than large trim sizes.
- *
- *    REGULAR TRIM SIZES (inches):
- *    - 5" × 8"      (min 24 pages, max 828 pages)
- *    - 5.06" × 7.81" (min 24 pages, max 828 pages)
- *    - 5.25" × 8"   (min 24 pages, max 828 pages)
- *    - 5.5" × 8.5"  (min 24 pages, max 828 pages)
- *    - 6" × 9"      (min 24 pages, max 828 pages)
- *    - 6.14" × 9.21" (min 24 pages, max 828 pages)
- *    - 6.69" × 9.61" (min 24 pages, max 600 pages) - Standard color only
- *
- *    LARGE TRIM SIZES (inches):
- *    - 7" × 10"     (min 24 pages, max 500 pages)
- *    - 7.5" × 9.25" (min 24 pages, max 500 pages)
- *    - 8" × 10"     (min 24 pages, max 500 pages)
- *    - 8.25" × 6"   (min 24 pages, max 500 pages)
- *    - 8.25" × 8.25" (min 24 pages, max 500 pages)
- *    - 8.5" × 8.5"  (min 24 pages, max 500 pages)
- *    - 8.5" × 11"   (min 24 pages, max 500 pages)
- *    - 8.27" × 11.69" (A4) (min 24 pages, max 500 pages)
- *
- * 3. PAGE COUNT
- *    - Minimum: 24 pages (all formats)
- *    - Maximum varies by trim size and ink type (see above)
- *    - Standard color: ONLY available for 72-600 pages
- *
- * 4. MARKETPLACE
- *    Different Amazon marketplaces have different printing costs.
- *    Prices below are in local currency.
+ * For LOW page counts (below threshold): Printing Cost = Fixed Cost only
+ * For HIGH page counts (above threshold): Printing Cost = Fixed Cost + (Per-Page Cost × Page Count)
  *
  * ============================================================================
- * COMPLETE PRICING TABLES BY MARKETPLACE
+ * PAGE COUNT THRESHOLDS BY INK TYPE
  * ============================================================================
  *
- * AMAZON.COM (US) - USD
- * ┌─────────────────┬─────────────┬───────────────┬───────────────┐
- * │ Trim Size       │ Black/White │ Standard Color│ Premium Color │
- * ├─────────────────┼─────────────┼───────────────┼───────────────┤
- * │ Regular         │ $0.85+$0.012│ $0.85+$0.036  │ $0.85+$0.065  │
- * │ Large           │ $0.85+$0.012│ $0.85+$0.036  │ $0.85+$0.065  │
- * └─────────────────┴─────────────┴───────────────┴───────────────┘
+ * BLACK INK:
+ *   - 24-108 pages: Fixed cost only (no per-page cost)
+ *   - 110-828 pages: Fixed cost + per-page cost
  *
- * AMAZON.CO.UK (UK) - GBP
- * ┌─────────────────┬─────────────┬───────────────┬───────────────┐
- * │ Trim Size       │ Black/White │ Standard Color│ Premium Color │
- * ├─────────────────┼─────────────┼───────────────┼───────────────┤
- * │ Regular         │ £0.70+£0.010│ £0.70+£0.030  │ £0.70+£0.055  │
- * │ Large           │ £0.85+£0.012│ £0.85+£0.036  │ £0.85+£0.070  │
- * └─────────────────┴─────────────┴───────────────┴───────────────┘
+ * PREMIUM COLOR:
+ *   - 24-40 pages: Fixed cost only (no per-page cost)
+ *   - 42-828 pages: Fixed cost + per-page cost
  *
- * AMAZON.DE (Germany) - EUR
- * ┌─────────────────┬─────────────┬───────────────┬───────────────┐
- * │ Trim Size       │ Black/White │ Standard Color│ Premium Color │
- * ├─────────────────┼─────────────┼───────────────┼───────────────┤
- * │ Regular         │ €0.60+€0.012│ €0.60+€0.036  │ €0.60+€0.065  │
- * │ Large           │ €0.75+€0.014│ €0.75+€0.042  │ €0.75+€0.075  │
- * └─────────────────┴─────────────┴───────────────┴───────────────┘
- *
- * AMAZON.FR (France) - EUR
- * ┌─────────────────┬─────────────┬───────────────┬───────────────┐
- * │ Trim Size       │ Black/White │ Standard Color│ Premium Color │
- * ├─────────────────┼─────────────┼───────────────┼───────────────┤
- * │ Regular         │ €0.60+€0.012│ €0.60+€0.036  │ €0.60+€0.065  │
- * │ Large           │ €0.75+€0.014│ €0.75+€0.042  │ €0.75+€0.075  │
- * └─────────────────┴─────────────┴───────────────┴───────────────┘
- *
- * AMAZON.ES (Spain) - EUR
- * ┌─────────────────┬─────────────┬───────────────┬───────────────┐
- * │ Trim Size       │ Black/White │ Standard Color│ Premium Color │
- * ├─────────────────┼─────────────┼───────────────┼───────────────┤
- * │ Regular         │ €0.60+€0.012│ €0.60+€0.036  │ €0.60+€0.065  │
- * │ Large           │ €0.75+€0.014│ €0.75+€0.042  │ €0.75+€0.075  │
- * └─────────────────┴─────────────┴───────────────┴───────────────┘
- *
- * AMAZON.IT (Italy) - EUR
- * ┌─────────────────┬─────────────┬───────────────┬───────────────┐
- * │ Trim Size       │ Black/White │ Standard Color│ Premium Color │
- * ├─────────────────┼─────────────┼───────────────┼───────────────┤
- * │ Regular         │ €0.60+€0.012│ €0.60+€0.036  │ €0.60+€0.065  │
- * │ Large           │ €0.75+€0.014│ €0.75+€0.042  │ €0.75+€0.075  │
- * └─────────────────┴─────────────┴───────────────┴───────────────┘
- *
- * AMAZON.NL (Netherlands) - EUR
- * ┌─────────────────┬─────────────┬───────────────┬───────────────┐
- * │ Trim Size       │ Black/White │ Standard Color│ Premium Color │
- * ├─────────────────┼─────────────┼───────────────┼───────────────┤
- * │ Regular         │ €0.60+€0.012│ €0.60+€0.036  │ €0.60+€0.065  │
- * │ Large           │ €0.75+€0.014│ €0.75+€0.042  │ €0.75+€0.075  │
- * └─────────────────┴─────────────┴───────────────┴───────────────┘
- *
- * AMAZON.PL (Poland) - PLN
- * ┌─────────────────┬─────────────┬───────────────┬───────────────┐
- * │ Trim Size       │ Black/White │ Standard Color│ Premium Color │
- * ├─────────────────┼─────────────┼───────────────┼───────────────┤
- * │ Regular         │ 2.90+0.05zł │ 2.90+0.15zł   │ 2.90+0.26zł   │
- * │ Large           │ 3.50+0.06zł │ 3.50+0.18zł   │ 3.50+0.32zł   │
- * └─────────────────┴─────────────┴───────────────┴───────────────┘
- *
- * AMAZON.SE (Sweden) - SEK
- * ┌─────────────────┬─────────────┬───────────────┬───────────────┐
- * │ Trim Size       │ Black/White │ Standard Color│ Premium Color │
- * ├─────────────────┼─────────────┼───────────────┼───────────────┤
- * │ Regular         │ 7.00+0.12kr │ 7.00+0.37kr   │ 7.00+0.66kr   │
- * │ Large           │ 8.50+0.15kr │ 8.50+0.44kr   │ 8.50+0.80kr   │
- * └─────────────────┴─────────────┴───────────────┴───────────────┘
- *
- * AMAZON.CO.JP (Japan) - JPY
- * ┌─────────────────┬─────────────┬───────────────┬───────────────┐
- * │ Trim Size       │ Black/White │ Standard Color│ Premium Color │
- * ├─────────────────┼─────────────┼───────────────┼───────────────┤
- * │ Regular         │ ¥114+¥1.5   │ ¥114+¥4.5     │ ¥114+¥8.0     │
- * │ Large           │ ¥140+¥1.8   │ ¥140+¥5.5     │ ¥140+¥10.0    │
- * └─────────────────┴─────────────┴───────────────┴───────────────┘
- *
- * AMAZON.CA (Canada) - CAD
- * ┌─────────────────┬─────────────┬───────────────┬───────────────┐
- * │ Trim Size       │ Black/White │ Standard Color│ Premium Color │
- * ├─────────────────┼─────────────┼───────────────┼───────────────┤
- * │ Regular         │ $1.10+$0.016│ $1.10+$0.046  │ $1.10+$0.085  │
- * │ Large           │ $1.35+$0.019│ $1.35+$0.055  │ $1.35+$0.100  │
- * └─────────────────┴─────────────┴───────────────┴───────────────┘
- *
- * AMAZON.COM.AU (Australia) - AUD
- * ┌─────────────────┬─────────────┬───────────────┬───────────────┐
- * │ Trim Size       │ Black/White │ Standard Color│ Premium Color │
- * ├─────────────────┼─────────────┼───────────────┼───────────────┤
- * │ Regular         │ $1.30+$0.018│ $1.30+$0.054  │ $1.30+$0.100  │
- * │ Large           │ $1.60+$0.022│ $1.60+$0.065  │ $1.60+$0.120  │
- * └─────────────────┴─────────────┴───────────────┴───────────────┘
+ * STANDARD COLOR:
+ *   - 72-600 pages: Fixed cost + per-page cost (no fixed-only tier)
+ *   - Note: Standard color is ONLY available for 72-600 pages
  *
  * ============================================================================
- * ROYALTY CALCULATION
+ * TRIM SIZES
  * ============================================================================
  *
- * Royalty = (Royalty Rate × List Price) - Printing Cost
+ * REGULAR TRIM SIZES (up to 6.12" width × 9" height):
+ *   - 5" × 8", 5.06" × 7.81", 5.25" × 8", 5.5" × 8.5"
+ *   - 6" × 9", 6.14" × 9.21", 6.69" × 9.61"
  *
- * Royalty rates:
- * - 60% for most territories (US, UK, DE, FR, ES, IT, etc.)
- * - 40% for expanded distribution
- *
- * ============================================================================
- * FAST ACOS CALCULATION
- * ============================================================================
- *
- * FAST ACOS = (Royalty / Price) × 100
- *
- * With VAT consideration (for European markets):
- * FAST ACOS = (Royalty / (Price × (1 + VAT/100))) × 100
- *
- * Example: €15 book, 100 pages, Italy (22% VAT)
- *   Printing Cost = €0.60 + (€0.012 × 100) = €1.80
- *   Royalty = (60% × €15) - €1.80 = €9.00 - €1.80 = €7.20
- *   FAST ACOS (with VAT) = (€7.20 / (€15 × 1.22)) × 100 = 39.34%
- *   FAST ACOS (no VAT) = (€7.20 / €15) × 100 = 48%
+ * LARGE TRIM SIZES (more than 6.12" width or more than 9" height):
+ *   - 7" × 10", 7.5" × 9.25", 8" × 10", 8.25" × 6"
+ *   - 8.25" × 8.25", 8.5" × 8.5", 8.5" × 11", 8.27" × 11.69" (A4)
  *
  * ============================================================================
- * NOTES FOR THIS APPLICATION
+ * PRICING TABLES
  * ============================================================================
  *
- * Current implementation uses REGULAR trim size rates as default.
- * KDP books scraped from bookshelf don't include trim size information,
- * so we assume regular trim (most common for KDP authors).
- *
- * Future enhancement: Add trim size to KdpBook entity if needed for
- * more accurate calculations with large-format books.
+ * See detailed tables below in the code comments for each ink type.
  */
 
 export type InkType = 'black_white' | 'standard_color' | 'premium_color';
 export type TrimSize = 'regular' | 'large';
 
-interface PrintingCostRate {
+interface TierPricing {
   fixedCost: number;
-  perPageCost: number;
+  perPageCost: number; // 0 for fixed-only tiers
 }
 
-interface MarketplacePricing {
-  regular: Record<InkType, PrintingCostRate>;
-  large: Record<InkType, PrintingCostRate>;
+interface TrimSizePricing {
+  regular: TierPricing;
+  large: TierPricing;
 }
 
-// Complete KDP printing cost tables per marketplace, trim size, and ink type
-// Source: https://kdp.amazon.com/en_US/help/topic/G201834340
-const PRINTING_COSTS: Record<string, MarketplacePricing> = {
-  // Amazon.com (US) - USD
+interface InkTypePricing {
+  lowTier: TrimSizePricing;  // Fixed cost only (for black_white and premium_color)
+  highTier: TrimSizePricing; // Fixed + per-page cost
+}
+
+// Page count thresholds for each ink type
+const PAGE_THRESHOLDS = {
+  black_white: { lowMax: 108, highMin: 110, highMax: 828 },
+  premium_color: { lowMax: 40, highMin: 42, highMax: 828 },
+  standard_color: { lowMax: 0, highMin: 72, highMax: 600 }, // No low tier for standard color
+};
+
+/**
+ * ============================================================================
+ * BLACK INK PRICING
+ * ============================================================================
+ *
+ * 24-108 pages (fixed cost only):
+ * | Marketplace | Regular    | Large      |
+ * |-------------|------------|------------|
+ * | US          | $2.30      | $2.84      |
+ * | UK          | £1.93      | £2.15      |
+ * | EU          | €2.05      | €2.48      |
+ * | CA          | $2.99 CAD  | $3.53 CAD  |
+ * | AU          | $4.74 AUD  | $5.28 AUD  |
+ * | JP          | ¥422       | ¥530       |
+ * | PL          | 9.58 PLN   | 11.61 PLN  |
+ * | SE          | 22.84 SEK  | 27.67 SEK  |
+ *
+ * 110-828 pages (fixed + per-page):
+ * | Marketplace | Regular Fixed | Regular/Page | Large Fixed | Large/Page |
+ * |-------------|---------------|--------------|-------------|------------|
+ * | US          | $1.00         | $0.012       | $1.00       | $0.017     |
+ * | UK          | £0.85         | £0.010       | £0.85       | £0.012     |
+ * | EU          | €0.75         | €0.012       | €0.75       | €0.016     |
+ * | CA          | $1.26 CAD     | $0.016 CAD   | $1.26 CAD   | $0.021 CAD |
+ * | AU          | $2.42 AUD     | $0.022 AUD   | $2.42 AUD   | $0.027 AUD |
+ * | JP          | ¥206          | ¥2           | ¥206        | ¥3         |
+ * | PL          | 3.51 PLN      | 0.056 PLN    | 3.51 PLN    | 0.075 PLN  |
+ * | SE          | 8.37 SEK      | 0.134 SEK    | 8.37 SEK    | 0.179 SEK  |
+ */
+const BLACK_WHITE_PRICING: Record<string, InkTypePricing> = {
   US: {
-    regular: {
-      black_white:    { fixedCost: 0.85, perPageCost: 0.012 },
-      standard_color: { fixedCost: 0.85, perPageCost: 0.036 },
-      premium_color:  { fixedCost: 0.85, perPageCost: 0.065 },
+    lowTier: {
+      regular: { fixedCost: 2.30, perPageCost: 0 },
+      large: { fixedCost: 2.84, perPageCost: 0 },
     },
-    large: {
-      black_white:    { fixedCost: 0.85, perPageCost: 0.012 },
-      standard_color: { fixedCost: 0.85, perPageCost: 0.036 },
-      premium_color:  { fixedCost: 0.85, perPageCost: 0.065 },
+    highTier: {
+      regular: { fixedCost: 1.00, perPageCost: 0.012 },
+      large: { fixedCost: 1.00, perPageCost: 0.017 },
     },
   },
-  // Amazon.co.uk (UK) - GBP
   UK: {
-    regular: {
-      black_white:    { fixedCost: 0.70, perPageCost: 0.010 },
-      standard_color: { fixedCost: 0.70, perPageCost: 0.030 },
-      premium_color:  { fixedCost: 0.70, perPageCost: 0.055 },
+    lowTier: {
+      regular: { fixedCost: 1.93, perPageCost: 0 },
+      large: { fixedCost: 2.15, perPageCost: 0 },
     },
-    large: {
-      black_white:    { fixedCost: 0.85, perPageCost: 0.012 },
-      standard_color: { fixedCost: 0.85, perPageCost: 0.036 },
-      premium_color:  { fixedCost: 0.85, perPageCost: 0.070 },
+    highTier: {
+      regular: { fixedCost: 0.85, perPageCost: 0.010 },
+      large: { fixedCost: 0.85, perPageCost: 0.012 },
     },
   },
-  // Amazon.de (Germany) - EUR
+  // EU marketplaces (DE, ES, FR, IT, NL, IE, BE)
   DE: {
-    regular: {
-      black_white:    { fixedCost: 0.60, perPageCost: 0.012 },
-      standard_color: { fixedCost: 0.60, perPageCost: 0.036 },
-      premium_color:  { fixedCost: 0.60, perPageCost: 0.065 },
+    lowTier: {
+      regular: { fixedCost: 2.05, perPageCost: 0 },
+      large: { fixedCost: 2.48, perPageCost: 0 },
     },
-    large: {
-      black_white:    { fixedCost: 0.75, perPageCost: 0.014 },
-      standard_color: { fixedCost: 0.75, perPageCost: 0.042 },
-      premium_color:  { fixedCost: 0.75, perPageCost: 0.075 },
+    highTier: {
+      regular: { fixedCost: 0.75, perPageCost: 0.012 },
+      large: { fixedCost: 0.75, perPageCost: 0.016 },
     },
   },
-  // Amazon.fr (France) - EUR
-  FR: {
-    regular: {
-      black_white:    { fixedCost: 0.60, perPageCost: 0.012 },
-      standard_color: { fixedCost: 0.60, perPageCost: 0.036 },
-      premium_color:  { fixedCost: 0.60, perPageCost: 0.065 },
-    },
-    large: {
-      black_white:    { fixedCost: 0.75, perPageCost: 0.014 },
-      standard_color: { fixedCost: 0.75, perPageCost: 0.042 },
-      premium_color:  { fixedCost: 0.75, perPageCost: 0.075 },
-    },
-  },
-  // Amazon.es (Spain) - EUR
-  ES: {
-    regular: {
-      black_white:    { fixedCost: 0.60, perPageCost: 0.012 },
-      standard_color: { fixedCost: 0.60, perPageCost: 0.036 },
-      premium_color:  { fixedCost: 0.60, perPageCost: 0.065 },
-    },
-    large: {
-      black_white:    { fixedCost: 0.75, perPageCost: 0.014 },
-      standard_color: { fixedCost: 0.75, perPageCost: 0.042 },
-      premium_color:  { fixedCost: 0.75, perPageCost: 0.075 },
-    },
-  },
-  // Amazon.it (Italy) - EUR
-  IT: {
-    regular: {
-      black_white:    { fixedCost: 0.60, perPageCost: 0.012 },
-      standard_color: { fixedCost: 0.60, perPageCost: 0.036 },
-      premium_color:  { fixedCost: 0.60, perPageCost: 0.065 },
-    },
-    large: {
-      black_white:    { fixedCost: 0.75, perPageCost: 0.014 },
-      standard_color: { fixedCost: 0.75, perPageCost: 0.042 },
-      premium_color:  { fixedCost: 0.75, perPageCost: 0.075 },
-    },
-  },
-  // Amazon.nl (Netherlands) - EUR
-  NL: {
-    regular: {
-      black_white:    { fixedCost: 0.60, perPageCost: 0.012 },
-      standard_color: { fixedCost: 0.60, perPageCost: 0.036 },
-      premium_color:  { fixedCost: 0.60, perPageCost: 0.065 },
-    },
-    large: {
-      black_white:    { fixedCost: 0.75, perPageCost: 0.014 },
-      standard_color: { fixedCost: 0.75, perPageCost: 0.042 },
-      premium_color:  { fixedCost: 0.75, perPageCost: 0.075 },
-    },
-  },
-  // Amazon.pl (Poland) - PLN
-  PL: {
-    regular: {
-      black_white:    { fixedCost: 2.90, perPageCost: 0.05 },
-      standard_color: { fixedCost: 2.90, perPageCost: 0.15 },
-      premium_color:  { fixedCost: 2.90, perPageCost: 0.26 },
-    },
-    large: {
-      black_white:    { fixedCost: 3.50, perPageCost: 0.06 },
-      standard_color: { fixedCost: 3.50, perPageCost: 0.18 },
-      premium_color:  { fixedCost: 3.50, perPageCost: 0.32 },
-    },
-  },
-  // Amazon.se (Sweden) - SEK
-  SE: {
-    regular: {
-      black_white:    { fixedCost: 7.00, perPageCost: 0.12 },
-      standard_color: { fixedCost: 7.00, perPageCost: 0.37 },
-      premium_color:  { fixedCost: 7.00, perPageCost: 0.66 },
-    },
-    large: {
-      black_white:    { fixedCost: 8.50, perPageCost: 0.15 },
-      standard_color: { fixedCost: 8.50, perPageCost: 0.44 },
-      premium_color:  { fixedCost: 8.50, perPageCost: 0.80 },
-    },
-  },
-  // Amazon.co.jp (Japan) - JPY
-  JP: {
-    regular: {
-      black_white:    { fixedCost: 114, perPageCost: 1.5 },
-      standard_color: { fixedCost: 114, perPageCost: 4.5 },
-      premium_color:  { fixedCost: 114, perPageCost: 8.0 },
-    },
-    large: {
-      black_white:    { fixedCost: 140, perPageCost: 1.8 },
-      standard_color: { fixedCost: 140, perPageCost: 5.5 },
-      premium_color:  { fixedCost: 140, perPageCost: 10.0 },
-    },
-  },
-  // Amazon.ca (Canada) - CAD
   CA: {
-    regular: {
-      black_white:    { fixedCost: 1.10, perPageCost: 0.016 },
-      standard_color: { fixedCost: 1.10, perPageCost: 0.046 },
-      premium_color:  { fixedCost: 1.10, perPageCost: 0.085 },
+    lowTier: {
+      regular: { fixedCost: 2.99, perPageCost: 0 },
+      large: { fixedCost: 3.53, perPageCost: 0 },
     },
-    large: {
-      black_white:    { fixedCost: 1.35, perPageCost: 0.019 },
-      standard_color: { fixedCost: 1.35, perPageCost: 0.055 },
-      premium_color:  { fixedCost: 1.35, perPageCost: 0.100 },
+    highTier: {
+      regular: { fixedCost: 1.26, perPageCost: 0.016 },
+      large: { fixedCost: 1.26, perPageCost: 0.021 },
     },
   },
-  // Amazon.com.au (Australia) - AUD
   AU: {
-    regular: {
-      black_white:    { fixedCost: 1.30, perPageCost: 0.018 },
-      standard_color: { fixedCost: 1.30, perPageCost: 0.054 },
-      premium_color:  { fixedCost: 1.30, perPageCost: 0.100 },
+    lowTier: {
+      regular: { fixedCost: 4.74, perPageCost: 0 },
+      large: { fixedCost: 5.28, perPageCost: 0 },
     },
-    large: {
-      black_white:    { fixedCost: 1.60, perPageCost: 0.022 },
-      standard_color: { fixedCost: 1.60, perPageCost: 0.065 },
-      premium_color:  { fixedCost: 1.60, perPageCost: 0.120 },
+    highTier: {
+      regular: { fixedCost: 2.42, perPageCost: 0.022 },
+      large: { fixedCost: 2.42, perPageCost: 0.027 },
+    },
+  },
+  JP: {
+    lowTier: {
+      regular: { fixedCost: 422, perPageCost: 0 },
+      large: { fixedCost: 530, perPageCost: 0 },
+    },
+    highTier: {
+      regular: { fixedCost: 206, perPageCost: 2 },
+      large: { fixedCost: 206, perPageCost: 3 },
+    },
+  },
+  PL: {
+    lowTier: {
+      regular: { fixedCost: 9.58, perPageCost: 0 },
+      large: { fixedCost: 11.61, perPageCost: 0 },
+    },
+    highTier: {
+      regular: { fixedCost: 3.51, perPageCost: 0.056 },
+      large: { fixedCost: 3.51, perPageCost: 0.075 },
+    },
+  },
+  SE: {
+    lowTier: {
+      regular: { fixedCost: 22.84, perPageCost: 0 },
+      large: { fixedCost: 27.67, perPageCost: 0 },
+    },
+    highTier: {
+      regular: { fixedCost: 8.37, perPageCost: 0.134 },
+      large: { fixedCost: 8.37, perPageCost: 0.179 },
     },
   },
 };
 
-// Page count limits per format
-export const PAGE_COUNT_LIMITS = {
-  standard_color: { min: 72, max: 600 }, // Standard color has restricted page range
-  regular_trim: { min: 24, max: 828 },
-  large_trim: { min: 24, max: 500 },
+// Copy EU pricing to all EU marketplaces
+BLACK_WHITE_PRICING.ES = BLACK_WHITE_PRICING.DE;
+BLACK_WHITE_PRICING.FR = BLACK_WHITE_PRICING.DE;
+BLACK_WHITE_PRICING.IT = BLACK_WHITE_PRICING.DE;
+BLACK_WHITE_PRICING.NL = BLACK_WHITE_PRICING.DE;
+BLACK_WHITE_PRICING.BE = BLACK_WHITE_PRICING.DE;
+BLACK_WHITE_PRICING.IE = BLACK_WHITE_PRICING.DE;
+
+/**
+ * ============================================================================
+ * PREMIUM COLOR PRICING
+ * ============================================================================
+ *
+ * 24-40 pages (fixed cost only):
+ * | Marketplace | Regular    | Large      |
+ * |-------------|------------|------------|
+ * | US          | $3.60      | $4.20      |
+ * | UK          | £2.59      | £3.24      |
+ * | EU          | €2.85      | €3.61      |
+ * | CA          | $4.66 CAD  | $5.26 CAD  |
+ * | AU          | $5.82 AUD  | $6.42 AUD  |
+ * | JP          | ¥475       | ¥475       |
+ * | PL          | 12.86 PLN  | 15.32 PLN  |
+ * | SE          | 30.65 SEK  | 36.51 SEK  |
+ *
+ * 42-828 pages (fixed + per-page):
+ * | Marketplace | Regular Fixed | Regular/Page | Large Fixed | Large/Page |
+ * |-------------|---------------|--------------|-------------|------------|
+ * | US          | $1.00         | $0.065       | $1.00       | $0.08      |
+ * | UK          | £0.85         | £0.0435      | £0.85       | £0.0598    |
+ * | EU          | €0.75         | €0.0525      | €0.75       | €0.0715    |
+ * | CA          | $1.26 CAD     | $0.085 CAD   | $1.26 CAD   | $0.10 CAD  |
+ * | AU          | $2.42 AUD     | $0.085 AUD   | $2.42 AUD   | $0.100 AUD |
+ * | JP          | ¥206          | ¥4           | ¥206        | ¥5         |
+ * | PL          | 3.51 PLN      | 0.267 PLN    | 3.51 PLN    | 0.337 PLN  |
+ * | SE          | 8.37 SEK      | 0.636 SEK    | 8.37 SEK    | 0.804 SEK  |
+ */
+const PREMIUM_COLOR_PRICING: Record<string, InkTypePricing> = {
+  US: {
+    lowTier: {
+      regular: { fixedCost: 3.60, perPageCost: 0 },
+      large: { fixedCost: 4.20, perPageCost: 0 },
+    },
+    highTier: {
+      regular: { fixedCost: 1.00, perPageCost: 0.065 },
+      large: { fixedCost: 1.00, perPageCost: 0.08 },
+    },
+  },
+  UK: {
+    lowTier: {
+      regular: { fixedCost: 2.59, perPageCost: 0 },
+      large: { fixedCost: 3.24, perPageCost: 0 },
+    },
+    highTier: {
+      regular: { fixedCost: 0.85, perPageCost: 0.0435 },
+      large: { fixedCost: 0.85, perPageCost: 0.0598 },
+    },
+  },
+  DE: {
+    lowTier: {
+      regular: { fixedCost: 2.85, perPageCost: 0 },
+      large: { fixedCost: 3.61, perPageCost: 0 },
+    },
+    highTier: {
+      regular: { fixedCost: 0.75, perPageCost: 0.0525 },
+      large: { fixedCost: 0.75, perPageCost: 0.0715 },
+    },
+  },
+  CA: {
+    lowTier: {
+      regular: { fixedCost: 4.66, perPageCost: 0 },
+      large: { fixedCost: 5.26, perPageCost: 0 },
+    },
+    highTier: {
+      regular: { fixedCost: 1.26, perPageCost: 0.085 },
+      large: { fixedCost: 1.26, perPageCost: 0.10 },
+    },
+  },
+  AU: {
+    lowTier: {
+      regular: { fixedCost: 5.82, perPageCost: 0 },
+      large: { fixedCost: 6.42, perPageCost: 0 },
+    },
+    highTier: {
+      regular: { fixedCost: 2.42, perPageCost: 0.085 },
+      large: { fixedCost: 2.42, perPageCost: 0.100 },
+    },
+  },
+  JP: {
+    lowTier: {
+      regular: { fixedCost: 475, perPageCost: 0 },
+      large: { fixedCost: 475, perPageCost: 0 },
+    },
+    highTier: {
+      regular: { fixedCost: 206, perPageCost: 4 },
+      large: { fixedCost: 206, perPageCost: 5 },
+    },
+  },
+  PL: {
+    lowTier: {
+      regular: { fixedCost: 12.86, perPageCost: 0 },
+      large: { fixedCost: 15.32, perPageCost: 0 },
+    },
+    highTier: {
+      regular: { fixedCost: 3.51, perPageCost: 0.267 },
+      large: { fixedCost: 3.51, perPageCost: 0.337 },
+    },
+  },
+  SE: {
+    lowTier: {
+      regular: { fixedCost: 30.65, perPageCost: 0 },
+      large: { fixedCost: 36.51, perPageCost: 0 },
+    },
+    highTier: {
+      regular: { fixedCost: 8.37, perPageCost: 0.636 },
+      large: { fixedCost: 8.37, perPageCost: 0.804 },
+    },
+  },
 };
+
+// Copy EU pricing to all EU marketplaces
+PREMIUM_COLOR_PRICING.ES = PREMIUM_COLOR_PRICING.DE;
+PREMIUM_COLOR_PRICING.FR = PREMIUM_COLOR_PRICING.DE;
+PREMIUM_COLOR_PRICING.IT = PREMIUM_COLOR_PRICING.DE;
+PREMIUM_COLOR_PRICING.NL = PREMIUM_COLOR_PRICING.DE;
+PREMIUM_COLOR_PRICING.BE = PREMIUM_COLOR_PRICING.DE;
+PREMIUM_COLOR_PRICING.IE = PREMIUM_COLOR_PRICING.DE;
+
+/**
+ * ============================================================================
+ * STANDARD COLOR PRICING
+ * ============================================================================
+ *
+ * Note: Standard color has NO low tier (fixed-only).
+ * It's only available for 72-600 pages with fixed + per-page cost.
+ *
+ * 72-600 pages (fixed + per-page):
+ * | Marketplace | Regular Fixed | Regular/Page | Large Fixed | Large/Page |
+ * |-------------|---------------|--------------|-------------|------------|
+ * | US          | $1.00         | $0.0255      | $1.00       | $0.0402    |
+ * | UK          | £0.85         | £0.020       | £0.85       | £0.027     |
+ * | EU          | €0.75         | €0.024       | €0.75       | €0.035     |
+ * | CA          | $1.26 CAD     | $0.037 CAD   | $1.26 CAD   | $0.052 CAD |
+ * | PL          | 3.51 PLN      | 0.112 PLN    | 3.51 PLN    | 0.164 PLN  |
+ * | SE          | 8.37 SEK      | 0.268 SEK    | 8.37 SEK    | 0.3691 SEK |
+ *
+ * Note: JP and AU are not listed for standard color in KDP tables
+ */
+const STANDARD_COLOR_PRICING: Record<string, InkTypePricing> = {
+  US: {
+    lowTier: {
+      regular: { fixedCost: 0, perPageCost: 0 }, // Not applicable
+      large: { fixedCost: 0, perPageCost: 0 },
+    },
+    highTier: {
+      regular: { fixedCost: 1.00, perPageCost: 0.0255 },
+      large: { fixedCost: 1.00, perPageCost: 0.0402 },
+    },
+  },
+  UK: {
+    lowTier: {
+      regular: { fixedCost: 0, perPageCost: 0 },
+      large: { fixedCost: 0, perPageCost: 0 },
+    },
+    highTier: {
+      regular: { fixedCost: 0.85, perPageCost: 0.020 },
+      large: { fixedCost: 0.85, perPageCost: 0.027 },
+    },
+  },
+  DE: {
+    lowTier: {
+      regular: { fixedCost: 0, perPageCost: 0 },
+      large: { fixedCost: 0, perPageCost: 0 },
+    },
+    highTier: {
+      regular: { fixedCost: 0.75, perPageCost: 0.024 },
+      large: { fixedCost: 0.75, perPageCost: 0.035 },
+    },
+  },
+  CA: {
+    lowTier: {
+      regular: { fixedCost: 0, perPageCost: 0 },
+      large: { fixedCost: 0, perPageCost: 0 },
+    },
+    highTier: {
+      regular: { fixedCost: 1.26, perPageCost: 0.037 },
+      large: { fixedCost: 1.26, perPageCost: 0.052 },
+    },
+  },
+  PL: {
+    lowTier: {
+      regular: { fixedCost: 0, perPageCost: 0 },
+      large: { fixedCost: 0, perPageCost: 0 },
+    },
+    highTier: {
+      regular: { fixedCost: 3.51, perPageCost: 0.112 },
+      large: { fixedCost: 3.51, perPageCost: 0.164 },
+    },
+  },
+  SE: {
+    lowTier: {
+      regular: { fixedCost: 0, perPageCost: 0 },
+      large: { fixedCost: 0, perPageCost: 0 },
+    },
+    highTier: {
+      regular: { fixedCost: 8.37, perPageCost: 0.268 },
+      large: { fixedCost: 8.37, perPageCost: 0.3691 },
+    },
+  },
+};
+
+// Copy EU pricing to all EU marketplaces
+STANDARD_COLOR_PRICING.ES = STANDARD_COLOR_PRICING.DE;
+STANDARD_COLOR_PRICING.FR = STANDARD_COLOR_PRICING.DE;
+STANDARD_COLOR_PRICING.IT = STANDARD_COLOR_PRICING.DE;
+STANDARD_COLOR_PRICING.NL = STANDARD_COLOR_PRICING.DE;
+STANDARD_COLOR_PRICING.BE = STANDARD_COLOR_PRICING.DE;
+STANDARD_COLOR_PRICING.IE = STANDARD_COLOR_PRICING.DE;
+
+// Get pricing table for ink type
+function getPricingTable(inkType: InkType): Record<string, InkTypePricing> {
+  switch (inkType) {
+    case 'black_white':
+      return BLACK_WHITE_PRICING;
+    case 'premium_color':
+      return PREMIUM_COLOR_PRICING;
+    case 'standard_color':
+      return STANDARD_COLOR_PRICING;
+    default:
+      return BLACK_WHITE_PRICING;
+  }
+}
 
 /**
  * Calculate printing cost for a KDP paperback book.
@@ -379,8 +427,8 @@ export const PAGE_COUNT_LIMITS = {
  * @param pageCount - Number of pages
  * @param marketplace - Marketplace code (US, UK, DE, FR, ES, IT, NL, PL, SE, JP, CA, AU)
  * @param inkType - Ink type (black_white, standard_color, premium_color)
- * @param trimSize - Trim size (regular, large). Defaults to 'regular' as most KDP books use regular trim.
- * @returns Printing cost in local currency, or null if marketplace not found
+ * @param trimSize - Trim size (regular, large). Defaults to 'regular'.
+ * @returns Printing cost in local currency, or null if invalid parameters
  */
 export function calculatePrintingCost(
   pageCount: number,
@@ -389,37 +437,49 @@ export function calculatePrintingCost(
   trimSize: TrimSize = 'regular'
 ): number | null {
   const marketplaceUpper = marketplace.toUpperCase();
-  const marketplacePricing = PRINTING_COSTS[marketplaceUpper];
+  const thresholds = PAGE_THRESHOLDS[inkType];
+  const pricingTable = getPricingTable(inkType);
 
+  // Validate page count
+  if (pageCount < 24) {
+    console.warn(`[PrintingCost] Page count ${pageCount} is below minimum (24)`);
+    return null;
+  }
+
+  if (pageCount > thresholds.highMax) {
+    console.warn(`[PrintingCost] Page count ${pageCount} exceeds maximum (${thresholds.highMax}) for ${inkType}`);
+    return null;
+  }
+
+  // Standard color has no low tier
+  if (inkType === 'standard_color' && pageCount < thresholds.highMin) {
+    console.warn(`[PrintingCost] Standard color requires minimum ${thresholds.highMin} pages, got ${pageCount}`);
+    return null;
+  }
+
+  // Get marketplace pricing, fall back to US
+  let marketplacePricing = pricingTable[marketplaceUpper];
   if (!marketplacePricing) {
     console.warn(`[PrintingCost] Unknown marketplace: ${marketplace}, falling back to US rates`);
-    const usRates = PRINTING_COSTS['US'][trimSize][inkType];
-    return Math.round((usRates.fixedCost + usRates.perPageCost * pageCount) * 100) / 100;
+    marketplacePricing = pricingTable['US'];
   }
 
-  const rates = marketplacePricing[trimSize];
-  if (!rates) {
-    console.warn(`[PrintingCost] Unknown trim size: ${trimSize}, falling back to regular`);
-    const regularRates = marketplacePricing['regular'][inkType];
-    return Math.round((regularRates.fixedCost + regularRates.perPageCost * pageCount) * 100) / 100;
+  // Determine which tier to use
+  const isLowTier = pageCount <= thresholds.lowMax;
+  const tierPricing = isLowTier ? marketplacePricing.lowTier : marketplacePricing.highTier;
+  const pricing = tierPricing[trimSize];
+
+  // Calculate cost
+  let cost: number;
+  if (isLowTier || pricing.perPageCost === 0) {
+    // Fixed cost only
+    cost = pricing.fixedCost;
+  } else {
+    // Fixed cost + per-page cost
+    cost = pricing.fixedCost + (pricing.perPageCost * pageCount);
   }
 
-  const rate = rates[inkType];
-  if (!rate) {
-    console.warn(`[PrintingCost] Unknown ink type: ${inkType}, falling back to black_white`);
-    const bwRate = rates['black_white'];
-    return Math.round((bwRate.fixedCost + bwRate.perPageCost * pageCount) * 100) / 100;
-  }
-
-  // Validate page count for standard color
-  if (inkType === 'standard_color') {
-    const { min, max } = PAGE_COUNT_LIMITS.standard_color;
-    if (pageCount < min || pageCount > max) {
-      console.warn(`[PrintingCost] Standard color only available for ${min}-${max} pages, got ${pageCount}`);
-    }
-  }
-
-  return Math.round((rate.fixedCost + rate.perPageCost * pageCount) * 100) / 100;
+  return Math.round(cost * 100) / 100;
 }
 
 /**
@@ -430,18 +490,32 @@ export function getPrintingCostBreakdown(
   marketplace: string,
   inkType: InkType = 'black_white',
   trimSize: TrimSize = 'regular'
-): { fixedCost: number; perPageCost: number; totalPerPage: number; total: number } | null {
+): {
+  tier: 'low' | 'high';
+  fixedCost: number;
+  perPageCost: number;
+  totalPerPage: number;
+  total: number;
+} | null {
   const marketplaceUpper = marketplace.toUpperCase();
-  const marketplacePricing = PRINTING_COSTS[marketplaceUpper] ?? PRINTING_COSTS['US'];
-  const rates = marketplacePricing[trimSize] ?? marketplacePricing['regular'];
-  const rate = rates[inkType] ?? rates['black_white'];
+  const thresholds = PAGE_THRESHOLDS[inkType];
+  const pricingTable = getPricingTable(inkType);
 
-  const totalPerPage = rate.perPageCost * pageCount;
-  const total = Math.round((rate.fixedCost + totalPerPage) * 100) / 100;
+  if (pageCount < 24 || pageCount > thresholds.highMax) return null;
+  if (inkType === 'standard_color' && pageCount < thresholds.highMin) return null;
+
+  let marketplacePricing = pricingTable[marketplaceUpper] ?? pricingTable['US'];
+  const isLowTier = pageCount <= thresholds.lowMax;
+  const tierPricing = isLowTier ? marketplacePricing.lowTier : marketplacePricing.highTier;
+  const pricing = tierPricing[trimSize];
+
+  const totalPerPage = pricing.perPageCost * pageCount;
+  const total = Math.round((pricing.fixedCost + totalPerPage) * 100) / 100;
 
   return {
-    fixedCost: rate.fixedCost,
-    perPageCost: rate.perPageCost,
+    tier: isLowTier ? 'low' : 'high',
+    fixedCost: pricing.fixedCost,
+    perPageCost: pricing.perPageCost,
     totalPerPage: Math.round(totalPerPage * 100) / 100,
     total,
   };
@@ -461,7 +535,6 @@ export function parseKdpPrice(priceStr: string | null | undefined): number | nul
     .trim();
 
   // Handle European comma format (12,99) vs US dot format (12.99)
-  // If both comma and dot exist, assume last separator is decimal
   if (cleaned.includes(',') && cleaned.includes('.')) {
     // e.g., "1.234,56" → "1234.56"
     const normalized = cleaned.replace(/\./g, '').replace(',', '.');
@@ -498,7 +571,7 @@ export interface VatSettings {
  *
  * @param price - Book list price in local currency
  * @param pageCount - Number of pages
- * @param marketplace - Marketplace code (US, UK, DE, FR, ES, IT, JP, CA, AU, etc.)
+ * @param marketplace - Marketplace code
  * @param inkType - Ink type (black_white, standard_color, premium_color)
  * @param royaltyPercentage - Royalty rate (default 60%)
  * @param vatSettings - VAT configuration for the calculation
@@ -523,11 +596,9 @@ export function calculateBookFastAcos(
   // Calculate FAST ACOS based on VAT settings
   let fastAcos: number;
   if (vatSettings.useVat) {
-    // With VAT: FAST ACOS = (royalty / (price × (1 + VAT/100))) × 100
     const vatMultiplier = 1 + (vatSettings.vatPercentage / 100);
     fastAcos = (royalty / (price * vatMultiplier)) * 100;
   } else {
-    // Without VAT: FAST ACOS = (royalty / price) × 100
     fastAcos = (royalty / price) * 100;
   }
 
@@ -537,3 +608,6 @@ export function calculateBookFastAcos(
     printingCost,
   };
 }
+
+// Export thresholds for reference
+export const PAGE_COUNT_LIMITS = PAGE_THRESHOLDS;
