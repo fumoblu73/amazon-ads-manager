@@ -17,7 +17,7 @@ export default function Dashboard() {
     setAutomationMessage(null);
     try {
       const response = await automationApi.triggerUser();
-      setAutomationMessage({ type: 'success', text: response.message || 'Automazioni avviate!' });
+      setAutomationMessage({ type: 'success', text: response.data?.message || 'Automazioni avviate!' });
       setTimeout(() => setAutomationMessage(null), 5000);
     } catch (err: any) {
       const errorMsg = err.response?.data?.error || err.message || 'Errore nell\'avvio delle automazioni';
