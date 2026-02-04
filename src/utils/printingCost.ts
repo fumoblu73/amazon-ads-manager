@@ -51,7 +51,30 @@
  */
 
 export type InkType = 'black_white' | 'standard_color' | 'premium_color';
-export type TrimSize = 'regular' | 'large';
+
+// Specific trim size dimensions
+export type TrimSize = '5x8' | '6x9' | '8x10' | '8.5x8.5' | '8.5x11';
+
+// Internal pricing tier (regular = smaller dimensions, large = larger dimensions)
+type PricingTier = 'regular' | 'large';
+
+// Map specific dimensions to pricing tier
+const TRIM_SIZE_TO_TIER: Record<TrimSize, PricingTier> = {
+  '5x8': 'regular',
+  '6x9': 'regular',
+  '8x10': 'large',
+  '8.5x8.5': 'large',
+  '8.5x11': 'large',
+};
+
+/**
+ * Get the pricing tier for a given trim size dimension
+ * Regular: 5x8, 6x9 (up to 6.12" width x 9" height)
+ * Large: 8x10, 8.5x8.5, 8.5x11 (larger dimensions)
+ */
+export function getTrimPricingTier(trimSize: TrimSize): PricingTier {
+  return TRIM_SIZE_TO_TIER[trimSize] || 'regular';
+}
 
 interface TierPricing {
   fixedCost: number;
@@ -427,18 +450,21 @@ function getPricingTable(inkType: InkType): Record<string, InkTypePricing> {
  * @param pageCount - Number of pages
  * @param marketplace - Marketplace code (US, UK, DE, FR, ES, IT, NL, PL, SE, JP, CA, AU)
  * @param inkType - Ink type (black_white, standard_color, premium_color)
- * @param trimSize - Trim size (regular, large). Defaults to 'regular'.
+ * @param trimSize - Trim size dimension (5x8, 6x9, 8x10, 8.5x8.5, 8.5x11). Defaults to '6x9'.
  * @returns Printing cost in local currency, or null if invalid parameters
  */
 export function calculatePrintingCost(
   pageCount: number,
   marketplace: string,
   inkType: InkType = 'black_white',
-  trimSize: TrimSize = 'regular'
+  trimSize: TrimSize = '6x9'
 ): number | null {
   const marketplaceUpper = marketplace.toUpperCase();
   const thresholds = PAGE_THRESHOLDS[inkType];
   const pricingTable = getPricingTable(inkType);
+
+  // Convert specific dimension to pricing tier (regular/large)
+  const pricingTier = getTrimPricingTier(trimSize);
 
   // Validate page count
   if (pageCount < 24) {
@@ -467,7 +493,7 @@ export function calculatePrintingCost(
   // Determine which tier to use
   const isLowTier = pageCount <= thresholds.lowMax;
   const tierPricing = isLowTier ? marketplacePricing.lowTier : marketplacePricing.highTier;
-  const pricing = tierPricing[trimSize];
+  const pricing = tierPricing[pricingTier];
 
   // Calculate cost
   let cost: number;
@@ -489,7 +515,7 @@ export function getPrintingCostBreakdown(
   pageCount: number,
   marketplace: string,
   inkType: InkType = 'black_white',
-  trimSize: TrimSize = 'regular'
+  trimSize: TrimSize = '6x9'
 ): {
   tier: 'low' | 'high';
   fixedCost: number;
@@ -500,6 +526,7 @@ export function getPrintingCostBreakdown(
   const marketplaceUpper = marketplace.toUpperCase();
   const thresholds = PAGE_THRESHOLDS[inkType];
   const pricingTable = getPricingTable(inkType);
+  const pricingTier = getTrimPricingTier(trimSize);
 
   if (pageCount < 24 || pageCount > thresholds.highMax) return null;
   if (inkType === 'standard_color' && pageCount < thresholds.highMin) return null;
@@ -507,7 +534,7 @@ export function getPrintingCostBreakdown(
   let marketplacePricing = pricingTable[marketplaceUpper] ?? pricingTable['US'];
   const isLowTier = pageCount <= thresholds.lowMax;
   const tierPricing = isLowTier ? marketplacePricing.lowTier : marketplacePricing.highTier;
-  const pricing = tierPricing[trimSize];
+  const pricing = tierPricing[pricingTier];
 
   const totalPerPage = pricing.perPageCost * pageCount;
   const total = Math.round((pricing.fixedCost + totalPerPage) * 100) / 100;
@@ -575,7 +602,7 @@ export interface VatSettings {
  * @param inkType - Ink type (black_white, standard_color, premium_color)
  * @param royaltyPercentage - Royalty rate (default 60%)
  * @param vatSettings - VAT configuration for the calculation
- * @param trimSize - Trim size (regular, large). Defaults to 'regular'.
+ * @param trimSize - Trim size dimension (5x8, 6x9, 8x10, 8.5x8.5, 8.5x11). Defaults to '6x9'.
  * @returns { fastAcos, royalty, printingCost } or null if data insufficient
  */
 export function calculateBookFastAcos(
@@ -585,7 +612,7 @@ export function calculateBookFastAcos(
   inkType: InkType = 'black_white',
   royaltyPercentage: number = 60,
   vatSettings: VatSettings = { useVat: true, vatPercentage: 22 },
-  trimSize: TrimSize = 'regular'
+  trimSize: TrimSize = '6x9'
 ): { fastAcos: number; royalty: number; printingCost: number } | null {
   const printingCost = calculatePrintingCost(pageCount, marketplace, inkType, trimSize);
   if (printingCost === null) return null;

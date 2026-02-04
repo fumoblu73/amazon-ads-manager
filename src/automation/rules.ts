@@ -353,7 +353,7 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
       const price = parseKdpPrice(kdpBook.price);
       if (price) {
         const inkType = (kdpBook.inkType || 'black_white') as InkType;
-        const trimSize = (kdpBook.trimSize || 'regular') as TrimSize;
+        const trimSize = (kdpBook.trimSize || '6x9') as TrimSize;
         const royaltyPct = Number(kdpBook.royaltyPercentage) || 60;
         const vatSettings: VatSettings = {
           useVat: config.useVatInFastAcos,
@@ -675,7 +675,7 @@ async function processCampaignWithApiService(
       const price = parseKdpPrice(kdpBook.price);
       if (price) {
         const inkType = (kdpBook.inkType || 'black_white') as InkType;
-        const trimSize = (kdpBook.trimSize || 'regular') as TrimSize;
+        const trimSize = (kdpBook.trimSize || '6x9') as TrimSize;
         const royaltyPct = Number(kdpBook.royaltyPercentage) || 60;
         const vatSettings: VatSettings = {
           useVat: config.useVatInFastAcos,

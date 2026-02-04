@@ -226,19 +226,26 @@ export default function Bookshelf() {
     },
     {
       key: 'trimSize',
-      header: 'Trim',
-      accessor: (book) => book.trimSize || 'regular',
+      header: 'Dimensions',
+      accessor: (book) => book.trimSize || '6x9',
       sortable: true,
       render: (value, book) => (
         <div className="flex items-center gap-1">
           <select
-            value={value || 'regular'}
+            value={value || '6x9'}
             onChange={(e) => saveBookField(book.id, 'trimSize', e.target.value as TrimSize)}
             disabled={savingField === `${book.id}:trimSize`}
             className="px-1.5 py-1 bg-gray-800 border border-gray-700 rounded text-white text-xs focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none"
           >
-            <option value="regular">Regular</option>
-            <option value="large">Large</option>
+            <optgroup label="Regular">
+              <option value="5x8">5" x 8"</option>
+              <option value="6x9">6" x 9"</option>
+            </optgroup>
+            <optgroup label="Large">
+              <option value="8x10">8" x 10"</option>
+              <option value="8.5x8.5">8.5" x 8.5"</option>
+              <option value="8.5x11">8.5" x 11"</option>
+            </optgroup>
           </select>
           {savingField === `${book.id}:trimSize` && (
             <div className="w-3 h-3 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>

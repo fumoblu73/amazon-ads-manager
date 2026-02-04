@@ -109,7 +109,7 @@ export interface AutomationStatus {
 // ================================================
 
 export type InkType = 'black_white' | 'standard_color' | 'premium_color';
-export type TrimSize = 'regular' | 'large';
+export type TrimSize = '5x8' | '6x9' | '8x10' | '8.5x8.5' | '8.5x11';
 
 export interface KdpBook {
   id: string;
