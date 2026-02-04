@@ -60,12 +60,8 @@ export default function Bookshelf() {
     try {
       setSavingField(`${bookId}:${field}`);
       setError(null);
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setError('Not logged in. Please refresh and login.');
-        return;
-      }
-      await kdpBooksApi.update(bookId, { [field]: value } as any, token);
+      // Auth handled by cookies (withCredentials: true in apiClient)
+      await kdpBooksApi.update(bookId, { [field]: value } as any);
       setBooks(prev => prev.map(b => b.id === bookId ? { ...b, [field]: value } : b));
       setSuccessMsg(`${field} updated!`);
       setTimeout(() => setSuccessMsg(null), 2000);

@@ -238,10 +238,9 @@ export const kdpBooksApi = {
     return response.data;
   },
 
-  update: async (id: string, book: Partial<KdpBook>, token: string) => {
-    const response = await apiClient.put<ApiResponse<KdpBook>>(`/api/kdp/books/${id}`, book, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+  update: async (id: string, book: Partial<KdpBook>, _token?: string) => {
+    // Auth handled by cookies (withCredentials: true)
+    const response = await apiClient.put<ApiResponse<KdpBook>>(`/api/kdp/books/${id}`, book);
     return response.data;
   },
 
