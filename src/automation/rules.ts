@@ -19,7 +19,7 @@ import { Campaign } from '../models/Campaign';
 import { KdpBook } from '../entities/KdpBook';
 import { AutomationSettings } from '../entities/AutomationSettings';
 import { isInWarmupPeriod, getCampaignCreatedAt } from '../utils/timeframe';
-import { parseKdpPrice, calculateBookFastAcos, InkType, VatSettings } from '../utils/printingCost';
+import { parseKdpPrice, calculateBookFastAcos, InkType, TrimSize, VatSettings } from '../utils/printingCost';
 import { automationScheduler } from './scheduler';
 
 // Import delle 5 funzioni
@@ -353,16 +353,17 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
       const price = parseKdpPrice(kdpBook.price);
       if (price) {
         const inkType = (kdpBook.inkType || 'black_white') as InkType;
+        const trimSize = (kdpBook.trimSize || 'regular') as TrimSize;
         const royaltyPct = Number(kdpBook.royaltyPercentage) || 60;
         const vatSettings: VatSettings = {
           useVat: config.useVatInFastAcos,
           vatPercentage: config.vatPercentage
         };
-        const result = calculateBookFastAcos(price, kdpBook.pageCount, marketplace, inkType, royaltyPct, vatSettings);
+        const result = calculateBookFastAcos(price, kdpBook.pageCount, marketplace, inkType, royaltyPct, vatSettings, trimSize);
         if (result) {
           book = { price, printingCost: result.printingCost, royaltyPercentage: royaltyPct };
           const vatInfo = vatSettings.useVat ? `(IVA ${vatSettings.vatPercentage}%)` : '(senza IVA)';
-          console.log(`  📖 Book data: price=${price}, printingCost=${result.printingCost}, fastAcos=${result.fastAcos}% ${vatInfo}`);
+          console.log(`  📖 Book data: price=${price}, pages=${kdpBook.pageCount}, ink=${inkType}, trim=${trimSize}, printingCost=${result.printingCost}, fastAcos=${result.fastAcos}% ${vatInfo}`);
         } else {
           console.error(`  ❌ FAST ACOS CALC FAILED: royalty<=0 for "${campaignName}"`);
         }
@@ -674,16 +675,17 @@ async function processCampaignWithApiService(
       const price = parseKdpPrice(kdpBook.price);
       if (price) {
         const inkType = (kdpBook.inkType || 'black_white') as InkType;
+        const trimSize = (kdpBook.trimSize || 'regular') as TrimSize;
         const royaltyPct = Number(kdpBook.royaltyPercentage) || 60;
         const vatSettings: VatSettings = {
           useVat: config.useVatInFastAcos,
           vatPercentage: config.vatPercentage
         };
-        const result = calculateBookFastAcos(price, kdpBook.pageCount, marketplace, inkType, royaltyPct, vatSettings);
+        const result = calculateBookFastAcos(price, kdpBook.pageCount, marketplace, inkType, royaltyPct, vatSettings, trimSize);
         if (result) {
           book = { price, printingCost: result.printingCost, royaltyPercentage: royaltyPct };
           const vatInfo = vatSettings.useVat ? `(IVA ${vatSettings.vatPercentage}%)` : '(senza IVA)';
-          console.log(`  📖 Book data: price=${price}, printingCost=${result.printingCost}, royalty%=${royaltyPct}, fastAcos=${result.fastAcos}% ${vatInfo}`);
+          console.log(`  📖 Book data: price=${price}, pages=${kdpBook.pageCount}, ink=${inkType}, trim=${trimSize}, printingCost=${result.printingCost}, fastAcos=${result.fastAcos}% ${vatInfo}`);
         } else {
           console.error(`  ❌ FAST ACOS CALC FAILED: royalty<=0 for "${campaignName}" (price=${price}, pageCount=${kdpBook.pageCount})`);
         }

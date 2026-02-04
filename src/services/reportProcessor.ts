@@ -9,7 +9,7 @@ import { PendingReport } from '../entities/PendingReport';
 import { KdpBook } from '../entities/KdpBook';
 import { createMarketplaceApiService } from './MarketplaceApiFactory';
 import { In, IsNull } from 'typeorm';
-import { parseKdpPrice, calculateBookFastAcos, InkType } from '../utils/printingCost';
+import { parseKdpPrice, calculateBookFastAcos, InkType, TrimSize } from '../utils/printingCost';
 
 import { executeFunc1 } from '../automation/functions/func1';
 import { executeFunc2 } from '../automation/functions/func2';
@@ -222,11 +222,12 @@ async function executeAutomationFunctions(
       const price = parseKdpPrice(kdpBook.price);
       if (price) {
         const inkType = (kdpBook.inkType || 'black_white') as InkType;
+        const trimSize = (kdpBook.trimSize || 'regular') as TrimSize;
         const royaltyPct = Number(kdpBook.royaltyPercentage) || 60;
-        const result = calculateBookFastAcos(price, kdpBook.pageCount, marketplace, inkType, royaltyPct);
+        const result = calculateBookFastAcos(price, kdpBook.pageCount, marketplace, inkType, royaltyPct, { useVat: true, vatPercentage: 22 }, trimSize);
         if (result) {
           book = { price, printingCost: result.printingCost, royaltyPercentage: royaltyPct };
-          console.log(`     📖 Book data: price=${price}, printingCost=${result.printingCost}, royalty%=${royaltyPct}, fastAcos=${result.fastAcos}%`);
+          console.log(`     📖 Book data: price=${price}, pages=${kdpBook.pageCount}, ink=${inkType}, trim=${trimSize}, printingCost=${result.printingCost}, fastAcos=${result.fastAcos}%`);
         } else {
           console.warn(`     ⚠️ FAST ACOS calculation failed for campaign ${report.campaignName}, using fallback`);
         }

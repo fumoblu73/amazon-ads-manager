@@ -108,6 +108,9 @@ export interface AutomationStatus {
 // KDP ANALYTICS TYPES
 // ================================================
 
+export type InkType = 'black_white' | 'standard_color' | 'premium_color';
+export type TrimSize = 'regular' | 'large';
+
 export interface KdpBook {
   id: string;
   userId: string;
@@ -122,6 +125,9 @@ export interface KdpBook {
   bsrRank?: number;
   bsrCategory?: string;
   pageCount?: number;
+  inkType?: InkType;
+  trimSize?: TrimSize;
+  royaltyPercentage?: number;
   kenpc?: number;
   lastSyncDate?: string;
   createdAt: string;

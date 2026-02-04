@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { kdpBooksApi } from '../../services/api';
 import DataTable from '../../components/kdp/DataTable';
 import type { Column } from '../../components/kdp/DataTable';
-import type { KdpBook, BookshelfFilters } from '../../types';
+import type { KdpBook, BookshelfFilters, InkType, TrimSize } from '../../types';
 
 interface CookieStatus {
   syncEnabled: boolean;
@@ -17,7 +17,7 @@ export default function Bookshelf() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cookieStatus, setCookieStatus] = useState<CookieStatus | null>(null);
-  const [savingPageCount, setSavingPageCount] = useState<string | null>(null);
+  const [savingField, setSavingField] = useState<string | null>(null); // bookId:fieldName
   const [filters, setFilters] = useState<BookshelfFilters>({
     status: 'all',
     page: 1,
@@ -55,18 +55,18 @@ export default function Bookshelf() {
     }
   };
 
-  const savePageCount = async (bookId: string, pageCount: number) => {
+  const saveBookField = async (bookId: string, field: string, value: any) => {
     try {
-      setSavingPageCount(bookId);
+      setSavingField(`${bookId}:${field}`);
       const token = localStorage.getItem('token');
       if (!token) return;
-      await kdpBooksApi.update(bookId, { pageCount } as any, token);
-      setBooks(prev => prev.map(b => b.id === bookId ? { ...b, pageCount } : b));
+      await kdpBooksApi.update(bookId, { [field]: value } as any, token);
+      setBooks(prev => prev.map(b => b.id === bookId ? { ...b, [field]: value } : b));
     } catch (err: any) {
-      console.error('Failed to save page count:', err);
-      setError('Failed to save page count');
+      console.error(`Failed to save ${field}:`, err);
+      setError(`Failed to save ${field}`);
     } finally {
-      setSavingPageCount(null);
+      setSavingField(null);
     }
   };
 
@@ -185,7 +185,7 @@ export default function Bookshelf() {
             onBlur={(e) => {
               const val = parseInt(e.target.value);
               if (val > 0 && val !== book.pageCount) {
-                savePageCount(book.id, val);
+                saveBookField(book.id, 'pageCount', val);
               }
             }}
             onKeyDown={(e) => {
@@ -193,9 +193,54 @@ export default function Bookshelf() {
                 (e.target as HTMLInputElement).blur();
               }
             }}
-            disabled={savingPageCount === book.id}
+            disabled={savingField === `${book.id}:pageCount`}
           />
-          {savingPageCount === book.id && (
+          {savingField === `${book.id}:pageCount` && (
+            <div className="w-3 h-3 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+          )}
+        </div>
+      )
+    },
+    {
+      key: 'inkType',
+      header: 'Ink',
+      accessor: (book) => book.inkType || 'black_white',
+      sortable: true,
+      render: (value, book) => (
+        <div className="flex items-center gap-1">
+          <select
+            value={value || 'black_white'}
+            onChange={(e) => saveBookField(book.id, 'inkType', e.target.value as InkType)}
+            disabled={savingField === `${book.id}:inkType`}
+            className="px-1.5 py-1 bg-gray-800 border border-gray-700 rounded text-white text-xs focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none"
+          >
+            <option value="black_white">Black</option>
+            <option value="standard_color">Std Color</option>
+            <option value="premium_color">Prm Color</option>
+          </select>
+          {savingField === `${book.id}:inkType` && (
+            <div className="w-3 h-3 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+          )}
+        </div>
+      )
+    },
+    {
+      key: 'trimSize',
+      header: 'Trim',
+      accessor: (book) => book.trimSize || 'regular',
+      sortable: true,
+      render: (value, book) => (
+        <div className="flex items-center gap-1">
+          <select
+            value={value || 'regular'}
+            onChange={(e) => saveBookField(book.id, 'trimSize', e.target.value as TrimSize)}
+            disabled={savingField === `${book.id}:trimSize`}
+            className="px-1.5 py-1 bg-gray-800 border border-gray-700 rounded text-white text-xs focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none"
+          >
+            <option value="regular">Regular</option>
+            <option value="large">Large</option>
+          </select>
+          {savingField === `${book.id}:trimSize` && (
             <div className="w-3 h-3 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
           )}
         </div>

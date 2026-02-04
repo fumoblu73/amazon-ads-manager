@@ -64,7 +64,10 @@ export class KdpBook {
   pageCount: number;
 
   @Column({ type: 'varchar', length: 20, default: 'black_white', name: 'ink_type' })
-  inkType: string;
+  inkType: 'black_white' | 'standard_color' | 'premium_color';
+
+  @Column({ type: 'varchar', length: 10, default: 'regular', name: 'trim_size' })
+  trimSize: 'regular' | 'large';
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 60, name: 'royalty_percentage' })
   royaltyPercentage: number;
