@@ -258,6 +258,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const bookData: UpdateKdpBookInput = req.body;
+    console.log(`📝 PUT /api/kdp/books/${req.params.id} - Updating:`, JSON.stringify(bookData));
 
     const bookRepository = AppDataSource.getRepository(KdpBook);
     const book = await bookRepository.findOne({
@@ -277,7 +278,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     Object.assign(book, bookData);
     await bookRepository.save(book);
 
-    console.log(`✅ Libro KDP aggiornato: ${book.title} (${book.asin})`);
+    console.log(`✅ Libro KDP aggiornato: ${book.title} (${book.asin}) - trimSize: ${book.trimSize}, inkType: ${book.inkType}`);
 
     res.json({
       success: true,

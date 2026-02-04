@@ -232,7 +232,7 @@ export default function DataTable<T extends Record<string, any>>({
               </tr>
             ) : (
               paginatedData.map((row, rowIndex) => (
-                <tr key={rowIndex} className="hover:bg-gray-800 transition-colors">
+                <tr key={row.id || row.asin || rowIndex} className="hover:bg-gray-800 transition-colors">
                   {columns.map(col => (
                     visibleColumns.has(col.key) && (
                       <td key={col.key} className={`px-6 py-4 text-sm text-gray-300 ${col.className || ''}`}>
