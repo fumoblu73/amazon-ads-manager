@@ -16,6 +16,7 @@ export default function Bookshelf() {
   const [books, setBooks] = useState<KdpBook[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [cookieStatus, setCookieStatus] = useState<CookieStatus | null>(null);
   const [savingField, setSavingField] = useState<string | null>(null); // bookId:fieldName
   const [filters, setFilters] = useState<BookshelfFilters>({
@@ -58,13 +59,19 @@ export default function Bookshelf() {
   const saveBookField = async (bookId: string, field: string, value: any) => {
     try {
       setSavingField(`${bookId}:${field}`);
+      setError(null);
       const token = localStorage.getItem('token');
-      if (!token) return;
+      if (!token) {
+        setError('Not logged in. Please refresh and login.');
+        return;
+      }
       await kdpBooksApi.update(bookId, { [field]: value } as any, token);
       setBooks(prev => prev.map(b => b.id === bookId ? { ...b, [field]: value } : b));
+      setSuccessMsg(`${field} updated!`);
+      setTimeout(() => setSuccessMsg(null), 2000);
     } catch (err: any) {
       console.error(`Failed to save ${field}:`, err);
-      setError(`Failed to save ${field}`);
+      setError(`Failed to save ${field}: ${err.response?.data?.error || err.message}`);
     } finally {
       setSavingField(null);
     }
@@ -375,10 +382,17 @@ export default function Bookshelf() {
         </div>
       </div>
 
+      {/* Success Message */}
+      {successMsg && (
+        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
+          <p className="text-green-500">✓ {successMsg}</p>
+        </div>
+      )}
+
       {/* Error Message */}
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
-          <p className="text-red-500">{error}</p>
+          <p className="text-red-500">✗ {error}</p>
         </div>
       )}
 
