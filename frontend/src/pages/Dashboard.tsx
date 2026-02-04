@@ -9,6 +9,24 @@ export default function Dashboard() {
   const [recentErrors, setRecentErrors] = useState<AutomationLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [triggeringAutomation, setTriggeringAutomation] = useState(false);
+  const [automationMessage, setAutomationMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleTriggerAutomation = async () => {
+    setTriggeringAutomation(true);
+    setAutomationMessage(null);
+    try {
+      const response = await automationApi.triggerUser();
+      setAutomationMessage({ type: 'success', text: response.message || 'Automazioni avviate!' });
+      setTimeout(() => setAutomationMessage(null), 5000);
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || err.message || 'Errore nell\'avvio delle automazioni';
+      setAutomationMessage({ type: 'error', text: errorMsg });
+      setTimeout(() => setAutomationMessage(null), 5000);
+    } finally {
+      setTriggeringAutomation(false);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -108,12 +126,47 @@ export default function Dashboard() {
         <div className="flex-1 grid grid-cols-3 gap-6 min-h-0">
           {/* Automation Status */}
           <div className="bg-black rounded-xl p-5 flex flex-col">
-            <div className="flex items-center gap-2 mb-3">
-              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              <h2 className="text-sm font-semibold text-white">Automazioni</h2>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <h2 className="text-sm font-semibold text-white">Automazioni</h2>
+              </div>
+              <button
+                onClick={handleTriggerAutomation}
+                disabled={triggeringAutomation}
+                className="px-3 py-1.5 bg-orange-500 text-white text-xs font-medium rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+              >
+                {triggeringAutomation ? (
+                  <>
+                    <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Avvio...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Esegui Ora
+                  </>
+                )}
+              </button>
             </div>
+            {/* Automation message */}
+            {automationMessage && (
+              <div className={`mb-3 p-2 rounded-lg text-xs ${
+                automationMessage.type === 'success'
+                  ? 'bg-green-100 text-green-800'
+                  : 'bg-red-100 text-red-800'
+              }`}>
+                {automationMessage.text}
+              </div>
+            )}
             {automationStatus && automationStatus.scheduler ? (
               <div className="space-y-3 flex-1">
                 <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-3 rounded-lg">

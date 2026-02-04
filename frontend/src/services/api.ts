@@ -190,6 +190,12 @@ export const automationApi = {
     });
     return response.data;
   },
+
+  // Trigger automations for current user (uses cookie auth)
+  triggerUser: async () => {
+    const response = await apiClient.post<ApiResponse<{ message: string }>>('/api/automation/trigger-user', {});
+    return response.data;
+  },
 };
 
 // ================================================
