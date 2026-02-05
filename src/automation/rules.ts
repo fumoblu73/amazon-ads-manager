@@ -681,15 +681,15 @@ async function processCampaignWithApiService(
       }
     }
 
-    // Step 3: Find book by Campaign.advertisedAsin + marketplace + userId
+    // Step 3: Find book by Campaign.advertisedAsin + userId (ASIN is universal across marketplaces)
     if (campaignRecord?.advertisedAsin && userId) {
       kdpBook = await kdpBookRepo.findOne({
-        where: { userId, asin: campaignRecord.advertisedAsin, marketplace }
+        where: { userId, asin: campaignRecord.advertisedAsin }
       });
       if (kdpBook) {
         console.log(`  📚 Found book "${kdpBook.title}" (${campaignRecord.advertisedAsin}) for campaign`);
       } else {
-        console.error(`  ❌ NO BOOK FOUND: ASIN "${campaignRecord.advertisedAsin}" not in kdp_books for marketplace ${marketplace}`);
+        console.error(`  ❌ NO BOOK FOUND: ASIN "${campaignRecord.advertisedAsin}" not in kdp_books`);
       }
     } else if (!campaignRecord?.advertisedAsin) {
       console.error(`  ❌ NO ASIN: Campaign "${campaignName}" has no advertisedAsin (keyword-only targeting)`);
