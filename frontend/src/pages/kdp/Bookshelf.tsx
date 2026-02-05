@@ -79,7 +79,7 @@ export default function Bookshelf() {
       header: 'Cover',
       accessor: (book) => book.coverUrl || '',
       sortable: false,
-      render: (value, book) => {
+      render: (_value, book) => {
         // Always generate cover URL from ASIN (more reliable than scraped URLs)
         const coverSrc = book.asin ? `https://m.media-amazon.com/images/P/${book.asin}.jpg` : '';
         return (
