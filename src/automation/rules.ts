@@ -643,29 +643,25 @@ async function processCampaignWithApiService(
       where: { amazonCampaignId: campaignId, marketplace }
     });
 
-    // Step 2: If Campaign.advertisedAsin is missing, auto-extract from targets API
+    // Step 2: If Campaign.advertisedAsin is missing, auto-extract from Product Ads API
     if (campaignRecord && !campaignRecord.advertisedAsin) {
       try {
-        const targets = await apiService.getTargets(campaignId);
-        for (const target of targets) {
-          if (target.expression) {
-            for (const expr of target.expression) {
-              if (expr.type === 'asinSameAs' && expr.value) {
-                // Save advertisedAsin on Campaign (first ASIN found)
-                campaignRecord.advertisedAsin = expr.value;
-                await campaignRepo.save(campaignRecord);
-                console.log(`  🔗 Auto-discovered ASIN "${expr.value}" for campaign "${campaignName}"`);
-                break;
-              }
-            }
+        // Product Ads contain the ASIN being advertised (the user's product)
+        const productAds = await apiService.getProductAds(campaignId);
+        for (const ad of productAds) {
+          if (ad.asin) {
+            // Save advertisedAsin on Campaign (first ASIN found)
+            campaignRecord.advertisedAsin = ad.asin;
+            await campaignRepo.save(campaignRecord);
+            console.log(`  🔗 Auto-discovered advertised ASIN "${ad.asin}" for campaign "${campaignName}"`);
+            break;
           }
-          if (campaignRecord.advertisedAsin) break;
         }
         if (!campaignRecord.advertisedAsin) {
-          console.warn(`  ⚠️ No ASIN targeting found for campaign "${campaignName}" (keyword-only campaign?)`);
+          console.warn(`  ⚠️ No Product Ads found for campaign "${campaignName}"`);
         }
-      } catch (targetErr: any) {
-        console.warn(`  ⚠️ Could not fetch targets for auto-link: ${targetErr.message}`);
+      } catch (productAdErr: any) {
+        console.warn(`  ⚠️ Could not fetch Product Ads for auto-link: ${productAdErr.message}`);
       }
     }
 

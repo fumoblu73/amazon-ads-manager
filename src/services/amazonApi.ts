@@ -447,6 +447,38 @@ class AmazonApiService {
   }
 
   // ================================================
+  // METODI PER PRODUCT ADS (Advertised Products)
+  // ================================================
+
+  /**
+   * Recupera i Product Ads di una campagna (contiene gli ASIN pubblicizzati)
+   * Questo è l'ASIN del prodotto che la campagna sta promuovendo
+   */
+  async getProductAds(campaignId: string): Promise<any[]> {
+    try {
+      console.log(`📥 Recupero Product Ads per campagna ${campaignId}...`);
+
+      // API v3 per Product Ads
+      const response = await this.client.post('/sp/productAds/list', {
+        campaignIdFilter: { include: [campaignId] },
+        maxResults: 100
+      }, {
+        headers: {
+          'Content-Type': 'application/vnd.spproductad.v3+json',
+          'Accept': 'application/vnd.spproductad.v3+json'
+        }
+      });
+
+      const productAds = response.data.productAds || [];
+      console.log(`✅ Trovati ${productAds.length} Product Ads`);
+      return productAds;
+    } catch (error) {
+      console.error(`❌ Errore recupero Product Ads per campagna ${campaignId}:`, error);
+      throw error;
+    }
+  }
+
+  // ================================================
   // METODI PER TARGET (Product Targeting)
   // ================================================
 
