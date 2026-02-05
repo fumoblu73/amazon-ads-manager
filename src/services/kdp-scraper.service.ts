@@ -504,9 +504,9 @@ export class KdpScraperService {
                 debugInfo.push(`⚠️ Row ${index} - No date element found with selector: span[id*="print-status-release-date-${rowId}"]`);
               }
 
-              // Extract COVER URL from cover column
-              const coverElement = row.querySelector(`td[id*="${rowId}-cover"] img`) as HTMLImageElement | null;
-              const coverUrl = coverElement ? coverElement.src : '';
+              // Generate COVER URL from ASIN using Amazon's standard image URL pattern
+              // (since we block images for memory optimization, we can't extract from img.src)
+              const coverUrl = asin ? `https://m.media-amazon.com/images/P/${asin}.jpg` : '';
 
               debugInfo.push(`  Title: "${title.substring(0, 40)}"`);
               debugInfo.push(`  ASIN: ${asin}`);
