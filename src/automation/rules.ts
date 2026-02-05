@@ -638,13 +638,29 @@ async function processCampaignWithApiService(
     const campaignRepo = AppDataSource.getRepository(Campaign);
     let kdpBook: KdpBook | null = null;
 
-    // Step 1: Get Campaign record from DB
+    // Step 1: Get Campaign record from DB, or CREATE it if missing
     let campaignRecord = await campaignRepo.findOne({
       where: { amazonCampaignId: campaignId, marketplace }
     });
 
+    // If Campaign record doesn't exist, create it now (for auto-linking)
+    if (!campaignRecord) {
+      console.log(`  📝 Creating Campaign record for "${campaignName}" (${campaignId})...`);
+      campaignRecord = campaignRepo.create({
+        amazonCampaignId: campaignId,
+        marketplace,
+        name: campaignName,
+        state: campaign.state || 'enabled',
+        userId: userId || null,
+        dailyBudget: campaign.budget?.budget || null,
+        campaignType: campaign.targetingType || null
+      });
+      await campaignRepo.save(campaignRecord);
+      console.log(`  ✅ Campaign record created with id ${campaignRecord.id}`);
+    }
+
     // Step 2: If Campaign.advertisedAsin is missing, auto-extract from Product Ads API
-    if (campaignRecord && !campaignRecord.advertisedAsin) {
+    if (!campaignRecord.advertisedAsin) {
       try {
         // Product Ads contain the ASIN being advertised (the user's product)
         const productAds = await apiService.getProductAds(campaignId);
