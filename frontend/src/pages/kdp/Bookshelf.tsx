@@ -80,8 +80,8 @@ export default function Bookshelf() {
       accessor: (book) => book.coverUrl || '',
       sortable: false,
       render: (value, book) => {
-        // Generate cover URL from ASIN if coverUrl is empty or invalid
-        const coverSrc = value || (book.asin ? `https://m.media-amazon.com/images/P/${book.asin}.jpg` : '');
+        // Always generate cover URL from ASIN (more reliable than scraped URLs)
+        const coverSrc = book.asin ? `https://m.media-amazon.com/images/P/${book.asin}.jpg` : '';
         return (
           <div className="w-12 h-16 flex items-center justify-center">
             {coverSrc ? (
