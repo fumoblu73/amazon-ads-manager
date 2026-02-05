@@ -339,15 +339,33 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
 
   const config = DEFAULT_CONFIG;
 
-  // Load real book data from kdp_books via linkedCampaignId
+  // Load real book data from kdp_books via Campaign.advertisedAsin
   // NO FALLBACK: if book data is missing, we skip automations
   let book: { price: number; printingCost: number; royaltyPercentage: number } | null = null;
 
   try {
     const kdpBookRepo = AppDataSource.getRepository(KdpBook);
-    const kdpBook = await kdpBookRepo.findOne({
-      where: { linkedCampaignId: campaignId }
+    const campaignRepo = AppDataSource.getRepository(Campaign);
+    let kdpBook: KdpBook | null = null;
+
+    // Get Campaign record to find advertisedAsin
+    const campaignRecord = await campaignRepo.findOne({
+      where: { amazonCampaignId: campaignId, marketplace }
     });
+
+    // Find book by Campaign.advertisedAsin + marketplace
+    if (campaignRecord?.advertisedAsin && campaignRecord.userId) {
+      kdpBook = await kdpBookRepo.findOne({
+        where: { userId: campaignRecord.userId, asin: campaignRecord.advertisedAsin, marketplace }
+      });
+      if (kdpBook) {
+        console.log(`  📚 Found book "${kdpBook.title}" (${campaignRecord.advertisedAsin}) for campaign`);
+      } else {
+        console.error(`  ❌ NO BOOK FOUND: ASIN "${campaignRecord.advertisedAsin}" not in kdp_books`);
+      }
+    } else {
+      console.error(`  ❌ NO ASIN: Campaign "${campaignName}" has no advertisedAsin set`);
+    }
 
     if (kdpBook && kdpBook.price && kdpBook.pageCount) {
       const price = parseKdpPrice(kdpBook.price);
@@ -372,8 +390,8 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
       }
     } else if (kdpBook) {
       console.error(`  ❌ BOOK DATA INCOMPLETE: price=${kdpBook.price || 'NULL'}, pageCount=${kdpBook.pageCount || 'NULL'} for "${campaignName}"`);
-    } else {
-      console.error(`  ❌ NO BOOK LINKED: No kdp_book linked to campaign "${campaignName}" (campaignId: ${campaignId})`);
+    } else if (!campaignRecord?.advertisedAsin) {
+      console.error(`  ❌ NO BOOK LINKED: Campaign "${campaignName}" needs advertisedAsin to be set`);
     }
   } catch (err: any) {
     console.error(`  ❌ BOOK DATA ERROR: ${err.message} for "${campaignName}"`);
@@ -611,66 +629,61 @@ async function processCampaignWithApiService(
 
   console.log(`✅ [${marketplace}] Campagna fuori warmup, procedo con automazioni...`);
 
-  // Load real book data from kdp_books
+  // Load real book data from kdp_books via Campaign.advertisedAsin
   // NO FALLBACK: if book data is missing, we skip automations
   let book: { price: number; printingCost: number; royaltyPercentage: number } | null = null;
 
   try {
     const kdpBookRepo = AppDataSource.getRepository(KdpBook);
+    const campaignRepo = AppDataSource.getRepository(Campaign);
     let kdpBook: KdpBook | null = null;
 
-    // Step 1: Try finding book by linkedCampaignId (cached link from previous run)
-    const campaignRepo = AppDataSource.getRepository(Campaign);
-    const campaignRecord = await campaignRepo.findOne({
+    // Step 1: Get Campaign record from DB
+    let campaignRecord = await campaignRepo.findOne({
       where: { amazonCampaignId: campaignId, marketplace }
     });
-    if (campaignRecord) {
-      kdpBook = await kdpBookRepo.findOne({
-        where: { linkedCampaignId: campaignRecord.id }
-      });
-    }
 
-    // Step 2: If not linked, auto-link via Amazon Ads API targets
-    if (!kdpBook && userId) {
+    // Step 2: If Campaign.advertisedAsin is missing, auto-extract from targets API
+    if (campaignRecord && !campaignRecord.advertisedAsin) {
       try {
         const targets = await apiService.getTargets(campaignId);
-        const asins: string[] = [];
         for (const target of targets) {
           if (target.expression) {
             for (const expr of target.expression) {
               if (expr.type === 'asinSameAs' && expr.value) {
-                asins.push(expr.value);
+                // Save advertisedAsin on Campaign (first ASIN found)
+                campaignRecord.advertisedAsin = expr.value;
+                await campaignRepo.save(campaignRecord);
+                console.log(`  🔗 Auto-discovered ASIN "${expr.value}" for campaign "${campaignName}"`);
+                break;
               }
             }
           }
+          if (campaignRecord.advertisedAsin) break;
         }
-        if (asins.length > 0) {
-          // Search for a matching book in kdp_books
-          for (const asin of asins) {
-            const matchedBook = await kdpBookRepo.findOne({
-              where: { userId, asin, marketplace }
-            });
-            if (matchedBook) {
-              kdpBook = matchedBook;
-              // Save the link for next time
-              if (campaignRecord) {
-                kdpBook.linkedCampaignId = campaignRecord.id;
-                await kdpBookRepo.save(kdpBook);
-                console.log(`  🔗 Auto-linked book "${kdpBook.title}" (${asin}) to campaign "${campaignName}"`);
-              }
-              break;
-            }
-          }
-          if (!kdpBook) {
-            console.error(`  ❌ NO BOOK FOUND: Targets ASINs [${asins.join(', ')}] not found in kdp_books for "${campaignName}"`);
-          }
+        if (!campaignRecord.advertisedAsin) {
+          console.warn(`  ⚠️ No ASIN targeting found for campaign "${campaignName}" (keyword-only campaign?)`);
         }
       } catch (targetErr: any) {
         console.warn(`  ⚠️ Could not fetch targets for auto-link: ${targetErr.message}`);
       }
     }
 
-    // Step 3: Use book data for FAST ACOS calculation
+    // Step 3: Find book by Campaign.advertisedAsin + marketplace + userId
+    if (campaignRecord?.advertisedAsin && userId) {
+      kdpBook = await kdpBookRepo.findOne({
+        where: { userId, asin: campaignRecord.advertisedAsin, marketplace }
+      });
+      if (kdpBook) {
+        console.log(`  📚 Found book "${kdpBook.title}" (${campaignRecord.advertisedAsin}) for campaign`);
+      } else {
+        console.error(`  ❌ NO BOOK FOUND: ASIN "${campaignRecord.advertisedAsin}" not in kdp_books for marketplace ${marketplace}`);
+      }
+    } else if (!campaignRecord?.advertisedAsin) {
+      console.error(`  ❌ NO ASIN: Campaign "${campaignName}" has no advertisedAsin (keyword-only targeting)`);
+    }
+
+    // Step 4: Use book data for FAST ACOS calculation
     if (kdpBook && kdpBook.price && kdpBook.pageCount) {
       const price = parseKdpPrice(kdpBook.price);
       if (price) {

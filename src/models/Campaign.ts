@@ -31,6 +31,10 @@ export class Campaign {
   @Column({ type: 'text', nullable: true })
   notes: string;
 
+  // ASIN del prodotto pubblicizzato da questa campagna (per auto-link a KdpBook)
+  @Column({ type: 'varchar', length: 15, nullable: true, name: 'advertised_asin' })
+  advertisedAsin: string | null;
+
   // User relationship for multi-user support
   @Column({ type: 'uuid', nullable: true, name: 'user_id' })
   userId: string | null;
