@@ -7,6 +7,7 @@
 import { AppDataSource } from '../config/database';
 import { PendingReport } from '../entities/PendingReport';
 import { KdpBook } from '../entities/KdpBook';
+import { Campaign } from '../models/Campaign';
 import { createMarketplaceApiService } from './MarketplaceApiFactory';
 import { In, IsNull } from 'typeorm';
 import { parseKdpPrice, calculateBookFastAcos, InkType, TrimSize } from '../utils/printingCost';
@@ -208,15 +209,25 @@ async function executeAutomationFunctions(
   const functionNumbers: number[] = JSON.parse(report.functionNumbers);
   const cachedApiService = createCachedApiService(apiService, reportData);
 
-  // Load real book data from kdp_books via linkedCampaignId
+  // Load real book data from kdp_books via Campaign.advertisedAsin
   const fallbackBook = { price: 15, printingCost: 3, royaltyPercentage: 60 };
   let book = fallbackBook;
 
   try {
     const kdpBookRepo = AppDataSource.getRepository(KdpBook);
-    const kdpBook = await kdpBookRepo.findOne({
-      where: { linkedCampaignId: report.campaignId }
+    const campaignRepo = AppDataSource.getRepository(Campaign);
+
+    // Find Campaign record by amazonCampaignId to get advertisedAsin
+    const campaignRecord = await campaignRepo.findOne({
+      where: { amazonCampaignId: report.campaignId, marketplace }
     });
+
+    let kdpBook: KdpBook | null = null;
+    if (campaignRecord?.advertisedAsin && campaignRecord.userId) {
+      kdpBook = await kdpBookRepo.findOne({
+        where: { userId: campaignRecord.userId, asin: campaignRecord.advertisedAsin }
+      });
+    }
 
     if (kdpBook && kdpBook.price && kdpBook.pageCount) {
       const price = parseKdpPrice(kdpBook.price);

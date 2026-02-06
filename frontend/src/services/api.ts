@@ -196,6 +196,17 @@ export const automationApi = {
     const response = await apiClient.post<ApiResponse<{ message: string }>>('/api/automation/trigger-user', {});
     return response.data;
   },
+
+  // Test bid increase (real API verification)
+  testBidIncrease: async (campaignId: string, marketplace: string, bidIncrease: number = 0.02, dryRun: boolean = true) => {
+    const response = await apiClient.post<any>('/api/automation/test-bid-increase', {
+      campaignId,
+      marketplace,
+      bidIncrease,
+      dryRun
+    });
+    return response.data;
+  },
 };
 
 // ================================================

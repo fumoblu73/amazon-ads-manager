@@ -898,17 +898,16 @@ async function processCampaignWithApiService(
 function determineCampaignType(campaign: any): 1 | 2 | 3 | 4 | 5 {
   const name = campaign.name.toLowerCase();
 
-  // Euristica per determinare il tipo in base al nome
+  // Detection basata sul nome della campagna
+  // Nomi tipici: "broad - 7/2/2025", "super - 7/2/2025", "product - 7/2/2025", "auto - 7/2/2025"
   if (name.includes('auto') || name.includes('automatic')) {
-    return 5; // AD Automatica
-  } else if (name.includes('super') && name.includes('keyword')) {
-    return 3; // Keyword Super
-  } else if (name.includes('super') && name.includes('product')) {
-    return 4; // Product Super
+    return 5; // Auto campaign
   } else if (name.includes('product')) {
     return 2; // Product Targeting
+  } else if (name.includes('super')) {
+    return 3; // Super (keyword-based)
   } else {
-    return 1; // Keyword Targeting (default)
+    return 1; // Broad / Keyword Targeting (default)
   }
 }
 

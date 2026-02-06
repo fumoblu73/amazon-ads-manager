@@ -198,13 +198,21 @@ class AmazonApiService {
     try {
       console.log('📥 Recupero keywords...');
 
-      // Se specificato un campaignId, filtra per quella campagna
-      const params = campaignId ? { campaignIdFilter: campaignId } : {};
+      const body: any = { maxResults: 5000 };
+      if (campaignId) {
+        body.campaignIdFilter = { include: [campaignId] };
+      }
 
-      const response = await this.client.get('/v2/sp/keywords', { params });
+      const response = await this.client.post('/sp/keywords/list', body, {
+        headers: {
+          'Content-Type': 'application/vnd.spKeyword.v3+json',
+          'Accept': 'application/vnd.spKeyword.v3+json'
+        }
+      });
 
-      console.log(`✅ Trovate ${response.data.length} keywords`);
-      return response.data;
+      const keywords = response.data.keywords || [];
+      console.log(`✅ Trovate ${keywords.length} keywords`);
+      return keywords;
     } catch (error) {
       console.error('❌ Errore recupero keywords:', error);
       throw error;
@@ -216,8 +224,13 @@ class AmazonApiService {
     try {
       console.log(`🔧 Aggiorno bid keyword ${keywordId} a ${newBid}...`);
 
-      const response = await this.client.put(`/v2/sp/keywords/${keywordId}`, {
-        bid: newBid
+      const response = await this.client.put('/sp/keywords', {
+        keywords: [{ keywordId, bid: newBid }]
+      }, {
+        headers: {
+          'Content-Type': 'application/vnd.spKeyword.v3+json',
+          'Accept': 'application/vnd.spKeyword.v3+json'
+        }
       });
 
       console.log(`✅ Bid aggiornato con successo`);
@@ -233,8 +246,13 @@ class AmazonApiService {
     try {
       console.log(`🔧 Imposto keyword ${keywordId} a ${state}...`);
 
-      const response = await this.client.put(`/v2/sp/keywords/${keywordId}`, {
-        state: state
+      const response = await this.client.put('/sp/keywords', {
+        keywords: [{ keywordId, state }]
+      }, {
+        headers: {
+          'Content-Type': 'application/vnd.spKeyword.v3+json',
+          'Accept': 'application/vnd.spKeyword.v3+json'
+        }
       });
 
       console.log(`✅ Stato keyword aggiornato`);
@@ -489,11 +507,21 @@ class AmazonApiService {
     try {
       console.log('📥 Recupero targets...');
 
-      const params = campaignId ? { campaignIdFilter: campaignId } : {};
-      const response = await this.client.get('/v2/sp/targets', { params });
+      const body: any = { maxResults: 5000 };
+      if (campaignId) {
+        body.campaignIdFilter = { include: [campaignId] };
+      }
 
-      console.log(`✅ Trovati ${response.data.length} targets`);
-      return response.data;
+      const response = await this.client.post('/sp/targets/list', body, {
+        headers: {
+          'Content-Type': 'application/vnd.spTargetingClause.v3+json',
+          'Accept': 'application/vnd.spTargetingClause.v3+json'
+        }
+      });
+
+      const targets = response.data.targetingClauses || [];
+      console.log(`✅ Trovati ${targets.length} targets`);
+      return targets;
     } catch (error) {
       console.error('❌ Errore recupero targets:', error);
       throw error;
@@ -507,8 +535,13 @@ class AmazonApiService {
     try {
       console.log(`🔧 Aggiorno bid target ${targetId} a ${newBid}...`);
 
-      const response = await this.client.put(`/v2/sp/targets/${targetId}`, {
-        bid: newBid
+      const response = await this.client.put('/sp/targets', {
+        targetingClauses: [{ targetId, bid: newBid }]
+      }, {
+        headers: {
+          'Content-Type': 'application/vnd.spTargetingClause.v3+json',
+          'Accept': 'application/vnd.spTargetingClause.v3+json'
+        }
       });
 
       console.log(`✅ Bid target aggiornato`);
@@ -526,8 +559,13 @@ class AmazonApiService {
     try {
       console.log(`🔧 Imposto target ${targetId} a ${state}...`);
 
-      const response = await this.client.put(`/v2/sp/targets/${targetId}`, {
-        state: state
+      const response = await this.client.put('/sp/targets', {
+        targetingClauses: [{ targetId, state }]
+      }, {
+        headers: {
+          'Content-Type': 'application/vnd.spTargetingClause.v3+json',
+          'Accept': 'application/vnd.spTargetingClause.v3+json'
+        }
       });
 
       console.log(`✅ Stato target aggiornato`);
@@ -550,15 +588,20 @@ class AmazonApiService {
     try {
       console.log(`📥 Recupero auto targeting groups per campagna ${campaignId}...`);
 
-      const response = await this.client.get('/v2/sp/targets', {
-        params: {
-          campaignIdFilter: campaignId,
-          expressionType: 'AUTO'
+      const response = await this.client.post('/sp/targets/list', {
+        campaignIdFilter: { include: [campaignId] },
+        expressionTypeFilter: { include: ['AUTO'] },
+        maxResults: 5000
+      }, {
+        headers: {
+          'Content-Type': 'application/vnd.spTargetingClause.v3+json',
+          'Accept': 'application/vnd.spTargetingClause.v3+json'
         }
       });
 
-      console.log(`✅ Trovati ${response.data.length} auto targeting groups`);
-      return response.data;
+      const targets = response.data.targetingClauses || [];
+      console.log(`✅ Trovati ${targets.length} auto targeting groups`);
+      return targets;
     } catch (error) {
       console.error(`❌ Errore recupero auto targeting groups:`, error);
       throw error;
@@ -711,7 +754,14 @@ class AmazonApiService {
         state: 'enabled'
       }));
 
-      const response = await this.client.post('/v2/sp/keywords', keywordsData);
+      const response = await this.client.post('/sp/keywords', {
+        keywords: keywordsData
+      }, {
+        headers: {
+          'Content-Type': 'application/vnd.spKeyword.v3+json',
+          'Accept': 'application/vnd.spKeyword.v3+json'
+        }
+      });
 
       console.log(`✅ Keywords aggiunte`);
       return response.data;
@@ -748,7 +798,14 @@ class AmazonApiService {
         state: 'enabled'
       }));
 
-      const response = await this.client.post('/v2/sp/targets', targetsData);
+      const response = await this.client.post('/sp/targets', {
+        targetingClauses: targetsData
+      }, {
+        headers: {
+          'Content-Type': 'application/vnd.spTargetingClause.v3+json',
+          'Accept': 'application/vnd.spTargetingClause.v3+json'
+        }
+      });
 
       console.log(`✅ Targets aggiunti`);
       return response.data;

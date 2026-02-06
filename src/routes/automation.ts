@@ -408,4 +408,81 @@ router.post('/process-reports', async (req: Request, res: Response) => {
     });
 });
 
+// ================================================
+// ENDPOINT: TEST BID INCREASE (Real API verification)
+// ================================================
+// Test endpoint to verify real connection to Amazon Ads API
+// Increases keyword bids by a specified amount for a given campaign
+router.post('/test-bid-increase', authMiddleware, requireAmazonAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { campaignId, marketplace, bidIncrease = 0.02, dryRun = true } = req.body;
+
+    if (!campaignId || !marketplace) {
+      return res.status(400).json({ error: 'campaignId and marketplace are required' });
+    }
+
+    console.log(`\n🧪 TEST BID INCREASE`);
+    console.log(`   Campaign: ${campaignId}`);
+    console.log(`   Marketplace: ${marketplace}`);
+    console.log(`   Bid increase: $${bidIncrease}`);
+    console.log(`   Dry run: ${dryRun}`);
+
+    // Create API service for the marketplace
+    const { createMarketplaceApiService } = await import('../services/MarketplaceApiFactory');
+    const apiService = createMarketplaceApiService(marketplace);
+
+    // Get keywords for this campaign
+    const keywords = await apiService.getKeywords(campaignId);
+    console.log(`📥 Found ${keywords.length} keywords`);
+
+    const results: any[] = [];
+
+    for (const kw of keywords) {
+      const keywordId = kw.keywordId;
+      const currentBid = kw.bid;
+      const newBid = Math.round((currentBid + bidIncrease) * 100) / 100;
+      const keywordText = kw.keywordText || kw.keyword || '(unknown)';
+      const matchType = kw.matchType || '(unknown)';
+
+      const entry = {
+        keywordId,
+        keywordText,
+        matchType,
+        currentBid,
+        newBid,
+        status: dryRun ? 'dry_run' : 'pending'
+      };
+
+      if (!dryRun) {
+        try {
+          await apiService.updateKeywordBid(keywordId, newBid);
+          entry.status = 'updated';
+          console.log(`  ✅ ${keywordText} (${matchType}): $${currentBid} → $${newBid}`);
+        } catch (err: any) {
+          entry.status = `error: ${err.message}`;
+          console.error(`  ❌ ${keywordText}: ${err.message}`);
+        }
+      } else {
+        console.log(`  🔍 [DRY RUN] ${keywordText} (${matchType}): $${currentBid} → $${newBid}`);
+      }
+
+      results.push(entry);
+    }
+
+    res.json({
+      success: true,
+      campaignId,
+      marketplace,
+      dryRun,
+      bidIncrease,
+      keywordsFound: keywords.length,
+      results
+    });
+
+  } catch (error: any) {
+    console.error('❌ Test bid increase error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
