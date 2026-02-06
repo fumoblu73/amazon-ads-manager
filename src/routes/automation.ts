@@ -1,16 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { automationScheduler } from '../automation/scheduler';
-import { EventEmitter } from 'events';
-import { runAutomationRules, runAutomationRulesForUser } from '../automation/rules';
 import { authMiddleware } from '../middleware/auth';
 import { requireAmazonAuth, AuthRequest } from '../middleware/requireAmazonAuth';
-import { submitReportsForAllUsers } from '../services/reportSubmitter';
-import { processCompletedReports } from '../services/reportProcessor';
+import { submitReportsForAllUsers, submitReportsForUser } from '../services/reportSubmitter';
+import { processCompletedReports, processCompletedReportsForUser } from '../services/reportProcessor';
 
 const router = Router();
-
-// Event emitter per gestire automazioni in background
-const automationQueue = new EventEmitter();
 
 // Stato esecuzione corrente
 let isRunning = false;
@@ -27,8 +22,12 @@ let lastExecution: {
 };
 
 // ================================================
-// ENDPOINT TRIGGER AUTOMAZIONI (Chiamato da Cron-Job.org)
+// ENDPOINT WARM-UP (Chiamato da Cron-Job.org per svegliare Render + DB)
 // ================================================
+// NOTA: Questo endpoint fa SOLO warm-up del server e del database.
+// Le automazioni sono gestite dalla pipeline asincrona a 2 fasi:
+//   - Fase 1: /api/automation/submit-reports (submit report in batch)
+//   - Fase 2: /api/automation/process-reports (processa report completati)
 router.post('/trigger', async (req: Request, res: Response) => {
   // 1. Verifica secret per sicurezza
   const secret = req.query.secret || req.body.secret;
@@ -41,16 +40,7 @@ router.post('/trigger', async (req: Request, res: Response) => {
     });
   }
 
-  // 2. Controlla se c'è già un'esecuzione in corso
-  if (isRunning) {
-    return res.status(409).json({
-      success: false,
-      message: 'Automations already running',
-      status: lastExecution
-    });
-  }
-
-  // 3. Pre-warm database (wake up Supabase if paused)
+  // 2. Pre-warm database (wake up Supabase if paused)
   let dbStatus = 'unknown';
   try {
     const { AppDataSource } = await import('../config/database');
@@ -74,72 +64,16 @@ router.post('/trigger', async (req: Request, res: Response) => {
     }
   }
 
-  // 4. RISPONDE SUBITO (evita timeout HTTP)
+  // 3. Risponde con stato warm-up
   res.json({
     success: true,
-    message: 'Automations queued successfully',
+    message: 'Server and database warmed up successfully',
     dbStatus,
     timestamp: new Date().toISOString(),
-    note: 'Execution started in background. Check /api/automation/status for progress.'
+    note: 'Warm-up only. Automations are triggered by /submit-reports and /process-reports.'
   });
 
-  // 5. Triggera esecuzione in background (non aspetta risposta)
-  console.log('🚀 Triggering automations in background...');
-  automationQueue.emit('run');
-});
-
-// ================================================
-// WORKER IN BACKGROUND
-// ================================================
-automationQueue.on('run', async () => {
-  // Marca come in esecuzione
-  isRunning = true;
-  lastExecution = {
-    startedAt: new Date(),
-    completedAt: null,
-    status: 'running',
-    error: null
-  };
-
-  console.log('════════════════════════════════════════');
-  console.log('🤖 Background Worker: Starting automations');
-  console.log(`⏰ Started at: ${lastExecution.startedAt.toISOString()}`);
-  console.log('════════════════════════════════════════');
-
-  try {
-    // Esegue TUTTE le automazioni (può richiedere anche 10 minuti)
-    await automationScheduler.runNow();
-
-    // Marca come completato
-    lastExecution.status = 'completed';
-    lastExecution.completedAt = new Date();
-    lastExecution.error = null;
-
-    const duration = lastExecution.completedAt.getTime() - lastExecution.startedAt!.getTime();
-    const durationMinutes = (duration / 1000 / 60).toFixed(2);
-
-    console.log('════════════════════════════════════════');
-    console.log('✅ Background Worker: Completed successfully');
-    console.log(`⏱️  Duration: ${durationMinutes} minutes`);
-    console.log(`⏰ Completed at: ${lastExecution.completedAt.toISOString()}`);
-    console.log('════════════════════════════════════════');
-
-  } catch (error) {
-    // Gestisce errori
-    lastExecution.status = 'failed';
-    lastExecution.completedAt = new Date();
-    lastExecution.error = error instanceof Error ? error.message : 'Unknown error';
-
-    console.error('════════════════════════════════════════');
-    console.error('❌ Background Worker: Failed');
-    console.error(`⏰ Failed at: ${lastExecution.completedAt.toISOString()}`);
-    console.error('Error:', error);
-    console.error('════════════════════════════════════════');
-
-  } finally {
-    // Rilascia lock
-    isRunning = false;
-  }
+  console.log(`🔥 Warm-up completato. DB status: ${dbStatus}`);
 });
 
 // ================================================
@@ -162,7 +96,7 @@ router.get('/status', (req: Request, res: Response) => {
 });
 
 // ================================================
-// ENDPOINT MANUAL TRIGGER (Per test manuali)
+// ENDPOINT MANUAL TRIGGER (Per test manuali - usa pipeline asincrona)
 // ================================================
 router.post('/trigger-manual', async (req: Request, res: Response) => {
   // Verifica autenticazione (può essere diverso dal secret cron)
@@ -179,38 +113,121 @@ router.post('/trigger-manual', async (req: Request, res: Response) => {
     });
   }
 
+  // Risponde subito
   res.json({
     success: true,
-    message: 'Manual execution started in background',
+    message: 'Manual execution started in background (async pipeline)',
     timestamp: new Date().toISOString()
   });
 
-  automationQueue.emit('run');
+  // Esegue in background con pipeline asincrona
+  (async () => {
+    isRunning = true;
+    lastExecution = {
+      startedAt: new Date(),
+      completedAt: null,
+      status: 'running',
+      error: null
+    };
+
+    try {
+      // FASE 1: Submit report per tutti gli utenti
+      console.log('🚀 [Manual] Fase 1: Submit reports per tutti gli utenti...');
+      const submitStats = await submitReportsForAllUsers();
+      console.log(`📊 [Manual] Fase 1 completata: ${submitStats.reportsSubmitted} report sottomessi`);
+
+      // FASE 2: Polling fino al completamento
+      const MAX_POLL_TIME_MS = 20 * 60 * 1000; // 20 min max
+      const POLL_INTERVAL_MS = 30000; // 30 secondi
+      const startTime = Date.now();
+      let pollCount = 0;
+
+      while (Date.now() - startTime < MAX_POLL_TIME_MS) {
+        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+        pollCount++;
+
+        const processStats = await processCompletedReports();
+        console.log(`📊 [Manual] Poll #${pollCount}: processed=${processStats.processed}, pending=${processStats.stillPending}`);
+
+        if (processStats.stillPending === 0) {
+          console.log('✅ [Manual] Tutti i report processati!');
+          break;
+        }
+      }
+
+      lastExecution.status = 'completed';
+      lastExecution.completedAt = new Date();
+      const duration = ((Date.now() - lastExecution.startedAt!.getTime()) / 1000 / 60).toFixed(2);
+      console.log(`✅ [Manual] Completato in ${duration} minuti`);
+
+    } catch (error) {
+      lastExecution.status = 'failed';
+      lastExecution.completedAt = new Date();
+      lastExecution.error = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ [Manual] Errore:', error);
+    } finally {
+      isRunning = false;
+    }
+  })();
 });
 
 // ================================================
 // ENDPOINT PER-USER TRIGGER (User-specific automation)
+// Uses async pipeline: submit all reports → poll until done
 // ================================================
 router.post('/trigger-user', authMiddleware, requireAmazonAuth, async (req: AuthRequest, res: Response) => {
   try {
-    console.log(`🚀 User ${req.userId} triggered their automations`);
+    const userId = req.userId!;
+    console.log(`🚀 User ${userId} triggered their automations (async pipeline)`);
 
     // Respond immediately
     res.json({
       success: true,
-      message: 'Your automations have been queued',
+      message: 'Your automations have been queued (async pipeline)',
       timestamp: new Date().toISOString(),
-      note: 'Execution started in background. Check /api/automation/status for global progress.'
+      note: 'Reports submitted in batch. Processing as they complete.'
     });
 
-    // Run user's automations in background (don't wait)
-    runAutomationRulesForUser(req.userId!)
-      .then(() => {
-        console.log(`✅ Completed automations for user ${req.userId}`);
-      })
-      .catch((error) => {
-        console.error(`❌ Failed automations for user ${req.userId}:`, error);
-      });
+    // Background: submit reports in batch, then poll until all processed
+    (async () => {
+      try {
+        // FASE 1: Submit all reports in batch (fast, ~seconds)
+        console.log(`📤 [User ${userId}] FASE 1: Submitting all reports...`);
+        const submitStats = await submitReportsForUser(userId);
+        console.log(`📤 [User ${userId}] FASE 1 done: ${submitStats.reportsSubmitted} reports submitted, ${submitStats.errors} errors`);
+
+        if (submitStats.reportsSubmitted === 0) {
+          console.log(`⚠️ [User ${userId}] No reports submitted, nothing to process`);
+          return;
+        }
+
+        // FASE 2: Poll every 30s until all reports processed or 15 min timeout
+        const MAX_POLL_TIME_MS = 15 * 60 * 1000; // 15 minutes
+        const POLL_INTERVAL_MS = 30000; // 30 seconds
+        const startTime = Date.now();
+        let pollCount = 0;
+
+        while (Date.now() - startTime < MAX_POLL_TIME_MS) {
+          pollCount++;
+          await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+
+          console.log(`📥 [User ${userId}] FASE 2: Poll #${pollCount}...`);
+          const processStats = await processCompletedReportsForUser(userId);
+
+          console.log(`   Checked: ${processStats.checked}, Completed: ${processStats.completed}, Processed: ${processStats.processed}, Still pending: ${processStats.stillPending}`);
+
+          if (processStats.stillPending === 0) {
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
+            console.log(`✅ [User ${userId}] All reports processed in ${elapsed}s (${pollCount} polls)`);
+            return;
+          }
+        }
+
+        console.warn(`⚠️ [User ${userId}] Timeout after 15 min. Remaining reports will be processed by cron.`);
+      } catch (error) {
+        console.error(`❌ [User ${userId}] Async pipeline failed:`, error);
+      }
+    })();
 
   } catch (error) {
     console.error('Error triggering user automations:', error);

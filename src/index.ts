@@ -132,7 +132,7 @@ const startServer = async () => {
       console.log('='.repeat(50));
       console.log('✅ OAuth and KDP Analytics active');
       console.log('✅ KDP Sync scheduler active (runs every 6 hours)');
-      console.log('✅ Automation engine active (Func 1+3: Lun/Mer/Ven 10:30 IT, Func 2+4+5: Lun 11:30 IT)');
+      console.log('✅ Automation engine active (pipeline asincrona, trigger da cron-job.org)');
     });
   } catch (error) {
     console.error('❌ Errore avvio server:', error);

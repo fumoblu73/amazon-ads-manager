@@ -824,20 +824,29 @@ class AmazonApiService {
    * Aspetta che il report sia pronto e lo scarica
    * Amazon API v3 può richiedere fino a 5-10 minuti per generare report
    */
-  async waitAndDownloadReport(reportId: string, maxAttempts: number = 60): Promise<any[]> {
+  async waitAndDownloadReport(reportId: string, maxAttempts: number = 20): Promise<any[]> {
+    // Backoff esponenziale: attese crescenti per ridurre chiamate API
+    // 20 tentativi coprono ~5 minuti: 5,5,5,10,10,15,15,20,20,30,30,30,30,30,30,30,30,30,30,30
+    const getDelay = (attempt: number): number => {
+      if (attempt <= 3) return 5000;       // primi 3: 5s
+      if (attempt <= 5) return 10000;      // 4-5: 10s
+      if (attempt <= 7) return 15000;      // 6-7: 15s
+      if (attempt <= 9) return 20000;      // 8-9: 20s
+      return 30000;                        // 10+: 30s
+    };
+
     try {
+      const totalTime = Array.from({ length: maxAttempts }, (_, i) => getDelay(i + 1)).reduce((a, b) => a + b, 0);
       console.log(`⏳ [API v3] Attendo completamento report ${reportId}...`);
-      console.log(`   [API v3] Timeout massimo: ${maxAttempts * 5} secondi (${(maxAttempts * 5 / 60).toFixed(1)} minuti)`);
+      console.log(`   [API v3] Max ${maxAttempts} tentativi con backoff (~${(totalTime / 60000).toFixed(1)} minuti)`);
 
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         const status = await this.getReportStatus(reportId);
 
-        // Log risposta completa per i primi tentativi (debug)
         if (attempt <= 2) {
           console.log(`   [API v3] DEBUG - Full response:`, JSON.stringify(status, null, 2));
         }
 
-        // API v3 usa 'COMPLETED' invece di 'SUCCESS'
         if (status.status === 'COMPLETED') {
           console.log(`✅ [API v3] Report pronto dopo ${attempt} tentativi, scarico...`);
           return await this.downloadReport(reportId);
@@ -847,16 +856,15 @@ class AmazonApiService {
           throw new Error(`Report fallito: ${status.failureReason || status.statusDetails || 'Unknown error'}`);
         }
 
-        // Log ogni 10 tentativi per non riempire i log
-        if (attempt % 10 === 0 || attempt <= 3) {
-          console.log(`   [API v3] Tentativo ${attempt}/${maxAttempts}: status=${status.status}`);
+        const delay = getDelay(attempt);
+        if (attempt % 5 === 0 || attempt <= 3) {
+          console.log(`   [API v3] Tentativo ${attempt}/${maxAttempts}: status=${status.status}, prossimo check tra ${delay / 1000}s`);
         }
 
-        // Aspetta 5 secondi prima di riprovare (Amazon API v3 può essere lento)
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
 
-      throw new Error(`Report non pronto dopo ${maxAttempts} tentativi (${(maxAttempts * 5 / 60).toFixed(1)} minuti)`);
+      throw new Error(`Report non pronto dopo ${maxAttempts} tentativi (~${(totalTime / 60000).toFixed(1)} minuti)`);
     } catch (error: any) {
       console.error(`❌ [API v3] Errore attesa/download report:`, error.message);
       throw error;

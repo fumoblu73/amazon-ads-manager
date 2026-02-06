@@ -17,6 +17,69 @@ import { executeFunc2 } from '../automation/functions/func2';
 import { executeFunc3 } from '../automation/functions/func3';
 import { executeFunc4 } from '../automation/functions/func4';
 import { executeFunc5, CampaignMapping } from '../automation/functions/func5';
+import { getUserAutomationSettings, AutomationConfig } from '../automation/rules';
+
+/**
+ * Pre-loaded data to avoid N+1 queries in report processing loops
+ */
+interface PreloadedData {
+  campaigns: Map<string, Campaign>;     // key: `${amazonCampaignId}_${marketplace}`
+  books: Map<string, KdpBook>;          // key: `${userId}_${asin}`
+  configs: Map<string, AutomationConfig>; // key: userId
+}
+
+/**
+ * Batch-load Campaign, KdpBook, and AutomationSettings for a set of reports
+ */
+async function preloadDataForReports(reports: PendingReport[]): Promise<PreloadedData> {
+  const campaignRepo = AppDataSource.getRepository(Campaign);
+  const kdpBookRepo = AppDataSource.getRepository(KdpBook);
+
+  // Collect unique campaign IDs
+  const campaignIds = [...new Set(reports.map(r => r.campaignId).filter(id => !id.includes('_products')))];
+
+  // Batch load campaigns
+  const campaigns = new Map<string, Campaign>();
+  if (campaignIds.length > 0) {
+    const campaignRecords = await campaignRepo.find({
+      where: campaignIds.map(id => ({ amazonCampaignId: id }))
+    });
+    for (const c of campaignRecords) {
+      campaigns.set(`${c.amazonCampaignId}_${c.marketplace}`, c);
+    }
+  }
+
+  // Collect unique ASINs from campaigns
+  const asinUserPairs: { userId: string; asin: string }[] = [];
+  for (const c of campaigns.values()) {
+    if (c.advertisedAsin && c.userId) {
+      asinUserPairs.push({ userId: c.userId, asin: c.advertisedAsin });
+    }
+  }
+
+  // Batch load books
+  const books = new Map<string, KdpBook>();
+  if (asinUserPairs.length > 0) {
+    const uniqueAsins = [...new Set(asinUserPairs.map(p => p.asin))];
+    const bookRecords = await kdpBookRepo.find({
+      where: uniqueAsins.map(asin => ({ asin }))
+    });
+    for (const b of bookRecords) {
+      books.set(`${b.userId}_${b.asin}`, b);
+    }
+  }
+
+  // Batch load user configs
+  const configs = new Map<string, AutomationConfig>();
+  const uniqueUserIds = [...new Set(reports.map(r => r.userId))];
+  for (const userId of uniqueUserIds) {
+    configs.set(userId, await getUserAutomationSettings(userId));
+  }
+
+  console.log(`   📦 Preloaded: ${campaigns.size} campaigns, ${books.size} books, ${configs.size} user configs`);
+
+  return { campaigns, books, configs };
+}
 
 /**
  * Creates a proxy apiService that returns cached report data
@@ -72,6 +135,9 @@ export async function processCompletedReports(): Promise<{
       console.log('✅ No pending reports. Nothing to do.');
       return stats;
     }
+
+    // Batch pre-load Campaign, KdpBook, and user settings (avoids N+1 queries)
+    const preloaded = await preloadDataForReports(pendingReports);
 
     // Group reports by marketplace for efficient API access
     const byMarketplace = new Map<string, PendingReport[]>();
@@ -134,7 +200,7 @@ export async function processCompletedReports(): Promise<{
                 console.log(`   ✅ ${report.reportId}: kdp_books enriched successfully`);
               } else {
                 await executeAutomationFunctions(
-                  report, reportData, apiService, marketplace
+                  report, reportData, apiService, marketplace, preloaded
                 );
                 report.status = 'processed';
                 await reportRepo.save(report);
@@ -198,60 +264,179 @@ export async function processCompletedReports(): Promise<{
 }
 
 /**
+ * FASE 2 (per singolo utente): Processa solo i report di un utente specifico.
+ * Usato da "Esegui Ora" per processare i report sottomessi in batch.
+ */
+export async function processCompletedReportsForUser(userId: string): Promise<{
+  checked: number;
+  completed: number;
+  processed: number;
+  failed: number;
+  stillPending: number;
+}> {
+  const stats = { checked: 0, completed: 0, processed: 0, failed: 0, stillPending: 0 };
+
+  try {
+    const reportRepo = AppDataSource.getRepository(PendingReport);
+
+    const pendingReports = await reportRepo.find({
+      where: { status: 'submitted', userId },
+      order: { createdAt: 'ASC' }
+    });
+
+    if (pendingReports.length === 0) {
+      return stats;
+    }
+
+    console.log(`📋 [User ${userId}] Found ${pendingReports.length} pending reports`);
+
+    // Batch pre-load Campaign, KdpBook, and user settings
+    const preloaded = await preloadDataForReports(pendingReports);
+
+    // Group by marketplace
+    const byMarketplace = new Map<string, PendingReport[]>();
+    for (const report of pendingReports) {
+      const existing = byMarketplace.get(report.marketplace) || [];
+      existing.push(report);
+      byMarketplace.set(report.marketplace, existing);
+    }
+
+    for (const [marketplace, reports] of byMarketplace) {
+      console.log(`🌍 [${marketplace}] Checking ${reports.length} reports for user...`);
+
+      let apiService: any;
+      try {
+        apiService = createMarketplaceApiService(marketplace);
+      } catch (error: any) {
+        console.error(`❌ [${marketplace}] Failed to create API service: ${error.message}`);
+        stats.failed += reports.length;
+        continue;
+      }
+
+      for (const report of reports) {
+        stats.checked++;
+
+        try {
+          if (report.attempts >= report.maxAttempts) {
+            report.status = 'failed';
+            report.errorMessage = `Exceeded max attempts (${report.maxAttempts})`;
+            await reportRepo.save(report);
+            stats.failed++;
+            continue;
+          }
+
+          const statusResponse = await apiService.getReportStatus(report.reportId);
+          report.attempts++;
+
+          if (statusResponse.status === 'COMPLETED') {
+            stats.completed++;
+            const reportData = await apiService.downloadReport(report.reportId);
+            report.status = 'completed';
+            report.reportUrl = statusResponse.url || null;
+            await reportRepo.save(report);
+
+            try {
+              if (report.reportType === 'spAdvertisedProduct') {
+                await enrichKdpBooksFromAdvertisedProductReport(report, reportData, marketplace);
+                report.status = 'processed';
+                await reportRepo.save(report);
+                stats.processed++;
+              } else {
+                await executeAutomationFunctions(report, reportData, apiService, marketplace, preloaded);
+                report.status = 'processed';
+                await reportRepo.save(report);
+                stats.processed++;
+              }
+            } catch (error: any) {
+              report.status = 'failed';
+              report.errorMessage = `Function execution error: ${error.message}`;
+              await reportRepo.save(report);
+              stats.failed++;
+            }
+
+          } else if (statusResponse.status === 'FAILURE' || statusResponse.status === 'FAILED') {
+            report.status = 'failed';
+            report.errorMessage = `Amazon report failed: ${statusResponse.failureReason || 'Unknown'}`;
+            await reportRepo.save(report);
+            stats.failed++;
+          } else {
+            await reportRepo.save(report);
+            stats.stillPending++;
+          }
+
+        } catch (error: any) {
+          report.attempts++;
+          report.errorMessage = error.message;
+          await reportRepo.save(report);
+          stats.failed++;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    return stats;
+  } catch (error: any) {
+    console.error(`❌ Fatal error in processCompletedReportsForUser: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
  * Execute the automation functions associated with a completed report
  */
 async function executeAutomationFunctions(
   report: PendingReport,
   reportData: any[],
   apiService: any,
-  marketplace: string
+  marketplace: string,
+  preloaded?: PreloadedData
 ): Promise<void> {
   const functionNumbers: number[] = JSON.parse(report.functionNumbers);
   const cachedApiService = createCachedApiService(apiService, reportData);
 
-  // Load real book data from kdp_books via Campaign.advertisedAsin
+  // Use pre-loaded data if available, otherwise fall back to individual queries
+  const config: AutomationConfig = preloaded?.configs.get(report.userId)
+    || await getUserAutomationSettings(report.userId);
+
+  const campaignRecord = preloaded?.campaigns.get(`${report.campaignId}_${marketplace}`)
+    || await AppDataSource.getRepository(Campaign).findOne({
+        where: { amazonCampaignId: report.campaignId, marketplace }
+      });
+
+  let kdpBook: KdpBook | null = null;
+  if (campaignRecord?.advertisedAsin && campaignRecord.userId) {
+    kdpBook = preloaded?.books.get(`${campaignRecord.userId}_${campaignRecord.advertisedAsin}`)
+      || await AppDataSource.getRepository(KdpBook).findOne({
+          where: { userId: campaignRecord.userId, asin: campaignRecord.advertisedAsin }
+        });
+  }
+
   const fallbackBook = { price: 15, printingCost: 3, royaltyPercentage: 60 };
   let book = fallbackBook;
 
-  try {
-    const kdpBookRepo = AppDataSource.getRepository(KdpBook);
-    const campaignRepo = AppDataSource.getRepository(Campaign);
-
-    // Find Campaign record by amazonCampaignId to get advertisedAsin
-    const campaignRecord = await campaignRepo.findOne({
-      where: { amazonCampaignId: report.campaignId, marketplace }
-    });
-
-    let kdpBook: KdpBook | null = null;
-    if (campaignRecord?.advertisedAsin && campaignRecord.userId) {
-      kdpBook = await kdpBookRepo.findOne({
-        where: { userId: campaignRecord.userId, asin: campaignRecord.advertisedAsin }
-      });
-    }
-
-    if (kdpBook && kdpBook.price && kdpBook.pageCount) {
-      const price = parseKdpPrice(kdpBook.price);
-      if (price) {
-        const inkType = (kdpBook.inkType || 'black_white') as InkType;
-        const trimSize = (kdpBook.trimSize || '6x9') as TrimSize;
-        const royaltyPct = Number(kdpBook.royaltyPercentage) || 60;
-        const result = calculateBookFastAcos(price, kdpBook.pageCount, marketplace, inkType, royaltyPct, { useVat: true, vatPercentage: 22 }, trimSize);
-        if (result) {
-          book = { price, printingCost: result.printingCost, royaltyPercentage: royaltyPct };
-          console.log(`     📖 Book data: price=${price}, pages=${kdpBook.pageCount}, ink=${inkType}, trim=${trimSize}, printingCost=${result.printingCost}, fastAcos=${result.fastAcos}%`);
-        } else {
-          console.warn(`     ⚠️ FAST ACOS calculation failed for campaign ${report.campaignName}, using fallback`);
-        }
+  if (kdpBook && kdpBook.price && kdpBook.pageCount) {
+    const price = parseKdpPrice(kdpBook.price);
+    if (price) {
+      const inkType = (kdpBook.inkType || 'black_white') as InkType;
+      const trimSize = (kdpBook.trimSize || '6x9') as TrimSize;
+      const royaltyPct = Number(kdpBook.royaltyPercentage) || 60;
+      const result = calculateBookFastAcos(price, kdpBook.pageCount, marketplace, inkType, royaltyPct, { useVat: config.useVatInFastAcos, vatPercentage: config.vatPercentage }, trimSize);
+      if (result) {
+        book = { price, printingCost: result.printingCost, royaltyPercentage: royaltyPct };
+        console.log(`     📖 Book data: price=${price}, pages=${kdpBook.pageCount}, ink=${inkType}, trim=${trimSize}, printingCost=${result.printingCost}, fastAcos=${result.fastAcos}%`);
       } else {
-        console.warn(`     ⚠️ Could not parse price "${kdpBook.price}" for campaign ${report.campaignName}, using fallback`);
+        console.warn(`     ⚠️ FAST ACOS calculation failed for campaign ${report.campaignName}, using fallback`);
       }
-    } else if (kdpBook) {
-      console.warn(`     ⚠️ Book found but missing price or pageCount for campaign ${report.campaignName}, using fallback`);
     } else {
-      console.warn(`     ⚠️ No kdp_book linked to campaign ${report.campaignName}, using fallback`);
+      console.warn(`     ⚠️ Could not parse price "${kdpBook.price}" for campaign ${report.campaignName}, using fallback`);
     }
-  } catch (err: any) {
-    console.warn(`     ⚠️ Error loading book data for campaign ${report.campaignName}: ${err.message}, using fallback`);
+  } else if (kdpBook) {
+    console.warn(`     ⚠️ Book found but missing price or pageCount for campaign ${report.campaignName}, using fallback`);
+  } else {
+    console.warn(`     ⚠️ No kdp_book linked to campaign ${report.campaignName}, using fallback`);
   }
 
   const mockPlacements = { topOfSearch: 0, restOfSearch: 10, productPages: 5 };
@@ -270,7 +455,12 @@ async function executeAutomationFunctions(
             report.campaignName,
             marketplace,
             cachedApiService,
-            { bidIncrease: 0.02, frequency: 3, maxImpressions: 20, maxClicks: 0 }
+            {
+              bidIncrease: config.func1_bidIncrease,
+              frequency: config.func1_frequency,
+              maxImpressions: config.func1_impressions,
+              maxClicks: config.func1_clicks
+            }
           );
           break;
 
@@ -282,14 +472,14 @@ async function executeAutomationFunctions(
             book,
             mockPlacements,
             cachedApiService,
-            { frequency: 7, placementTimeframeWeeks: 4 }
+            {
+              frequency: config.func2_frequency,
+              placementTimeframeWeeks: config.func2_timeframeWeeks
+            }
           );
           break;
 
         case 3:
-          // F3 needs both the current report AND the 65-day report
-          // If this is the main report, F3 will use it; the 65d report
-          // will be fetched when its own PendingReport is processed
           await executeFunc3(
             report.campaignId,
             report.campaignType as 1 | 2 | 3 | 4,
@@ -298,7 +488,14 @@ async function executeAutomationFunctions(
             book,
             mockTotalImpressions,
             cachedApiService,
-            { frequency: 3, timeframeA: 2000, timeframeB: 3000, timeframeC: 5000, clicksPause: 10, clicks65days: 30 }
+            {
+              frequency: config.func3_frequency,
+              timeframeA: config.func3_timeframeA,
+              timeframeB: config.func3_timeframeB,
+              timeframeC: config.func3_timeframeC,
+              clicksPause: config.func3_clicksPause,
+              clicks65days: config.func3_clicks65days
+            }
           );
           break;
 
@@ -311,12 +508,18 @@ async function executeAutomationFunctions(
             book,
             mockTotalImpressions,
             cachedApiService,
-            { frequency: 7, timeframeA: 1000, timeframeB: 3000, timeframeC: 5000, clicksNegative: 10, spendNegative: 10 }
+            {
+              frequency: config.func4_frequency,
+              timeframeA: config.func4_timeframeA,
+              timeframeB: config.func4_timeframeB,
+              timeframeC: config.func4_timeframeC,
+              clicksNegative: config.func4_clicksNegative,
+              spendNegative: config.func4_spendNegative
+            }
           );
           break;
 
         case 5:
-          // F5 needs search terms report
           const mockCampaignMapping: CampaignMapping = {
             campaign5Id: report.campaignId,
             campaign5AdGroupId: mockAdGroupId
@@ -328,7 +531,14 @@ async function executeAutomationFunctions(
             marketplace,
             mockCampaignMapping,
             cachedApiService,
-            { frequency: 7, minOrders: 1, bidBroad: 0.30, bidExact: 0.50, bidPhrase: 0.40, bidExpanded: 0.30 }
+            {
+              frequency: config.func5_frequency,
+              minOrders: config.func5_minOrders,
+              bidBroad: config.func5_bidBroad,
+              bidExact: config.func5_bidExact,
+              bidPhrase: config.func5_bidPhrase,
+              bidExpanded: config.func5_bidExpanded
+            }
           );
           break;
       }

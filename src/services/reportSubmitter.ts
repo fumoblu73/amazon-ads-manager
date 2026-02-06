@@ -150,7 +150,7 @@ async function submitReportsGlobal(): Promise<{ reportsSubmitted: number; errors
 /**
  * Submit reports for a specific user across all marketplaces
  */
-async function submitReportsForUser(userId: string): Promise<{ reportsSubmitted: number; errors: number }> {
+export async function submitReportsForUser(userId: string): Promise<{ reportsSubmitted: number; errors: number }> {
   const stats = { reportsSubmitted: 0, errors: 0 };
   const configuredMarketplaces = getConfiguredMarketplaces();
 

@@ -18,6 +18,7 @@ import { AppDataSource } from '../config/database';
 import { Campaign } from '../models/Campaign';
 import { KdpBook } from '../entities/KdpBook';
 import { AutomationSettings } from '../entities/AutomationSettings';
+import { In } from 'typeorm';
 import { isInWarmupPeriod, getCampaignCreatedAt } from '../utils/timeframe';
 import { parseKdpPrice, calculateBookFastAcos, InkType, TrimSize, VatSettings } from '../utils/printingCost';
 import { automationScheduler } from './scheduler';
@@ -32,7 +33,7 @@ import { executeFunc5, shouldExecuteFunc5, CampaignMapping } from './functions/f
 /**
  * Configurazione automazione (dal database o default)
  */
-interface AutomationConfig {
+export interface AutomationConfig {
   func1_enabled: boolean;
   func1_bidIncrease: number;
   func1_frequency: number;
@@ -108,7 +109,7 @@ const DEFAULT_CONFIG: AutomationConfig = {
 /**
  * Recupera le impostazioni di automazione per un utente dal database
  */
-async function getUserAutomationSettings(userId: string): Promise<AutomationConfig> {
+export async function getUserAutomationSettings(userId: string): Promise<AutomationConfig> {
   try {
     if (!AppDataSource.isInitialized) {
       console.log('⚠️  Database non inizializzato, uso configurazione default');
@@ -603,7 +604,9 @@ async function processCampaignWithApiService(
   apiService: any,
   marketplace: string,
   config: AutomationConfig = DEFAULT_CONFIG,
-  userId?: string
+  userId?: string,
+  campaignMap?: Map<string, Campaign>,
+  bookMap?: Map<string, KdpBook>
 ): Promise<void> {
   stats.campaignsProcessed++;
 
@@ -638,8 +641,8 @@ async function processCampaignWithApiService(
     const campaignRepo = AppDataSource.getRepository(Campaign);
     let kdpBook: KdpBook | null = null;
 
-    // Step 1: Get Campaign record from DB, or CREATE it if missing
-    let campaignRecord = await campaignRepo.findOne({
+    // Step 1: Get Campaign record from pre-loaded Map or DB, CREATE if missing
+    let campaignRecord = campaignMap?.get(campaignId) || await campaignRepo.findOne({
       where: { amazonCampaignId: campaignId, marketplace }
     });
 
@@ -681,9 +684,9 @@ async function processCampaignWithApiService(
       }
     }
 
-    // Step 3: Find book by Campaign.advertisedAsin + userId (ASIN is universal across marketplaces)
+    // Step 3: Find book from pre-loaded Map or DB (ASIN is universal across marketplaces)
     if (campaignRecord?.advertisedAsin && userId) {
-      kdpBook = await kdpBookRepo.findOne({
+      kdpBook = bookMap?.get(campaignRecord.advertisedAsin) || await kdpBookRepo.findOne({
         where: { userId, asin: campaignRecord.advertisedAsin }
       });
       if (kdpBook) {
@@ -978,6 +981,28 @@ export async function runAutomationRulesForUser(userId: string): Promise<void> {
           continue;
         }
 
+        // Batch pre-load Campaign records and KdpBooks for this marketplace
+        const campaignIds = activeCampaigns.map((c: any) => c.campaignId);
+        const campaignRepo = AppDataSource.getRepository(Campaign);
+        const kdpBookRepo = AppDataSource.getRepository(KdpBook);
+
+        const existingCampaigns = await campaignRepo.find({
+          where: { amazonCampaignId: In(campaignIds), marketplace }
+        });
+        const campaignMap = new Map<string, Campaign>();
+        for (const c of existingCampaigns) {
+          campaignMap.set(c.amazonCampaignId, c);
+        }
+
+        // Pre-load all KdpBooks for this user (so we don't query per campaign)
+        const userBooks = userId ? await kdpBookRepo.find({ where: { userId } }) : [];
+        const bookMap = new Map<string, KdpBook>();
+        for (const b of userBooks) {
+          if (b.asin) bookMap.set(b.asin, b);
+        }
+
+        console.log(`📦 [${marketplace}] Pre-loaded: ${campaignMap.size} campaigns, ${bookMap.size} books`);
+
         const stats = {
           campaignsProcessed: 0,
           campaignsInWarmup: 0,
@@ -990,15 +1015,23 @@ export async function runAutomationRulesForUser(userId: string): Promise<void> {
           errors: 0
         };
 
-        // Process each active campaign with user settings
-        for (const campaign of activeCampaigns) {
-          try {
-            await processCampaignWithApiService(campaign, stats, apiService, marketplace, userConfig, userId);
-          } catch (error) {
-            stats.errors++;
-            console.error(`❌ [${marketplace}] Error processing campaign ${campaign.name}:`, error);
+        // Process campaigns in parallel (max 3 concurrent to respect Amazon rate limits)
+        const CONCURRENCY = 3;
+        const campaignQueue = [...activeCampaigns];
+        const runNext = async (): Promise<void> => {
+          while (campaignQueue.length > 0) {
+            const campaign = campaignQueue.shift()!;
+            try {
+              await processCampaignWithApiService(campaign, stats, apiService, marketplace, userConfig, userId, campaignMap, bookMap);
+            } catch (error) {
+              stats.errors++;
+              console.error(`❌ [${marketplace}] Error processing campaign ${campaign.name}:`, error);
+            }
           }
-        }
+        };
+
+        const workers = Array.from({ length: Math.min(CONCURRENCY, activeCampaigns.length) }, () => runNext());
+        await Promise.allSettled(workers);
 
         // Accumulate stats
         globalStats.totalCampaignsProcessed += stats.campaignsProcessed;
