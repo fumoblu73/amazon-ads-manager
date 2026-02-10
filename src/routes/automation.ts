@@ -542,6 +542,30 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
     // 1. Crea API service usando i token OAuth dell'utente + endpoint corretto per marketplace
     const apiService = createUserAmazonApiService(userId, marketplace);
 
+    // 1b. [DIAGNOSTICA] Verifica connessione API prima di procedere
+    try {
+      const profiles = await apiService.getProfiles();
+      console.log(`🔍 [TEST] Auth OK - Found ${profiles.length} profiles`);
+      // Trova il profilo corretto per il marketplace richiesto
+      const matchingProfile = profiles.find((p: any) => p.countryCode === marketplace);
+      if (matchingProfile) {
+        console.log(`🔍 [TEST] Matching profile for ${marketplace}: ${matchingProfile.profileId}`);
+      } else {
+        console.log(`⚠️ [TEST] No profile found for marketplace ${marketplace}. Available: ${profiles.map((p: any) => `${p.countryCode}:${p.profileId}`).join(', ')}`);
+      }
+    } catch (authError: any) {
+      const details = authError.response?.data || authError.message;
+      return res.status(401).json({
+        error: 'API authentication failed',
+        diagnostics: {
+          marketplace,
+          errorStatus: authError.response?.status,
+          errorDetails: details,
+          hint: 'Check if user OAuth tokens are valid and AMAZON_ADS_CLIENT_ID env var is set'
+        }
+      });
+    }
+
     // 2. Trova le campagne dell'utente per questo ASIN
     const campaignRepo = AppDataSource.getRepository(Campaign);
     const campaigns = await campaignRepo.find({
