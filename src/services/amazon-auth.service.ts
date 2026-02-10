@@ -7,7 +7,7 @@ const CLIENT_ID = process.env.AMAZON_ADS_CLIENT_ID!;
 const CLIENT_SECRET = process.env.AMAZON_ADS_CLIENT_SECRET!;
 const REDIRECT_URI_LOCAL = process.env.AMAZON_ADS_REDIRECT_URI_LOCAL!;
 const REDIRECT_URI_PROD = process.env.AMAZON_ADS_REDIRECT_URI_PROD!;
-const SCOPES = process.env.AMAZON_ADS_SCOPES || 'advertising::campaign_management';
+const SCOPES = process.env.AMAZON_ADS_SCOPES || 'advertising::campaign_management profile';
 
 // Determina il redirect URI in base all'ambiente
 const getRedirectUri = () => {
