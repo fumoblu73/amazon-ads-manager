@@ -567,19 +567,65 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
     };
     console.log(`🔍 [TEST] Token diagnostics:`, JSON.stringify(tokenDiagnostics, null, 2));
 
-    // Bypass UserAmazonApiService: test diretto con AmazonAuthService.getProfiles()
-    // per verificare se il token funziona indipendentemente dal service
-    const { AmazonAuthService } = await import('../services/amazon-auth.service');
+    // Chiamata RAW ad Amazon API per diagnostica completa (senza wrapper che nascondono errori)
+    const axios = (await import('axios')).default;
+    const CLIENT_ID = process.env.AMAZON_ADS_CLIENT_ID || '';
     let profiles: any[] = [];
     let directAuthResult: any = null;
+    let workingAccessToken = dbUser!.accessToken!;
 
+    // Step A: Prova refresh token per avere un token fresco
     try {
-      // Test diretto: usa access token dal DB con AmazonAuthService statico
-      profiles = await AmazonAuthService.getProfiles(dbUser!.accessToken!);
-      directAuthResult = { success: true, profileCount: profiles.length, profiles: profiles.map((p: any) => ({ profileId: p.profileId, countryCode: p.countryCode, name: p.accountInfo?.name })) };
-      console.log(`✅ [TEST] Direct auth OK - Found ${profiles.length} profiles`);
+      console.log(`🔄 [TEST] Refreshing token...`);
+      const refreshResponse = await axios.post('https://api.amazon.com/auth/o2/token',
+        new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: dbUser!.refreshToken!,
+          client_id: CLIENT_ID,
+          client_secret: process.env.AMAZON_ADS_CLIENT_SECRET || ''
+        }).toString(),
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+      );
+      workingAccessToken = refreshResponse.data.access_token;
+      // Salva nuovi token nel DB
+      dbUser!.accessToken = refreshResponse.data.access_token;
+      dbUser!.refreshToken = refreshResponse.data.refresh_token;
+      dbUser!.tokenExpiresAt = new Date(Date.now() + refreshResponse.data.expires_in * 1000);
+      await userRepo.save(dbUser!);
+      console.log(`✅ [TEST] Token refreshed OK`);
+    } catch (refreshErr: any) {
+      return res.status(401).json({
+        error: 'Token refresh failed',
+        diagnostics: {
+          ...tokenDiagnostics,
+          refreshHttpStatus: refreshErr.response?.status,
+          refreshError: refreshErr.response?.data || refreshErr.message,
+          clientIdUsed: CLIENT_ID.substring(0, 10) + '...',
+          action: 'Refresh token invalid. User needs to re-authenticate via Amazon OAuth.'
+        }
+      });
+    }
 
-      // Auto-fix: se profileId mancante, salva quello del marketplace richiesto
+    // Step B: Chiama /v2/profiles con il token fresco (RAW, senza wrapper)
+    try {
+      console.log(`🔍 [TEST] Fetching profiles with fresh token...`);
+      const profilesResponse = await axios.get('https://advertising-api.amazon.com/v2/profiles', {
+        headers: {
+          'Authorization': `Bearer ${workingAccessToken}`,
+          'Amazon-Advertising-API-ClientId': CLIENT_ID,
+          'Content-Type': 'application/json'
+        }
+      });
+      profiles = profilesResponse.data;
+      directAuthResult = {
+        success: true,
+        tokenRefreshed: true,
+        profileCount: profiles.length,
+        profiles: profiles.map((p: any) => ({ profileId: p.profileId, countryCode: p.countryCode, name: p.accountInfo?.name }))
+      };
+      console.log(`✅ [TEST] Found ${profiles.length} profiles`);
+
+      // Auto-fix: salva profileId per il marketplace richiesto
       if (!dbUser!.profileId) {
         const matchingProfile = profiles.find((p: any) => p.countryCode === marketplace);
         if (matchingProfile) {
@@ -590,42 +636,20 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
           directAuthResult.autoFixed = { profileId: matchingProfile.profileId, countryCode: matchingProfile.countryCode };
         }
       }
-    } catch (directError: any) {
-      // Token diretto fallito, prova refresh
-      console.log(`⚠️ [TEST] Direct auth failed, trying token refresh...`);
-      try {
-        const newTokens = await AmazonAuthService.refreshAccessToken(dbUser!.refreshToken!);
-        // Aggiorna token nel DB
-        dbUser!.accessToken = newTokens.access_token;
-        dbUser!.refreshToken = newTokens.refresh_token;
-        dbUser!.tokenExpiresAt = AmazonAuthService.calculateTokenExpiry(newTokens.expires_in);
-        await userRepo.save(dbUser!);
-        console.log(`✅ [TEST] Token refreshed, retrying profiles...`);
-
-        profiles = await AmazonAuthService.getProfiles(newTokens.access_token);
-        directAuthResult = { success: true, profileCount: profiles.length, tokenRefreshed: true, profiles: profiles.map((p: any) => ({ profileId: p.profileId, countryCode: p.countryCode, name: p.accountInfo?.name })) };
-
-        // Auto-fix profileId
-        if (!dbUser!.profileId) {
-          const matchingProfile = profiles.find((p: any) => p.countryCode === marketplace);
-          if (matchingProfile) {
-            dbUser!.profileId = matchingProfile.profileId;
-            dbUser!.countryCode = matchingProfile.countryCode;
-            await userRepo.save(dbUser!);
-            directAuthResult.autoFixed = { profileId: matchingProfile.profileId, countryCode: matchingProfile.countryCode };
-          }
+    } catch (profilesErr: any) {
+      return res.status(401).json({
+        error: 'Profiles fetch failed (with fresh token)',
+        diagnostics: {
+          ...tokenDiagnostics,
+          tokenRefreshOK: true,
+          profilesHttpStatus: profilesErr.response?.status,
+          profilesError: profilesErr.response?.data || profilesErr.message,
+          profilesHeaders: profilesErr.response?.headers || {},
+          requestedUrl: 'https://advertising-api.amazon.com/v2/profiles',
+          clientIdUsed: CLIENT_ID.substring(0, 10) + '...',
+          action: 'Token works for auth but not for API. Check if AMAZON_ADS_CLIENT_ID matches the OAuth app.'
         }
-      } catch (refreshError: any) {
-        return res.status(401).json({
-          error: 'Both direct auth and token refresh failed',
-          diagnostics: {
-            ...tokenDiagnostics,
-            directAuthError: directError.response?.data || directError.message,
-            refreshError: refreshError.response?.data || refreshError.message,
-            action: 'User needs to re-authenticate via Amazon OAuth'
-          }
-        });
-      }
+      });
     }
 
     // Se profileId ancora mancante dopo auto-fix, errore
