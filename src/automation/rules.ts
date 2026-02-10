@@ -354,10 +354,10 @@ async function processCampaign(campaign: any, stats: any): Promise<void> {
       where: { amazonCampaignId: campaignId, marketplace }
     });
 
-    // Find book by Campaign.advertisedAsin + marketplace
+    // Find book by Campaign.advertisedAsin (ASIN e' universale, non filtrare per marketplace)
     if (campaignRecord?.advertisedAsin && campaignRecord.userId) {
       kdpBook = await kdpBookRepo.findOne({
-        where: { userId: campaignRecord.userId, asin: campaignRecord.advertisedAsin, marketplace }
+        where: { userId: campaignRecord.userId, asin: campaignRecord.advertisedAsin }
       });
       if (kdpBook) {
         console.log(`  📚 Found book "${kdpBook.title}" (${campaignRecord.advertisedAsin}) for campaign`);

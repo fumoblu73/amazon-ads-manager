@@ -586,11 +586,10 @@ async function enrichKdpBooksFromAdvertisedProductReport(
   // Update kdp_books for each ASIN
   for (const [asin, data] of asinData) {
     try {
-      // Find book by ASIN and marketplace (for the user who owns this report)
+      // Find book by ASIN (ASIN e' universale, non filtrare per marketplace)
       const book = await kdpBookRepo.findOne({
         where: {
           asin: asin,
-          marketplace: marketplace.toUpperCase(),
           userId: report.userId
         }
       });
