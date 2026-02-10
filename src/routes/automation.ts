@@ -527,7 +527,7 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
     console.log(`\n🧪 [TEST-ONLY] Function ${functionNumber} on ASIN ${asin} [${marketplace}]`);
 
     // Import necessari (isolati, non condizionano il resto del codice)
-    const { createMarketplaceApiService } = await import('../services/MarketplaceApiFactory');
+    const { createUserAmazonApiService } = await import('../services/UserAmazonApiFactory');
     const { AppDataSource } = await import('../config/database');
     const { Campaign } = await import('../models/Campaign');
     const { KdpBook } = await import('../entities/KdpBook');
@@ -539,8 +539,8 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
     const { executeFunc5 } = await import('../automation/functions/func5');
     const { parseKdpPrice, calculateBookFastAcos } = await import('../utils/printingCost');
 
-    // 1. Crea API service per il marketplace
-    const apiService = createMarketplaceApiService(marketplace);
+    // 1. Crea API service usando i token OAuth dell'utente (non credenziali globali)
+    const apiService = createUserAmazonApiService(userId);
 
     // 2. Trova le campagne dell'utente per questo ASIN
     const campaignRepo = AppDataSource.getRepository(Campaign);
