@@ -670,57 +670,61 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
     // Ricrea apiService con profileId specifico per il marketplace
     apiService = createUserAmazonApiService(userId, marketplace, marketplaceProfileId);
 
-    // Step C: Test diretto API report per diagnostica errori 425
-    let apiTestResult: any = null;
-    try {
-      const testStartDate = new Date();
-      testStartDate.setDate(testStartDate.getDate() - 3);
-      const testStart = testStartDate.toISOString().split('T')[0];
-      const testEnd = new Date().toISOString().split('T')[0];
+    // Step C: Test multi-endpoint per diagnostica (quale API call fallisce?)
+    const authHeaders = {
+      'Authorization': `Bearer ${workingAccessToken}`,
+      'Amazon-Advertising-API-ClientId': CLIENT_ID,
+      'Amazon-Advertising-API-Scope': marketplaceProfileId,
+      'Content-Type': 'application/json'
+    };
+    const apiTestResult: any = { endpoint };
 
-      console.log(`🧪 [TEST] Step C: Raw report request test (${testStart} to ${testEnd})`);
-      const reportTestResponse = await axios.post(
-        `${endpoint}/reporting/reports`,
-        {
-          startDate: testStart,
-          endDate: testEnd,
-          configuration: {
-            adProduct: 'SPONSORED_PRODUCTS',
-            groupBy: ['targeting'],
-            columns: ['campaignId', 'adGroupId', 'keywordId', 'keyword', 'impressions', 'clicks', 'cost'],
-            reportTypeId: 'spTargeting',
-            timeUnit: 'SUMMARY',
-            format: 'GZIP_JSON'
-          }
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${workingAccessToken}`,
-            'Amazon-Advertising-API-ClientId': CLIENT_ID,
-            'Amazon-Advertising-API-Scope': marketplaceProfileId,
-            'Content-Type': 'application/vnd.createasyncreportrequest.v3+json'
-          }
-        }
-      );
-      apiTestResult = { success: true, reportId: reportTestResponse.data.reportId, status: reportTestResponse.status };
-      console.log(`✅ [TEST] Step C: Report request OK - ID: ${reportTestResponse.data.reportId}`);
-    } catch (apiTestErr: any) {
-      apiTestResult = {
-        success: false,
-        httpStatus: apiTestErr.response?.status,
-        errorBody: apiTestErr.response?.data,
-        errorHeaders: apiTestErr.response?.headers ? Object.fromEntries(
-          Object.entries(apiTestErr.response.headers).filter(([k]) => k.startsWith('x-') || k === 'content-type')
-        ) : {},
-        requestUrl: `${endpoint}/reporting/reports`,
-        requestHeaders: {
-          profileScope: marketplaceProfileId,
-          clientId: CLIENT_ID.substring(0, 15) + '...',
-          hasToken: !!workingAccessToken
-        }
-      };
-      console.error(`❌ [TEST] Step C: Report request FAILED:`, JSON.stringify(apiTestResult, null, 2));
+    // C1: Report request (v3)
+    try {
+      const testStart = new Date(Date.now() - 3 * 86400000).toISOString().split('T')[0];
+      const testEnd = new Date().toISOString().split('T')[0];
+      const resp = await axios.post(`${endpoint}/reporting/reports`, {
+        startDate: testStart, endDate: testEnd,
+        configuration: { adProduct: 'SPONSORED_PRODUCTS', groupBy: ['targeting'],
+          columns: ['campaignId', 'impressions', 'clicks', 'cost'],
+          reportTypeId: 'spTargeting', timeUnit: 'SUMMARY', format: 'GZIP_JSON' }
+      }, { headers: { ...authHeaders, 'Content-Type': 'application/vnd.createasyncreportrequest.v3+json' } });
+      apiTestResult.reportV3 = { ok: true, reportId: resp.data.reportId };
+    } catch (e: any) {
+      apiTestResult.reportV3 = { ok: false, status: e.response?.status, body: e.response?.data };
     }
+
+    // C2: v2 keywords endpoint
+    try {
+      const resp = await axios.get(`${endpoint}/v2/sp/keywords`, {
+        headers: authHeaders, params: { count: 1 }
+      });
+      apiTestResult.v2Keywords = { ok: true, count: Array.isArray(resp.data) ? resp.data.length : '?' };
+    } catch (e: any) {
+      apiTestResult.v2Keywords = { ok: false, status: e.response?.status, body: e.response?.data };
+    }
+
+    // C3: v2 targets endpoint
+    try {
+      const resp = await axios.get(`${endpoint}/v2/sp/targets`, {
+        headers: authHeaders, params: { count: 1 }
+      });
+      apiTestResult.v2Targets = { ok: true, count: Array.isArray(resp.data) ? resp.data.length : '?' };
+    } catch (e: any) {
+      apiTestResult.v2Targets = { ok: false, status: e.response?.status, body: e.response?.data };
+    }
+
+    // C4: v3 campaigns list endpoint (alternativa a v2)
+    try {
+      const resp = await axios.post(`${endpoint}/sp/campaigns/list`, {
+        maxResults: 1
+      }, { headers: authHeaders });
+      apiTestResult.v3Campaigns = { ok: true, count: resp.data?.campaigns?.length ?? '?' };
+    } catch (e: any) {
+      apiTestResult.v3Campaigns = { ok: false, status: e.response?.status, body: e.response?.data };
+    }
+
+    console.log(`🧪 [TEST] Step C results:`, JSON.stringify(apiTestResult, null, 2));
 
     // 2. Trova le campagne dell'utente per questo ASIN
     const campaignRepo = AppDataSource.getRepository(Campaign);
