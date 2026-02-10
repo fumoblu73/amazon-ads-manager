@@ -65,19 +65,16 @@ router.get('/callback', async (req: Request, res: Response) => {
     // Step 3: Ottieni user info
     const userInfo = await AmazonAuthService.getUserInfo(tokens.access_token);
 
-    // Step 4: Tenta di ottenere profili Ads (opzionale se scope presente)
+    // Step 4: Ottieni profili Ads (sempre, advertising::campaign_management e' lo scope default)
     let profile = null;
-    const scopes = process.env.AMAZON_ADS_SCOPES || '';
-
-    if (scopes.includes('advertising')) {
-      try {
-        const profiles = await AmazonAuthService.getProfiles(tokens.access_token);
-        if (profiles.length > 0) {
-          profile = profiles[0];
-        }
-      } catch (error) {
-        console.log('No Ads profiles available (scope not granted yet)');
+    try {
+      const profiles = await AmazonAuthService.getProfiles(tokens.access_token);
+      if (profiles.length > 0) {
+        profile = profiles[0];
+        console.log(`✅ Found ${profiles.length} Ads profiles. Using: ${profile.profileId} (${profile.countryCode})`);
       }
+    } catch (error) {
+      console.log('⚠️ No Ads profiles available (advertising scope not granted or API error)');
     }
 
     const tokenExpiry = AmazonAuthService.calculateTokenExpiry(tokens.expires_in);
