@@ -343,21 +343,26 @@ class AmazonApiService {
     }
   }
 
-  // Metodo legacy per compatibilità - converte al nuovo formato
-  async requestReport(reportDate: string, metrics: string[]): Promise<string> {
-    // Converte da formato YYYYMMDD a YYYY-MM-DD
-    const year = reportDate.substring(0, 4);
-    const month = reportDate.substring(4, 6);
-    const day = reportDate.substring(6, 8);
-    const endDate = `${year}-${month}-${day}`;
+  // Richiede report con date range: startDate → endDate (default: oggi)
+  // startDate in formato YYYYMMDD (come restituito da formatDateForAmazon)
+  // endDate opzionale in formato YYYYMMDD (default: oggi)
+  async requestReport(startDateStr: string, metrics: string[], endDateStr?: string): Promise<string> {
+    // Converte startDate da YYYYMMDD a YYYY-MM-DD
+    const startDate = `${startDateStr.substring(0, 4)}-${startDateStr.substring(4, 6)}-${startDateStr.substring(6, 8)}`;
 
-    // Amazon API v3 funziona meglio con range di date più ampi
-    // Usa gli ultimi 7 giorni invece di un singolo giorno
-    const startDateObj = new Date(endDate);
-    startDateObj.setDate(startDateObj.getDate() - 6); // 7 giorni totali
-    const startDate = startDateObj.toISOString().split('T')[0];
+    // Se endDate non fornita, usa oggi
+    let endDate: string;
+    if (endDateStr) {
+      endDate = `${endDateStr.substring(0, 4)}-${endDateStr.substring(4, 6)}-${endDateStr.substring(6, 8)}`;
+    } else {
+      endDate = new Date().toISOString().split('T')[0];
+    }
 
-    console.log(`📅 [API v3] Date range: ${startDate} to ${endDate} (7 giorni)`);
+    const startMs = new Date(startDate).getTime();
+    const endMs = new Date(endDate).getTime();
+    const days = Math.round((endMs - startMs) / (1000 * 60 * 60 * 24));
+    console.log(`📅 [API v3] Date range: ${startDate} to ${endDate} (${days} giorni)`);
+
     return this.requestReportV3(startDate, endDate, 'spTargeting', metrics);
   }
 
