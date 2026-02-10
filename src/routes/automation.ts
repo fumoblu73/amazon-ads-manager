@@ -502,4 +502,223 @@ router.post('/test-bid-increase', authMiddleware, requireAmazonAuth, async (req:
   }
 });
 
+// ================================================
+// ENDPOINT: TEST SINGOLA FUNZIONE SU ASIN (SOLO DEBUG/TEST)
+// ================================================
+// Endpoint SOLO per testing manuale. NON viene usato dalla pipeline
+// di automazione normale. NON modifica frequenze, NON aggiorna lo
+// scheduler, NON influenza il flusso cronjob. E' completamente
+// isolato: esegue la funzione richiesta e restituisce i risultati.
+// Ignora i check di frequenza (shouldExecuteFunction) perche'
+// il suo scopo e' testare la funzione on-demand.
+router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    const { asin, functionNumber, marketplace } = req.body;
+
+    if (!asin || !functionNumber || !marketplace) {
+      return res.status(400).json({ error: 'asin, functionNumber (1-5), and marketplace are required' });
+    }
+
+    if (functionNumber < 1 || functionNumber > 5) {
+      return res.status(400).json({ error: 'functionNumber must be between 1 and 5' });
+    }
+
+    console.log(`\n🧪 [TEST-ONLY] Function ${functionNumber} on ASIN ${asin} [${marketplace}]`);
+
+    // Import necessari (isolati, non condizionano il resto del codice)
+    const { createMarketplaceApiService } = await import('../services/MarketplaceApiFactory');
+    const { AppDataSource } = await import('../config/database');
+    const { Campaign } = await import('../models/Campaign');
+    const { KdpBook } = await import('../entities/KdpBook');
+    const { getUserAutomationSettings } = await import('../automation/rules');
+    const { executeFunc1 } = await import('../automation/functions/func1');
+    const { executeFunc2 } = await import('../automation/functions/func2');
+    const { executeFunc3 } = await import('../automation/functions/func3');
+    const { executeFunc4 } = await import('../automation/functions/func4');
+    const { executeFunc5 } = await import('../automation/functions/func5');
+    const { parseKdpPrice, calculateBookFastAcos } = await import('../utils/printingCost');
+
+    // 1. Crea API service per il marketplace
+    const apiService = createMarketplaceApiService(marketplace);
+
+    // 2. Trova le campagne dell'utente per questo ASIN
+    const campaignRepo = AppDataSource.getRepository(Campaign);
+    const campaigns = await campaignRepo.find({
+      where: { userId, advertisedAsin: asin, marketplace }
+    });
+
+    if (campaigns.length === 0) {
+      return res.status(404).json({
+        error: `No campaigns found for ASIN ${asin} in marketplace ${marketplace}`,
+        hint: 'Make sure campaigns have advertisedAsin set (run automation once to auto-discover)'
+      });
+    }
+
+    console.log(`📊 [TEST] Found ${campaigns.length} campaigns for ASIN ${asin}`);
+
+    // 3. Carica dati libro
+    const kdpBookRepo = AppDataSource.getRepository(KdpBook);
+    const kdpBook = await kdpBookRepo.findOne({ where: { userId, asin } });
+
+    if (!kdpBook || !kdpBook.price || !kdpBook.pageCount) {
+      return res.status(404).json({
+        error: `Book data not found or incomplete for ASIN ${asin}`,
+        book: kdpBook ? { price: kdpBook.price, pageCount: kdpBook.pageCount } : null
+      });
+    }
+
+    // 4. Calcola book data per FAST ACOS
+    const price = parseKdpPrice(kdpBook.price);
+    if (!price) {
+      return res.status(400).json({ error: `Cannot parse price "${kdpBook.price}" for ASIN ${asin}` });
+    }
+
+    const userConfig = await getUserAutomationSettings(userId);
+    const inkType = (kdpBook.inkType || 'black_white') as any;
+    const trimSize = (kdpBook.trimSize || '6x9') as any;
+    const royaltyPct = Number(kdpBook.royaltyPercentage) || 60;
+    const vatSettings = { useVat: userConfig.useVatInFastAcos, vatPercentage: userConfig.vatPercentage };
+    const fastAcosResult = calculateBookFastAcos(price, kdpBook.pageCount, marketplace, inkType, royaltyPct, vatSettings, trimSize);
+
+    if (!fastAcosResult) {
+      return res.status(400).json({ error: 'FAST ACOS calculation failed' });
+    }
+
+    const book = { price, printingCost: fastAcosResult.printingCost, royaltyPercentage: royaltyPct };
+    console.log(`📚 [TEST] Book: "${kdpBook.title}" | price=${price} | fastAcos=${fastAcosResult.fastAcos}%`);
+
+    // 5. Esegui la funzione su ogni campagna compatibile
+    const results: any[] = [];
+    const funcNames = ['', 'Progressive Bidding', 'Placement Optimization', 'Targeting Optimization', 'Auto Ad Optimization', 'Campaign Feeding'];
+
+    // Per func5: costruisci mapping di tutte le campagne del libro
+    // Usa solo gli ID campagna dal DB (adGroupId non disponibile direttamente)
+    let campaignMapping: any = {};
+    if (functionNumber === 5) {
+      for (const c of campaigns) {
+        const cType = _detectCampaignType(c.name);
+        campaignMapping[`campaign${cType}Id`] = c.amazonCampaignId;
+      }
+    }
+
+    for (const campaign of campaigns) {
+      const campaignId = campaign.amazonCampaignId;
+      const campaignName = campaign.name;
+      const campaignType = _detectCampaignType(campaignName);
+
+      // Verifica compatibilita' funzione-tipo campagna
+      if (!_isFuncCompatible(functionNumber, campaignType)) {
+        const reason = `Func${functionNumber} not applicable to type ${campaignType} (${campaignName})`;
+        console.log(`⏩ [TEST] Skip: ${reason}`);
+        results.push({ campaignName, campaignId, campaignType, status: 'skipped', reason });
+        continue;
+      }
+
+      try {
+        let result: any;
+
+        switch (functionNumber) {
+          case 1:
+            result = await executeFunc1(campaignId, campaignType as any, campaignName, marketplace, apiService, {
+              bidIncrease: userConfig.func1_bidIncrease,
+              frequency: userConfig.func1_frequency,
+              maxImpressions: userConfig.func1_impressions,
+              maxClicks: userConfig.func1_clicks
+            });
+            break;
+
+          case 2: {
+            // Placement attuali non disponibili direttamente, usa default 0
+            const placements = { topOfSearch: 0, restOfSearch: 0, productPages: 0 };
+            result = await executeFunc2(campaignId, campaignName, marketplace, book, placements, apiService, {
+              frequency: userConfig.func2_frequency,
+              placementTimeframeWeeks: userConfig.func2_timeframeWeeks
+            });
+            break;
+          }
+
+          case 3:
+            result = await executeFunc3(campaignId, campaignType as any, campaignName, marketplace, book, 50000, apiService, {
+              frequency: userConfig.func3_frequency,
+              timeframeA: userConfig.func3_timeframeA,
+              timeframeB: userConfig.func3_timeframeB,
+              timeframeC: userConfig.func3_timeframeC,
+              clicksPause: userConfig.func3_clicksPause,
+              clicks65days: userConfig.func3_clicks65days
+            });
+            break;
+
+          case 4: {
+            // adGroupId: usa quello dalla campagna se disponibile
+            const adGroupId = (campaign as any).adGroupId || 'unknown';
+            result = await executeFunc4(campaignId, campaignName, marketplace, adGroupId, book, 50000, apiService, {
+              frequency: userConfig.func4_frequency,
+              timeframeA: userConfig.func4_timeframeA,
+              timeframeB: userConfig.func4_timeframeB,
+              timeframeC: userConfig.func4_timeframeC,
+              clicksNegative: userConfig.func4_clicksNegative,
+              spendNegative: userConfig.func4_spendNegative
+            });
+            break;
+          }
+
+          case 5:
+            result = await executeFunc5(campaignId, campaignType as any, marketplace, campaignMapping, apiService, {
+              frequency: userConfig.func5_frequency,
+              minOrders: userConfig.func5_minOrders,
+              bidBroad: userConfig.func5_bidBroad,
+              bidExact: userConfig.func5_bidExact,
+              bidPhrase: userConfig.func5_bidPhrase,
+              bidExpanded: userConfig.func5_bidExpanded
+            });
+            break;
+        }
+
+        results.push({ campaignName, campaignId, campaignType, status: 'executed', result });
+        console.log(`✅ [TEST] Func${functionNumber} completed on ${campaignName}`);
+      } catch (error: any) {
+        results.push({ campaignName, campaignId, campaignType, status: 'error', error: error.message });
+        console.error(`❌ [TEST] Func${functionNumber} failed on ${campaignName}: ${error.message}`);
+      }
+    }
+
+    res.json({
+      success: true,
+      testOnly: true,
+      functionNumber,
+      functionName: funcNames[functionNumber],
+      asin,
+      marketplace,
+      book: { title: kdpBook.title, price, fastAcos: fastAcosResult.fastAcos },
+      campaignsFound: campaigns.length,
+      results
+    });
+
+  } catch (error: any) {
+    console.error('❌ [TEST] Test function error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper interni SOLO per test-function (prefisso _ per evitare conflitti)
+function _detectCampaignType(name: string): 1 | 2 | 3 | 4 | 5 {
+  const lower = name.toLowerCase();
+  if (lower.includes('auto') || lower.includes('automatic')) return 5;
+  if (lower.includes('product')) return 2;
+  if (lower.includes('super')) return 3;
+  return 1;
+}
+
+function _isFuncCompatible(funcNum: number, campaignType: 1 | 2 | 3 | 4 | 5): boolean {
+  switch (funcNum) {
+    case 1: return campaignType !== 5;
+    case 2: return true;
+    case 3: return campaignType !== 5;
+    case 4: return campaignType === 5;
+    case 5: return true;
+    default: return false;
+  }
+}
+
 export default router;
