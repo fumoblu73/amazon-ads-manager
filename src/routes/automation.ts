@@ -540,7 +540,7 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
     const { parseKdpPrice, calculateBookFastAcos } = await import('../utils/printingCost');
 
     // 1. Crea API service usando i token OAuth dell'utente + endpoint corretto per marketplace
-    const apiService = createUserAmazonApiService(userId, marketplace);
+    let apiService = createUserAmazonApiService(userId, marketplace);
 
     // 1b. [DIAGNOSTICA] Verifica stato token e connessione API
     const { User } = await import('../entities/User');
@@ -567,33 +567,78 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
     };
     console.log(`🔍 [TEST] Token diagnostics:`, JSON.stringify(tokenDiagnostics, null, 2));
 
+    // Bypass UserAmazonApiService: test diretto con AmazonAuthService.getProfiles()
+    // per verificare se il token funziona indipendentemente dal service
+    const { AmazonAuthService } = await import('../services/amazon-auth.service');
+    let profiles: any[] = [];
+    let directAuthResult: any = null;
+
     try {
-      const profiles = await apiService.getProfiles();
-      console.log(`🔍 [TEST] Auth OK - Found ${profiles.length} profiles`);
-      const matchingProfile = profiles.find((p: any) => p.countryCode === marketplace);
-      if (matchingProfile) {
-        console.log(`🔍 [TEST] Matching profile for ${marketplace}: ${matchingProfile.profileId}`);
-      } else {
-        console.log(`⚠️ [TEST] No profile found for marketplace ${marketplace}. Available: ${profiles.map((p: any) => `${p.countryCode}:${p.profileId}`).join(', ')}`);
+      // Test diretto: usa access token dal DB con AmazonAuthService statico
+      profiles = await AmazonAuthService.getProfiles(dbUser!.accessToken!);
+      directAuthResult = { success: true, profileCount: profiles.length, profiles: profiles.map((p: any) => ({ profileId: p.profileId, countryCode: p.countryCode, name: p.accountInfo?.name })) };
+      console.log(`✅ [TEST] Direct auth OK - Found ${profiles.length} profiles`);
+
+      // Auto-fix: se profileId mancante, salva quello del marketplace richiesto
+      if (!dbUser!.profileId) {
+        const matchingProfile = profiles.find((p: any) => p.countryCode === marketplace);
+        if (matchingProfile) {
+          dbUser!.profileId = matchingProfile.profileId;
+          dbUser!.countryCode = matchingProfile.countryCode;
+          await userRepo.save(dbUser!);
+          console.log(`🔧 [TEST] Auto-saved profileId ${matchingProfile.profileId} for ${marketplace}`);
+          directAuthResult.autoFixed = { profileId: matchingProfile.profileId, countryCode: matchingProfile.countryCode };
+        }
       }
-    } catch (authError: any) {
-      const details = authError.response?.data || authError.message;
-      return res.status(401).json({
-        error: 'API authentication failed',
-        diagnostics: {
-          ...tokenDiagnostics,
-          errorStatus: authError.response?.status,
-          errorDetails: details,
-          requestUrl: authError.config?.baseURL,
-          requestHeaders: {
-            hasAuthorization: !!authError.config?.headers?.Authorization,
-            hasClientId: !!authError.config?.headers?.['Amazon-Advertising-API-ClientId'],
-            hasScope: !!authError.config?.headers?.['Amazon-Advertising-API-Scope'],
-            scopeValue: authError.config?.headers?.['Amazon-Advertising-API-Scope'] || 'NOT SET'
+    } catch (directError: any) {
+      // Token diretto fallito, prova refresh
+      console.log(`⚠️ [TEST] Direct auth failed, trying token refresh...`);
+      try {
+        const newTokens = await AmazonAuthService.refreshAccessToken(dbUser!.refreshToken!);
+        // Aggiorna token nel DB
+        dbUser!.accessToken = newTokens.access_token;
+        dbUser!.refreshToken = newTokens.refresh_token;
+        dbUser!.tokenExpiresAt = AmazonAuthService.calculateTokenExpiry(newTokens.expires_in);
+        await userRepo.save(dbUser!);
+        console.log(`✅ [TEST] Token refreshed, retrying profiles...`);
+
+        profiles = await AmazonAuthService.getProfiles(newTokens.access_token);
+        directAuthResult = { success: true, profileCount: profiles.length, tokenRefreshed: true, profiles: profiles.map((p: any) => ({ profileId: p.profileId, countryCode: p.countryCode, name: p.accountInfo?.name })) };
+
+        // Auto-fix profileId
+        if (!dbUser!.profileId) {
+          const matchingProfile = profiles.find((p: any) => p.countryCode === marketplace);
+          if (matchingProfile) {
+            dbUser!.profileId = matchingProfile.profileId;
+            dbUser!.countryCode = matchingProfile.countryCode;
+            await userRepo.save(dbUser!);
+            directAuthResult.autoFixed = { profileId: matchingProfile.profileId, countryCode: matchingProfile.countryCode };
           }
         }
+      } catch (refreshError: any) {
+        return res.status(401).json({
+          error: 'Both direct auth and token refresh failed',
+          diagnostics: {
+            ...tokenDiagnostics,
+            directAuthError: directError.response?.data || directError.message,
+            refreshError: refreshError.response?.data || refreshError.message,
+            action: 'User needs to re-authenticate via Amazon OAuth'
+          }
+        });
+      }
+    }
+
+    // Se profileId ancora mancante dopo auto-fix, errore
+    if (!dbUser!.profileId) {
+      return res.status(400).json({
+        error: `No profile found for marketplace ${marketplace}`,
+        availableProfiles: directAuthResult?.profiles,
+        hint: 'User needs to select a profile for this marketplace in the app settings'
       });
     }
+
+    // Ricrea apiService con profileId aggiornato (ora nel DB)
+    apiService = createUserAmazonApiService(userId, marketplace);
 
     // 2. Trova le campagne dell'utente per questo ASIN
     const campaignRepo = AppDataSource.getRepository(Campaign);
@@ -743,6 +788,7 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
       functionName: funcNames[functionNumber],
       asin,
       marketplace,
+      auth: directAuthResult,
       book: { title: kdpBook.title, price, fastAcos: fastAcosResult.fastAcos },
       campaignsFound: campaigns.length,
       results
