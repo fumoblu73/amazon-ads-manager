@@ -625,16 +625,20 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
       };
       console.log(`✅ [TEST] Found ${profiles.length} profiles`);
 
-      // Auto-fix: salva profileId per il marketplace richiesto
-      if (!dbUser!.profileId) {
-        const matchingProfile = profiles.find((p: any) => p.countryCode === marketplace);
-        if (matchingProfile) {
-          dbUser!.profileId = matchingProfile.profileId;
-          dbUser!.countryCode = matchingProfile.countryCode;
-          await userRepo.save(dbUser!);
-          console.log(`🔧 [TEST] Auto-saved profileId ${matchingProfile.profileId} for ${marketplace}`);
-          directAuthResult.autoFixed = { profileId: matchingProfile.profileId, countryCode: matchingProfile.countryCode };
-        }
+      // Trova il profileId corretto per il marketplace richiesto
+      const matchingProfile = profiles.find((p: any) => p.countryCode === marketplace);
+      if (matchingProfile) {
+        directAuthResult.marketplaceProfileId = matchingProfile.profileId.toString();
+        console.log(`🎯 [TEST] ProfileId per ${marketplace}: ${matchingProfile.profileId}`);
+      }
+
+      // Auto-fix: salva profileId nel DB se mancante
+      if (!dbUser!.profileId && matchingProfile) {
+        dbUser!.profileId = matchingProfile.profileId;
+        dbUser!.countryCode = matchingProfile.countryCode;
+        await userRepo.save(dbUser!);
+        console.log(`🔧 [TEST] Auto-saved profileId ${matchingProfile.profileId} for ${marketplace}`);
+        directAuthResult.autoFixed = { profileId: matchingProfile.profileId, countryCode: matchingProfile.countryCode };
       }
     } catch (profilesErr: any) {
       return res.status(401).json({
@@ -652,17 +656,19 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
       });
     }
 
-    // Se profileId ancora mancante dopo auto-fix, errore
-    if (!dbUser!.profileId) {
+    // Determina il profileId da usare: quello specifico del marketplace ha priorita'
+    const marketplaceProfileId = directAuthResult?.marketplaceProfileId || dbUser!.profileId?.toString();
+    if (!marketplaceProfileId) {
       return res.status(400).json({
         error: `No profile found for marketplace ${marketplace}`,
         availableProfiles: directAuthResult?.profiles,
         hint: 'User needs to select a profile for this marketplace in the app settings'
       });
     }
+    console.log(`🎯 [TEST] Using profileId ${marketplaceProfileId} for marketplace ${marketplace}`);
 
-    // Ricrea apiService con profileId aggiornato (ora nel DB)
-    apiService = createUserAmazonApiService(userId, marketplace);
+    // Ricrea apiService con profileId specifico per il marketplace
+    apiService = createUserAmazonApiService(userId, marketplace, marketplaceProfileId);
 
     // 2. Trova le campagne dell'utente per questo ASIN
     const campaignRepo = AppDataSource.getRepository(Campaign);

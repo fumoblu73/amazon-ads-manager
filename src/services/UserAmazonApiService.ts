@@ -21,10 +21,12 @@ export class UserAmazonApiService {
   private accessToken: string = '';
   private clientId: string;
   private marketplace?: string; // Se specificato, usa questo per determinare endpoint/regione
+  private profileIdOverride?: string; // Se specificato, usa questo profileId invece di quello dal DB
 
-  constructor(userId: string, marketplace?: string) {
+  constructor(userId: string, marketplace?: string, profileId?: string) {
     this.userId = userId;
     this.marketplace = marketplace;
+    this.profileIdOverride = profileId;
     this.clientId = process.env.AMAZON_ADS_CLIENT_ID || '';
 
     // Create HTTP client
@@ -49,9 +51,10 @@ export class UserAmazonApiService {
       config.headers.Authorization = `Bearer ${this.accessToken}`;
       config.headers['Amazon-Advertising-API-ClientId'] = this.clientId;
 
-      // Set profile scope if available
-      if (this.user?.profileId) {
-        config.headers['Amazon-Advertising-API-Scope'] = this.user.profileId.toString();
+      // Set profile scope: override ha priorita' su DB (supporta multi-marketplace)
+      const profileId = this.profileIdOverride || this.user?.profileId;
+      if (profileId) {
+        config.headers['Amazon-Advertising-API-Scope'] = profileId.toString();
       }
 
       return config;
