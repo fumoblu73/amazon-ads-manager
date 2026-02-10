@@ -542,11 +542,34 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
     // 1. Crea API service usando i token OAuth dell'utente + endpoint corretto per marketplace
     const apiService = createUserAmazonApiService(userId, marketplace);
 
-    // 1b. [DIAGNOSTICA] Verifica connessione API prima di procedere
+    // 1b. [DIAGNOSTICA] Verifica stato token e connessione API
+    const { User } = await import('../entities/User');
+    const { MARKETPLACE_TO_REGION, API_ENDPOINTS } = await import('../config/amazon');
+    const userRepo = AppDataSource.getRepository(User);
+    const dbUser = await userRepo.findOne({ where: { id: userId } });
+
+    const regionSource = marketplace || dbUser?.countryCode || 'US';
+    const region = MARKETPLACE_TO_REGION[regionSource.toUpperCase()] || 'NA';
+    const endpoint = API_ENDPOINTS[region];
+
+    const tokenDiagnostics = {
+      userCountryCode: dbUser?.countryCode || 'NOT SET',
+      userProfileId: dbUser?.profileId || 'NOT SET',
+      resolvedRegion: region,
+      resolvedEndpoint: endpoint,
+      hasAccessToken: !!(dbUser?.accessToken),
+      accessTokenLength: dbUser?.accessToken?.length || 0,
+      hasRefreshToken: !!(dbUser?.refreshToken),
+      tokenExpiresAt: dbUser?.tokenExpiresAt?.toString() || 'NOT SET',
+      tokenExpired: dbUser?.tokenExpiresAt ? new Date() >= new Date(dbUser.tokenExpiresAt) : 'UNKNOWN',
+      clientIdSet: !!(process.env.AMAZON_ADS_CLIENT_ID),
+      clientIdLength: (process.env.AMAZON_ADS_CLIENT_ID || '').length
+    };
+    console.log(`🔍 [TEST] Token diagnostics:`, JSON.stringify(tokenDiagnostics, null, 2));
+
     try {
       const profiles = await apiService.getProfiles();
       console.log(`🔍 [TEST] Auth OK - Found ${profiles.length} profiles`);
-      // Trova il profilo corretto per il marketplace richiesto
       const matchingProfile = profiles.find((p: any) => p.countryCode === marketplace);
       if (matchingProfile) {
         console.log(`🔍 [TEST] Matching profile for ${marketplace}: ${matchingProfile.profileId}`);
@@ -558,10 +581,16 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
       return res.status(401).json({
         error: 'API authentication failed',
         diagnostics: {
-          marketplace,
+          ...tokenDiagnostics,
           errorStatus: authError.response?.status,
           errorDetails: details,
-          hint: 'Check if user OAuth tokens are valid and AMAZON_ADS_CLIENT_ID env var is set'
+          requestUrl: authError.config?.baseURL,
+          requestHeaders: {
+            hasAuthorization: !!authError.config?.headers?.Authorization,
+            hasClientId: !!authError.config?.headers?.['Amazon-Advertising-API-ClientId'],
+            hasScope: !!authError.config?.headers?.['Amazon-Advertising-API-Scope'],
+            scopeValue: authError.config?.headers?.['Amazon-Advertising-API-Scope'] || 'NOT SET'
+          }
         }
       });
     }
