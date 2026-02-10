@@ -20,9 +20,11 @@ export class UserAmazonApiService {
   private user: User | null = null;
   private accessToken: string = '';
   private clientId: string;
+  private marketplace?: string; // Se specificato, usa questo per determinare endpoint/regione
 
-  constructor(userId: string) {
+  constructor(userId: string, marketplace?: string) {
     this.userId = userId;
+    this.marketplace = marketplace;
     this.clientId = process.env.AMAZON_ADS_CLIENT_ID || '';
 
     // Create HTTP client
@@ -36,8 +38,10 @@ export class UserAmazonApiService {
     this.client.interceptors.request.use(async (config) => {
       await this.ensureValidToken();
 
-      // Set dynamic base URL based on user's region
-      const region = this.user?.countryCode ? MARKETPLACE_TO_REGION[this.user.countryCode.toUpperCase()] || 'EU' : 'EU';
+      // Set dynamic base URL: marketplace (se specificato) ha priorita' su countryCode utente
+      // Un utente italiano puo' avere campagne su marketplace US → serve endpoint NA, non EU
+      const regionSource = this.marketplace || this.user?.countryCode || 'US';
+      const region = MARKETPLACE_TO_REGION[regionSource.toUpperCase()] || 'NA';
       const endpoint = API_ENDPOINTS[region];
       config.baseURL = endpoint;
 

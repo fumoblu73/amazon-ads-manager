@@ -539,8 +539,8 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
     const { executeFunc5 } = await import('../automation/functions/func5');
     const { parseKdpPrice, calculateBookFastAcos } = await import('../utils/printingCost');
 
-    // 1. Crea API service usando i token OAuth dell'utente (non credenziali globali)
-    const apiService = createUserAmazonApiService(userId);
+    // 1. Crea API service usando i token OAuth dell'utente + endpoint corretto per marketplace
+    const apiService = createUserAmazonApiService(userId, marketplace);
 
     // 2. Trova le campagne dell'utente per questo ASIN
     const campaignRepo = AppDataSource.getRepository(Campaign);
