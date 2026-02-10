@@ -670,6 +670,58 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
     // Ricrea apiService con profileId specifico per il marketplace
     apiService = createUserAmazonApiService(userId, marketplace, marketplaceProfileId);
 
+    // Step C: Test diretto API report per diagnostica errori 425
+    let apiTestResult: any = null;
+    try {
+      const testStartDate = new Date();
+      testStartDate.setDate(testStartDate.getDate() - 3);
+      const testStart = testStartDate.toISOString().split('T')[0];
+      const testEnd = new Date().toISOString().split('T')[0];
+
+      console.log(`🧪 [TEST] Step C: Raw report request test (${testStart} to ${testEnd})`);
+      const reportTestResponse = await axios.post(
+        `${endpoint}/reporting/reports`,
+        {
+          startDate: testStart,
+          endDate: testEnd,
+          configuration: {
+            adProduct: 'SPONSORED_PRODUCTS',
+            groupBy: ['targeting'],
+            columns: ['campaignId', 'adGroupId', 'keywordId', 'keyword', 'impressions', 'clicks', 'cost'],
+            reportTypeId: 'spTargeting',
+            timeUnit: 'SUMMARY',
+            format: 'GZIP_JSON'
+          }
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${workingAccessToken}`,
+            'Amazon-Advertising-API-ClientId': CLIENT_ID,
+            'Amazon-Advertising-API-Scope': marketplaceProfileId,
+            'Content-Type': 'application/vnd.createasyncreportrequest.v3+json'
+          }
+        }
+      );
+      apiTestResult = { success: true, reportId: reportTestResponse.data.reportId, status: reportTestResponse.status };
+      console.log(`✅ [TEST] Step C: Report request OK - ID: ${reportTestResponse.data.reportId}`);
+    } catch (apiTestErr: any) {
+      apiTestResult = {
+        success: false,
+        httpStatus: apiTestErr.response?.status,
+        errorBody: apiTestErr.response?.data,
+        errorHeaders: apiTestErr.response?.headers ? Object.fromEntries(
+          Object.entries(apiTestErr.response.headers).filter(([k]) => k.startsWith('x-') || k === 'content-type')
+        ) : {},
+        requestUrl: `${endpoint}/reporting/reports`,
+        requestHeaders: {
+          profileScope: marketplaceProfileId,
+          clientId: CLIENT_ID.substring(0, 15) + '...',
+          hasToken: !!workingAccessToken
+        }
+      };
+      console.error(`❌ [TEST] Step C: Report request FAILED:`, JSON.stringify(apiTestResult, null, 2));
+    }
+
     // 2. Trova le campagne dell'utente per questo ASIN
     const campaignRepo = AppDataSource.getRepository(Campaign);
     const campaigns = await campaignRepo.find({
@@ -819,6 +871,7 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
       asin,
       marketplace,
       auth: directAuthResult,
+      apiTest: apiTestResult,
       book: { title: kdpBook.title, price, fastAcos: fastAcosResult.fastAcos },
       campaignsFound: campaigns.length,
       results
