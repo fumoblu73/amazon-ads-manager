@@ -148,7 +148,9 @@ export class UserAmazonApiService {
   // ================================================
 
   async getCampaigns(): Promise<any[]> {
-    return this.getCampaignsForProfile(this.user!.profileId!.toString());
+    const profileId = this.profileIdOverride || this.user?.profileId?.toString();
+    if (!profileId) throw new Error('No profileId available for getCampaigns');
+    return this.getCampaignsForProfile(profileId);
   }
 
   async getCampaignsForProfile(profileId: string): Promise<any[]> {
