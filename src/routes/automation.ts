@@ -733,43 +733,49 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
 
     console.log(`📊 [TEST] Found ${campaigns.length} campaigns for ASIN ${asin}`);
 
-    // 3. Carica dati libro
-    const kdpBookRepo = AppDataSource.getRepository(KdpBook);
-    const kdpBook = await kdpBookRepo.findOne({ where: { userId, asin } });
-
-    if (!kdpBook || !kdpBook.price || !kdpBook.pageCount) {
-      return res.status(404).json({
-        error: `Book data not found or incomplete for ASIN ${asin}`,
-        book: kdpBook ? { price: kdpBook.price, pageCount: kdpBook.pageCount } : null
-      });
-    }
-
-    // 4. Calcola book data per FAST ACOS
-    const price = parseKdpPrice(kdpBook.price);
-    if (!price) {
-      return res.status(400).json({ error: `Cannot parse price "${kdpBook.price}" for ASIN ${asin}` });
-    }
-
     const userConfig = await getUserAutomationSettings(userId);
-    const inkType = (kdpBook.inkType || 'black_white') as any;
-    const trimSize = (kdpBook.trimSize || '6x9') as any;
-    const royaltyPct = Number(kdpBook.royaltyPercentage) || 60;
-    const vatSettings = { useVat: userConfig.useVatInFastAcos, vatPercentage: userConfig.vatPercentage };
-    const fastAcosResult = calculateBookFastAcos(price, kdpBook.pageCount, marketplace, inkType, royaltyPct, vatSettings, trimSize);
 
-    if (!fastAcosResult) {
-      return res.status(400).json({ error: 'FAST ACOS calculation failed' });
+    // 3-4. Carica dati libro e FAST ACOS (solo per func 2-5, non serve per func1)
+    let book: any = null;
+    let fastAcosValue: number | null = null;
+    let kdpBook: any = null;
+
+    if (functionNumber >= 2) {
+      const kdpBookRepo = AppDataSource.getRepository(KdpBook);
+      kdpBook = await kdpBookRepo.findOne({ where: { userId, asin } });
+
+      if (!kdpBook || !kdpBook.price || !kdpBook.pageCount) {
+        return res.status(404).json({
+          error: `Book data not found or incomplete for ASIN ${asin}`,
+          book: kdpBook ? { price: kdpBook.price, pageCount: kdpBook.pageCount } : null
+        });
+      }
+
+      const price = parseKdpPrice(kdpBook.price);
+      if (!price) {
+        return res.status(400).json({ error: `Cannot parse price "${kdpBook.price}" for ASIN ${asin}` });
+      }
+
+      const inkType = (kdpBook.inkType || 'black_white') as any;
+      const trimSize = (kdpBook.trimSize || '6x9') as any;
+      const royaltyPct = Number(kdpBook.royaltyPercentage) || 60;
+      const vatSettings = { useVat: userConfig.useVatInFastAcos, vatPercentage: userConfig.vatPercentage };
+      const fastAcosResult = calculateBookFastAcos(price, kdpBook.pageCount, marketplace, inkType, royaltyPct, vatSettings, trimSize);
+
+      if (!fastAcosResult) {
+        return res.status(400).json({ error: 'FAST ACOS calculation failed' });
+      }
+
+      book = { price, printingCost: fastAcosResult.printingCost, royaltyPercentage: royaltyPct };
+      fastAcosValue = fastAcosResult.fastAcos;
+      console.log(`📚 [TEST] Book: "${kdpBook.title}" | price=${price} | fastAcos=${fastAcosValue}%`);
     }
-
-    const book = { price, printingCost: fastAcosResult.printingCost, royaltyPercentage: royaltyPct };
-    console.log(`📚 [TEST] Book: "${kdpBook.title}" | price=${price} | fastAcos=${fastAcosResult.fastAcos}%`);
 
     // 5. Pre-scarica il report una volta sola (condiviso tra campagne)
     let preloadedReportData: any[] | undefined;
     if (functionNumber === 1 || functionNumber === 3) {
       try {
         const { formatDateForAmazon } = await import('../utils/timeframe');
-        const reportEndDate = new Date();
         const reportStartDate = new Date();
         reportStartDate.setDate(reportStartDate.getDate() - (userConfig.func1_frequency || 3));
         const startStr = formatDateForAmazon(reportStartDate);
@@ -886,7 +892,7 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
       asin,
       marketplace,
       auth: directAuthResult,
-      book: { title: kdpBook.title, price, fastAcos: fastAcosResult.fastAcos },
+      ...(kdpBook ? { book: { title: kdpBook.title, price: book?.price, fastAcos: fastAcosValue } } : {}),
       campaignsFound: campaigns.length,
       results
     });
