@@ -155,28 +155,20 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
 
     // If we have snapshot data and no KdpDailyStats, use snapshot
     if (latestSnapshot) {
-      console.log(`📊 Using KdpSalesSnapshot data from ${latestSnapshot.createdAt}`);
-      console.log(`📊 Snapshot historicalMonths count: ${latestSnapshot.historicalMonths?.length || 0}`);
-
       // Build historical data map for easy lookup
       const historicalMap = new Map<string, any>();
       if (latestSnapshot.historicalMonths && latestSnapshot.historicalMonths.length > 0) {
         latestSnapshot.historicalMonths.forEach((hm: any) => {
           historicalMap.set(hm.month, hm);
-          console.log(`📊 Historical month: ${hm.month} = $${hm.totalRoyalties || 0}`);
         });
       }
 
       // Use snapshot data for current month if KdpDailyStats is empty
       if (currentMonthStats.grossRoyalties === 0) {
         const currentMonthKey = currentMonth.startDate.substring(0, 7); // YYYY-MM
-        console.log(`📊 Looking for current month: ${currentMonthKey}`);
-        console.log(`📊 Available months in historicalMap: ${Array.from(historicalMap.keys()).join(', ')}`);
-
         const currentMonthHistorical = historicalMap.get(currentMonthKey);
 
         if (currentMonthHistorical) {
-          console.log(`📊 ✅ Found historical data for current month: ${currentMonthKey} = $${currentMonthHistorical.totalRoyalties}`);
           currentMonthStats = {
             grossRoyalties: currentMonthHistorical.totalRoyalties || 0,
             spending: 0,
@@ -188,7 +180,6 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
             digitalOrders: currentMonthHistorical.digitalOrders || 0
           };
         } else if (latestSnapshot.totalRoyalties) {
-          console.log(`📊 ⚠️ Current month ${currentMonthKey} not in historicalMonths, using snapshot totalRoyalties: $${latestSnapshot.totalRoyalties}`);
           currentMonthStats = {
             grossRoyalties: parseFloat(latestSnapshot.totalRoyalties.toString()),
             spending: 0,
@@ -199,11 +190,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
             printOrders: latestSnapshot.printOrders || 0,
             digitalOrders: latestSnapshot.digitalOrders || 0
           };
-        } else {
-          console.log(`📊 ❌ No data found for current month ${currentMonthKey} - neither in historicalMonths nor snapshot`);
         }
-      } else {
-        console.log(`📊 Current month already has data from DB: $${currentMonthStats.grossRoyalties}`);
       }
 
       // Use historical months for previous month stats if available
@@ -212,7 +199,6 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
         const prevMonthData = historicalMap.get(prevMonthKey);
 
         if (prevMonthData) {
-          console.log(`📊 Using historical data for previous month: ${prevMonthKey} = $${prevMonthData.totalRoyalties}`);
           previousMonthStats = {
             grossRoyalties: prevMonthData.totalRoyalties || 0,
             spending: 0,
@@ -363,8 +349,6 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
     if (latestSnapshot) {
       // Use historicalMonths from snapshot if available
       if (latestSnapshot.historicalMonths && latestSnapshot.historicalMonths.length > 0) {
-        console.log(`📊 Using historical data from snapshot: ${latestSnapshot.historicalMonths.length} months`);
-
         // Map historical months by month key (YYYY-MM)
         const historicalMap = new Map();
         latestSnapshot.historicalMonths.forEach((hm: any) => {
