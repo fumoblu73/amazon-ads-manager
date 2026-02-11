@@ -670,64 +670,45 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
     // Ricrea apiService con profileId specifico per il marketplace
     apiService = createUserAmazonApiService(userId, marketplace, marketplaceProfileId);
 
-    // Step C: Test multi-endpoint per diagnostica (quale API call fallisce?)
-    const authHeaders = {
-      'Authorization': `Bearer ${workingAccessToken}`,
-      'Amazon-Advertising-API-ClientId': CLIENT_ID,
-      'Amazon-Advertising-API-Scope': marketplaceProfileId,
-      'Content-Type': 'application/json'
-    };
-    const apiTestResult: any = { endpoint };
-
-    // C1: Report request (v3)
-    try {
-      const testStart = new Date(Date.now() - 3 * 86400000).toISOString().split('T')[0];
-      const testEnd = new Date().toISOString().split('T')[0];
-      const resp = await axios.post(`${endpoint}/reporting/reports`, {
-        startDate: testStart, endDate: testEnd,
-        configuration: { adProduct: 'SPONSORED_PRODUCTS', groupBy: ['targeting'],
-          columns: ['campaignId', 'impressions', 'clicks', 'cost'],
-          reportTypeId: 'spTargeting', timeUnit: 'SUMMARY', format: 'GZIP_JSON' }
-      }, { headers: { ...authHeaders, 'Content-Type': 'application/vnd.createasyncreportrequest.v3+json' }, timeout: 15000 });
-      apiTestResult.reportV3 = { ok: true, reportId: resp.data.reportId };
-    } catch (e: any) {
-      apiTestResult.reportV3 = { ok: false, status: e.response?.status, body: e.response?.data, timeout: e.code === 'ECONNABORTED' };
-    }
-
-    // C2: v2 keywords endpoint
-    try {
-      const resp = await axios.get(`${endpoint}/v2/sp/keywords`, {
-        headers: authHeaders, params: { count: 1 }, timeout: 15000
-      });
-      apiTestResult.v2Keywords = { ok: true, count: Array.isArray(resp.data) ? resp.data.length : '?' };
-    } catch (e: any) {
-      apiTestResult.v2Keywords = { ok: false, status: e.response?.status, body: e.response?.data, timeout: e.code === 'ECONNABORTED' };
-    }
-
-    // C3: v2 targets endpoint
-    try {
-      const resp = await axios.get(`${endpoint}/v2/sp/targets`, {
-        headers: authHeaders, params: { count: 1 }, timeout: 15000
-      });
-      apiTestResult.v2Targets = { ok: true, count: Array.isArray(resp.data) ? resp.data.length : '?' };
-    } catch (e: any) {
-      apiTestResult.v2Targets = { ok: false, status: e.response?.status, body: e.response?.data, timeout: e.code === 'ECONNABORTED' };
-    }
-
-    // C4: v3 campaigns list endpoint (alternativa a v2)
-    try {
-      const resp = await axios.post(`${endpoint}/sp/campaigns/list`, {
-        maxResults: 1
-      }, { headers: authHeaders, timeout: 15000 });
-      apiTestResult.v3Campaigns = { ok: true, count: resp.data?.campaigns?.length ?? '?' };
-    } catch (e: any) {
-      apiTestResult.v3Campaigns = { ok: false, status: e.response?.status, body: e.response?.data, timeout: e.code === 'ECONNABORTED' };
-    }
-
-    console.log(`🧪 [TEST] Step C results:`, JSON.stringify(apiTestResult, null, 2));
-
-    // Se diagnosticsOnly, restituisci solo i risultati dei test API
+    // Step C: Test rapido v3 API (solo se diagnosticsOnly)
     if (diagnosticsOnly) {
+      const authHeaders = {
+        'Authorization': `Bearer ${workingAccessToken}`,
+        'Amazon-Advertising-API-ClientId': CLIENT_ID,
+        'Amazon-Advertising-API-Scope': marketplaceProfileId
+      };
+      const apiTestResult: any = { endpoint };
+
+      // C1: v3 keywords
+      try {
+        const resp = await axios.post(`${endpoint}/sp/keywords/list`, { maxResults: 1 }, {
+          headers: { ...authHeaders, 'Content-Type': 'application/vnd.spKeyword.v3+json', 'Accept': 'application/vnd.spKeyword.v3+json' }, timeout: 15000
+        });
+        apiTestResult.v3Keywords = { ok: true, count: resp.data.keywords?.length ?? 0 };
+      } catch (e: any) {
+        apiTestResult.v3Keywords = { ok: false, status: e.response?.status, body: e.response?.data };
+      }
+
+      // C2: v3 targets
+      try {
+        const resp = await axios.post(`${endpoint}/sp/targets/list`, { maxResults: 1 }, {
+          headers: { ...authHeaders, 'Content-Type': 'application/vnd.spTargetingClause.v3+json', 'Accept': 'application/vnd.spTargetingClause.v3+json' }, timeout: 15000
+        });
+        apiTestResult.v3Targets = { ok: true, count: resp.data.targetingClauses?.length ?? 0 };
+      } catch (e: any) {
+        apiTestResult.v3Targets = { ok: false, status: e.response?.status, body: e.response?.data };
+      }
+
+      // C3: v3 campaigns
+      try {
+        const resp = await axios.post(`${endpoint}/sp/campaigns/list`, { maxResults: 1 }, {
+          headers: { ...authHeaders, 'Content-Type': 'application/vnd.spcampaign.v3+json', 'Accept': 'application/vnd.spcampaign.v3+json' }, timeout: 15000
+        });
+        apiTestResult.v3Campaigns = { ok: true, count: resp.data.campaigns?.length ?? 0 };
+      } catch (e: any) {
+        apiTestResult.v3Campaigns = { ok: false, status: e.response?.status, body: e.response?.data };
+      }
+
       return res.json({
         success: true,
         diagnosticsOnly: true,
