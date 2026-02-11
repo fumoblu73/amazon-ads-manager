@@ -117,13 +117,10 @@ export async function executeFunc1(
           (r.targetId && r.targetId === itemId)
         );
 
-        if (!metrics) {
-          console.log(`   ⏭️  Nessun dato per ${itemName}`);
-          continue;
-        }
-
-        const impressions = metrics.impressions || 0;
-        const clicks = metrics.clicks || 0;
+        // Se non ci sono dati nel report, la keyword ha 0 impressioni e 0 click
+        // (Amazon include nel report solo items con almeno qualche attivita')
+        const impressions = metrics?.impressions || 0;
+        const clicks = metrics?.clicks || 0;
 
         // 6. Controlla condizione: impressions <= maxImpressions AND clicks <= maxClicks
         if (impressions <= cfg.maxImpressions && clicks <= cfg.maxClicks) {
