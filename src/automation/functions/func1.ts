@@ -16,6 +16,7 @@ export interface Func1Config {
   frequency: number;        // Default: 3 giorni
   maxImpressions: number;   // Default: 20
   maxClicks: number;        // Default: 0
+  dryRun?: boolean;         // Se true, non aggiorna i bid (solo analisi)
 }
 
 export interface Func1Result {
@@ -23,6 +24,8 @@ export interface Func1Result {
   campaignName: string;
   itemsProcessed: number;
   itemsIncreased: number;
+  dryRun: boolean;
+  reportSample?: any;
   errors: string[];
   details?: Array<{
     itemId: string;
@@ -50,6 +53,7 @@ export interface Func1Result {
  * @param marketplace - Marketplace code
  * @param apiService - Per-user Amazon API service instance
  * @param config - Configurazione parametri (opzionale)
+ * @param preloadedReportData - Report gia' scaricato (evita richieste duplicate)
  * @returns Risultato con statistiche esecuzione
  */
 export async function executeFunc1(
@@ -57,8 +61,9 @@ export async function executeFunc1(
   campaignType: 1 | 2 | 3 | 4,
   campaignName: string,
   marketplace: string,
-  apiService: any,  // Support both UserAmazonApiService and AmazonApiService
-  config?: Partial<Func1Config>
+  apiService: any,
+  config?: Partial<Func1Config>,
+  preloadedReportData?: any[]
 ): Promise<Func1Result> {
   console.log('\n════════════════════════════════════════');
   console.log('📈 FUNZIONE 1: Progressive Bidding Increase');
@@ -70,14 +75,20 @@ export async function executeFunc1(
     bidIncrease: config?.bidIncrease || 0.02,
     frequency: config?.frequency || 3,
     maxImpressions: config?.maxImpressions || 20,
-    maxClicks: config?.maxClicks || 0
+    maxClicks: config?.maxClicks || 0,
+    dryRun: config?.dryRun || false
   };
+
+  if (cfg.dryRun) {
+    console.log('🔍 MODALITA\' DRY RUN - Nessun bid verra\' aggiornato');
+  }
 
   const result: Func1Result = {
     campaignId,
     campaignName,
     itemsProcessed: 0,
     itemsIncreased: 0,
+    dryRun: cfg.dryRun!,
     errors: [],
     details: []
   };
@@ -93,11 +104,21 @@ export async function executeFunc1(
 
     console.log(`📅 Periodo analisi: ${startDateStr} - ${endDateStr} (${cfg.frequency} giorni)`);
 
-    // 2. Richiedi report delle performance
-    const reportId = await apiService.requestReport(startDateStr, ['impressions', 'clicks', 'spend', 'sales']);
+    // 2-3. Usa report pre-scaricato o richiedine uno nuovo
+    let reportData: any[];
+    if (preloadedReportData) {
+      reportData = preloadedReportData;
+      console.log(`📊 Usando report pre-scaricato (${reportData.length} righe)`);
+    } else {
+      const reportId = await apiService.requestReport(startDateStr, ['impressions', 'clicks', 'spend', 'sales']);
+      reportData = await apiService.waitAndDownloadReport(reportId);
+    }
 
-    // 3. Aspetta e scarica il report
-    const reportData = await apiService.waitAndDownloadReport(reportId);
+    // Log campione del report per debug (mostra campi reali)
+    if (reportData.length > 0) {
+      result.reportSample = reportData[0];
+      console.log(`📋 Report sample (campi):`, Object.keys(reportData[0]).join(', '));
+    }
 
     // 4. Recupera keywords o targets in base al tipo di campagna
     let items: any[] = [];
@@ -122,9 +143,12 @@ export async function executeFunc1(
         const currentBid = item.bid;
 
         // Trova le metriche del report per questo item
+        // Matching robusto: confronta come stringa e supporta campo 'targeting' del v3
+        const itemIdStr = String(itemId);
         const metrics = reportData.find((r: any) =>
-          (r.keywordId && r.keywordId === itemId) ||
-          (r.targetId && r.targetId === itemId)
+          (r.keywordId && String(r.keywordId) === itemIdStr) ||
+          (r.targetId && String(r.targetId) === itemIdStr) ||
+          (r.targeting && String(r.targeting) === itemIdStr)
         );
 
         // Se non ci sono dati nel report, la keyword ha 0 impressioni e 0 click
@@ -142,15 +166,17 @@ export async function executeFunc1(
         if (impressions <= cfg.maxImpressions && clicks <= cfg.maxClicks) {
           const newBid = currentBid + cfg.bidIncrease;
 
-          console.log(`   🔼 ${itemName}:`);
-          console.log(`      Impressions: ${impressions}, Clicks: ${clicks}`);
-          console.log(`      Bid: ${currentBid.toFixed(2)} → ${newBid.toFixed(2)}`);
+          if (!cfg.dryRun) {
+            console.log(`   🔼 ${itemName}:`);
+            console.log(`      Impressions: ${impressions}, Clicks: ${clicks}`);
+            console.log(`      Bid: ${currentBid.toFixed(2)} → ${newBid.toFixed(2)}`);
 
-          // Aggiorna il bid
-          if (campaignType === 1 || campaignType === 3) {
-            await apiService.updateKeywordBid(itemId, newBid);
-          } else {
-            await apiService.updateTargetBid(itemId, newBid);
+            // Aggiorna il bid
+            if (campaignType === 1 || campaignType === 3) {
+              await apiService.updateKeywordBid(itemId, newBid);
+            } else {
+              await apiService.updateTargetBid(itemId, newBid);
+            }
           }
 
           result.itemsIncreased++;
@@ -166,9 +192,9 @@ export async function executeFunc1(
     }
 
     console.log('────────────────────────────────────────');
-    console.log(`✅ Funzione 1 completata`);
+    console.log(`✅ Funzione 1 completata${cfg.dryRun ? ' (DRY RUN)' : ''}`);
     console.log(`   Items analizzati: ${result.itemsProcessed}`);
-    console.log(`   Bid aumentati: ${result.itemsIncreased}`);
+    console.log(`   Bid ${cfg.dryRun ? 'da aumentare' : 'aumentati'}: ${result.itemsIncreased}`);
     console.log(`   Errori: ${result.errors.length}`);
     console.log('════════════════════════════════════════\n');
 

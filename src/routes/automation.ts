@@ -514,7 +514,7 @@ router.post('/test-bid-increase', authMiddleware, requireAmazonAuth, async (req:
 router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
-    const { asin, functionNumber, marketplace, diagnosticsOnly } = req.body;
+    const { asin, functionNumber, marketplace, diagnosticsOnly, dryRun } = req.body;
 
     if (!asin || !functionNumber || !marketplace) {
       return res.status(400).json({ error: 'asin, functionNumber (1-5), and marketplace are required' });
@@ -764,7 +764,25 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
     const book = { price, printingCost: fastAcosResult.printingCost, royaltyPercentage: royaltyPct };
     console.log(`📚 [TEST] Book: "${kdpBook.title}" | price=${price} | fastAcos=${fastAcosResult.fastAcos}%`);
 
-    // 5. Esegui la funzione su ogni campagna compatibile
+    // 5. Pre-scarica il report una volta sola (condiviso tra campagne)
+    let preloadedReportData: any[] | undefined;
+    if (functionNumber === 1 || functionNumber === 3) {
+      try {
+        const { formatDateForAmazon } = await import('../utils/timeframe');
+        const reportEndDate = new Date();
+        const reportStartDate = new Date();
+        reportStartDate.setDate(reportStartDate.getDate() - (userConfig.func1_frequency || 3));
+        const startStr = formatDateForAmazon(reportStartDate);
+        console.log(`📊 [TEST] Pre-loading report (${startStr} → oggi)...`);
+        const reportId = await apiService.requestReport(startStr, ['impressions', 'clicks', 'spend', 'sales']);
+        preloadedReportData = await apiService.waitAndDownloadReport(reportId);
+        console.log(`✅ [TEST] Report pre-scaricato: ${preloadedReportData.length} righe`);
+      } catch (reportErr: any) {
+        console.error(`❌ [TEST] Errore pre-loading report:`, reportErr.message);
+      }
+    }
+
+    // 6. Esegui la funzione su ogni campagna compatibile
     const results: any[] = [];
     const funcNames = ['', 'Progressive Bidding', 'Placement Optimization', 'Targeting Optimization', 'Auto Ad Optimization', 'Campaign Feeding'];
 
@@ -800,8 +818,9 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
               bidIncrease: userConfig.func1_bidIncrease,
               frequency: userConfig.func1_frequency,
               maxImpressions: userConfig.func1_impressions,
-              maxClicks: userConfig.func1_clicks
-            });
+              maxClicks: userConfig.func1_clicks,
+              dryRun: !!dryRun
+            }, preloadedReportData);
             break;
 
           case 2: {
