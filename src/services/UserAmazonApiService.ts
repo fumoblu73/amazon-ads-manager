@@ -348,6 +348,15 @@ export class UserAmazonApiService {
 
       return reportId;
     } catch (error: any) {
+      // 425 = "duplicate request" - Amazon restituisce l'ID del report gia' esistente
+      if (error.response?.status === 425 && error.response?.data?.detail) {
+        const match = error.response.data.detail.match(/duplicate of\s*:\s*([a-f0-9-]+)/i);
+        if (match) {
+          const existingReportId = match[1];
+          console.log(`♻️ [API v3] Report already exists (425 duplicate). Using: ${existingReportId}`);
+          return existingReportId;
+        }
+      }
       console.error('❌ [API v3] Error requesting report:', error.response?.data || error.message);
       throw error;
     }
@@ -831,7 +840,7 @@ export class UserAmazonApiService {
    * Aspetta che il report sia pronto e lo scarica
    * Amazon API v3 può richiedere fino a 5-10 minuti per generare report
    */
-  async waitAndDownloadReport(reportId: string, maxAttempts: number = 60): Promise<any[]> {
+  async waitAndDownloadReport(reportId: string, maxAttempts: number = 120): Promise<any[]> {
     try {
       console.log(`⏳ [API v3] Waiting for report ${reportId} to complete...`);
       console.log(`   [API v3] Max timeout: ${maxAttempts * 5} seconds (${(maxAttempts * 5 / 60).toFixed(1)} minutes)`);
