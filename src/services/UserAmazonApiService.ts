@@ -179,8 +179,16 @@ export class UserAmazonApiService {
 
   async getCampaign(campaignId: string): Promise<any> {
     try {
-      const response = await this.client.get(`/v2/sp/campaigns/${campaignId}`);
-      return response.data;
+      const response = await this.client.post('/sp/campaigns/list', {
+        campaignIdFilter: { include: [campaignId] }
+      }, {
+        headers: {
+          'Content-Type': 'application/vnd.spcampaign.v3+json',
+          'Accept': 'application/vnd.spcampaign.v3+json'
+        }
+      });
+      const campaigns = response.data.campaigns || [];
+      return campaigns[0] || null;
     } catch (error) {
       console.error(`❌ Error fetching campaign ${campaignId}:`, error);
       throw error;
@@ -193,13 +201,22 @@ export class UserAmazonApiService {
 
   async getKeywords(campaignId?: string): Promise<any[]> {
     try {
-      console.log('📥 Fetching keywords...');
+      console.log('📥 Fetching keywords (v3)...');
 
-      const params = campaignId ? { campaignIdFilter: campaignId } : {};
-      const response = await this.client.get('/v2/sp/keywords', { params });
+      const body: any = { maxResults: 10000 };
+      if (campaignId) {
+        body.campaignIdFilter = { include: [campaignId] };
+      }
+      const response = await this.client.post('/sp/keywords/list', body, {
+        headers: {
+          'Content-Type': 'application/vnd.spKeyword.v3+json',
+          'Accept': 'application/vnd.spKeyword.v3+json'
+        }
+      });
 
-      console.log(`✅ Found ${response.data.length} keywords`);
-      return response.data;
+      const keywords = response.data.keywords || [];
+      console.log(`✅ Found ${keywords.length} keywords`);
+      return keywords;
     } catch (error) {
       console.error('❌ Error fetching keywords:', error);
       throw error;
@@ -208,10 +225,15 @@ export class UserAmazonApiService {
 
   async updateKeywordBid(keywordId: string, newBid: number): Promise<any> {
     try {
-      console.log(`🔧 Updating keyword ${keywordId} bid to ${newBid}...`);
+      console.log(`🔧 Updating keyword ${keywordId} bid to ${newBid} (v3)...`);
 
-      const response = await this.client.put(`/v2/sp/keywords/${keywordId}`, {
-        bid: newBid
+      const response = await this.client.put('/sp/keywords', {
+        keywords: [{ keywordId, bid: newBid }]
+      }, {
+        headers: {
+          'Content-Type': 'application/vnd.spKeyword.v3+json',
+          'Accept': 'application/vnd.spKeyword.v3+json'
+        }
       });
 
       console.log(`✅ Bid updated successfully`);
@@ -224,10 +246,15 @@ export class UserAmazonApiService {
 
   async updateKeywordState(keywordId: string, state: 'enabled' | 'paused'): Promise<any> {
     try {
-      console.log(`🔧 Setting keyword ${keywordId} to ${state}...`);
+      console.log(`🔧 Setting keyword ${keywordId} to ${state} (v3)...`);
 
-      const response = await this.client.put(`/v2/sp/keywords/${keywordId}`, {
-        state: state
+      const response = await this.client.put('/sp/keywords', {
+        keywords: [{ keywordId, state: state.toUpperCase() }]
+      }, {
+        headers: {
+          'Content-Type': 'application/vnd.spKeyword.v3+json',
+          'Accept': 'application/vnd.spKeyword.v3+json'
+        }
       });
 
       console.log(`✅ Keyword state updated`);
@@ -405,35 +432,43 @@ export class UserAmazonApiService {
     }
   ): Promise<any> {
     try {
-      console.log(`🔧 Updating placements for campaign ${campaignId}...`);
+      console.log(`🔧 Updating placements for campaign ${campaignId} (v3)...`);
 
-      const bidding = {
-        placementBidding: []
-      } as any;
+      const dynamicBidding: any[] = [];
 
       if (placements.topOfSearch !== undefined) {
-        bidding.placementBidding.push({
+        dynamicBidding.push({
           placement: 'PLACEMENT_TOP',
           percentage: placements.topOfSearch
         });
       }
 
-      if (placements.restOfSearch !== undefined) {
-        bidding.placementBidding.push({
-          placement: 'PLACEMENT_PRODUCT_PAGE',
-          percentage: placements.restOfSearch
-        });
-      }
-
       if (placements.productPages !== undefined) {
-        bidding.placementBidding.push({
-          placement: 'PLACEMENT_REST_OF_SEARCH',
+        dynamicBidding.push({
+          placement: 'PLACEMENT_PRODUCT_PAGE',
           percentage: placements.productPages
         });
       }
 
-      const response = await this.client.put(`/v2/sp/campaigns/${campaignId}`, {
-        bidding
+      if (placements.restOfSearch !== undefined) {
+        dynamicBidding.push({
+          placement: 'PLACEMENT_REST_OF_SEARCH',
+          percentage: placements.restOfSearch
+        });
+      }
+
+      const response = await this.client.put('/sp/campaigns', {
+        campaigns: [{
+          campaignId,
+          dynamicBidding: {
+            placementBidding: dynamicBidding
+          }
+        }]
+      }, {
+        headers: {
+          'Content-Type': 'application/vnd.spcampaign.v3+json',
+          'Accept': 'application/vnd.spcampaign.v3+json'
+        }
       });
 
       console.log(`✅ Placements updated`);
@@ -450,13 +485,22 @@ export class UserAmazonApiService {
 
   async getTargets(campaignId?: string): Promise<any[]> {
     try {
-      console.log('📥 Fetching targets...');
+      console.log('📥 Fetching targets (v3)...');
 
-      const params = campaignId ? { campaignIdFilter: campaignId } : {};
-      const response = await this.client.get('/v2/sp/targets', { params });
+      const body: any = { maxResults: 10000 };
+      if (campaignId) {
+        body.campaignIdFilter = { include: [campaignId] };
+      }
+      const response = await this.client.post('/sp/targets/list', body, {
+        headers: {
+          'Content-Type': 'application/vnd.spTargetingClause.v3+json',
+          'Accept': 'application/vnd.spTargetingClause.v3+json'
+        }
+      });
 
-      console.log(`✅ Found ${response.data.length} targets`);
-      return response.data;
+      const targets = response.data.targetingClauses || [];
+      console.log(`✅ Found ${targets.length} targets`);
+      return targets;
     } catch (error) {
       console.error('❌ Error fetching targets:', error);
       throw error;
@@ -465,10 +509,15 @@ export class UserAmazonApiService {
 
   async updateTargetBid(targetId: string, newBid: number): Promise<any> {
     try {
-      console.log(`🔧 Updating target ${targetId} bid to ${newBid}...`);
+      console.log(`🔧 Updating target ${targetId} bid to ${newBid} (v3)...`);
 
-      const response = await this.client.put(`/v2/sp/targets/${targetId}`, {
-        bid: newBid
+      const response = await this.client.put('/sp/targets', {
+        targetingClauses: [{ targetId, bid: newBid }]
+      }, {
+        headers: {
+          'Content-Type': 'application/vnd.spTargetingClause.v3+json',
+          'Accept': 'application/vnd.spTargetingClause.v3+json'
+        }
       });
 
       console.log(`✅ Target bid updated`);
@@ -481,10 +530,15 @@ export class UserAmazonApiService {
 
   async updateTargetState(targetId: string, state: 'enabled' | 'paused'): Promise<any> {
     try {
-      console.log(`🔧 Setting target ${targetId} to ${state}...`);
+      console.log(`🔧 Setting target ${targetId} to ${state} (v3)...`);
 
-      const response = await this.client.put(`/v2/sp/targets/${targetId}`, {
-        state: state
+      const response = await this.client.put('/sp/targets', {
+        targetingClauses: [{ targetId, state: state.toUpperCase() }]
+      }, {
+        headers: {
+          'Content-Type': 'application/vnd.spTargetingClause.v3+json',
+          'Accept': 'application/vnd.spTargetingClause.v3+json'
+        }
       });
 
       console.log(`✅ Target state updated`);
@@ -501,17 +555,22 @@ export class UserAmazonApiService {
 
   async getAutoTargetingGroups(campaignId: string): Promise<any[]> {
     try {
-      console.log(`📥 Fetching auto targeting groups for campaign ${campaignId}...`);
+      console.log(`📥 Fetching auto targeting groups for campaign ${campaignId} (v3)...`);
 
-      const response = await this.client.get('/v2/sp/targets', {
-        params: {
-          campaignIdFilter: campaignId,
-          expressionType: 'AUTO'
+      const response = await this.client.post('/sp/targets/list', {
+        campaignIdFilter: { include: [campaignId] },
+        expressionTypeFilter: { include: ['AUTO'] },
+        maxResults: 10000
+      }, {
+        headers: {
+          'Content-Type': 'application/vnd.spTargetingClause.v3+json',
+          'Accept': 'application/vnd.spTargetingClause.v3+json'
         }
       });
 
-      console.log(`✅ Found ${response.data.length} auto targeting groups`);
-      return response.data;
+      const targets = response.data.targetingClauses || [];
+      console.log(`✅ Found ${targets.length} auto targeting groups`);
+      return targets;
     } catch (error) {
       console.error(`❌ Error fetching auto targeting groups:`, error);
       throw error;
@@ -525,15 +584,25 @@ export class UserAmazonApiService {
     matchType: 'negativeExact' | 'negativePhrase'
   ): Promise<any> {
     try {
-      console.log(`➖ Adding negative keyword "${keyword}" (${matchType})...`);
+      console.log(`➖ Adding negative keyword "${keyword}" (${matchType}) (v3)...`);
 
-      const response = await this.client.post('/v2/sp/negativeKeywords', [{
-        campaignId,
-        adGroupId,
-        keywordText: keyword,
-        matchType,
-        state: 'enabled'
-      }]);
+      // v3: matchType usa UPPERCASE
+      const v3MatchType = matchType === 'negativeExact' ? 'NEGATIVE_EXACT' : 'NEGATIVE_PHRASE';
+
+      const response = await this.client.post('/sp/negativeKeywords', {
+        negativeKeywords: [{
+          campaignId,
+          adGroupId,
+          keywordText: keyword,
+          matchType: v3MatchType,
+          state: 'ENABLED'
+        }]
+      }, {
+        headers: {
+          'Content-Type': 'application/vnd.spNegativeKeyword.v3+json',
+          'Accept': 'application/vnd.spNegativeKeyword.v3+json'
+        }
+      });
 
       console.log(`✅ Negative keyword added`);
       return response.data;
@@ -549,18 +618,24 @@ export class UserAmazonApiService {
     asin: string
   ): Promise<any> {
     try {
-      console.log(`➖ Adding negative target ASIN ${asin}...`);
+      console.log(`➖ Adding negative target ASIN ${asin} (v3)...`);
 
-      const response = await this.client.post('/v2/sp/negativeTargets', [{
-        campaignId,
-        adGroupId,
-        expression: [{
-          type: 'asinSameAs',
-          value: asin
-        }],
-        expressionType: 'manual',
-        state: 'enabled'
-      }]);
+      const response = await this.client.post('/sp/negativeTargets', {
+        negativeTargetingClauses: [{
+          campaignId,
+          adGroupId,
+          expression: [{
+            type: 'ASIN_SAME_AS',
+            value: asin
+          }],
+          state: 'ENABLED'
+        }]
+      }, {
+        headers: {
+          'Content-Type': 'application/vnd.spNegativeTargetingClause.v3+json',
+          'Accept': 'application/vnd.spNegativeTargetingClause.v3+json'
+        }
+      });
 
       console.log(`✅ Negative target added`);
       return response.data;
@@ -680,18 +755,25 @@ export class UserAmazonApiService {
     }>
   ): Promise<any> {
     try {
-      console.log(`➕ Adding ${keywords.length} keywords to campaign ${campaignId}...`);
+      console.log(`➕ Adding ${keywords.length} keywords to campaign ${campaignId} (v3)...`);
 
       const keywordsData = keywords.map(kw => ({
         campaignId,
         adGroupId,
         keywordText: kw.keywordText,
-        matchType: kw.matchType,
+        matchType: kw.matchType.toUpperCase(),
         bid: kw.bid,
-        state: 'enabled'
+        state: 'ENABLED'
       }));
 
-      const response = await this.client.post('/v2/sp/keywords', keywordsData);
+      const response = await this.client.post('/sp/keywords', {
+        keywords: keywordsData
+      }, {
+        headers: {
+          'Content-Type': 'application/vnd.spKeyword.v3+json',
+          'Accept': 'application/vnd.spKeyword.v3+json'
+        }
+      });
 
       console.log(`✅ Keywords added`);
       return response.data;
@@ -711,21 +793,27 @@ export class UserAmazonApiService {
     }>
   ): Promise<any> {
     try {
-      console.log(`➕ Adding ${targets.length} targets to campaign ${campaignId}...`);
+      console.log(`➕ Adding ${targets.length} targets to campaign ${campaignId} (v3)...`);
 
       const targetsData = targets.map(target => ({
         campaignId,
         adGroupId,
         expression: [{
-          type: 'asinSameAs',
+          type: 'ASIN_SAME_AS',
           value: target.asin
         }],
-        expressionType: target.expressionType,
         bid: target.bid,
-        state: 'enabled'
+        state: 'ENABLED'
       }));
 
-      const response = await this.client.post('/v2/sp/targets', targetsData);
+      const response = await this.client.post('/sp/targets', {
+        targetingClauses: targetsData
+      }, {
+        headers: {
+          'Content-Type': 'application/vnd.spTargetingClause.v3+json',
+          'Accept': 'application/vnd.spTargetingClause.v3+json'
+        }
+      });
 
       console.log(`✅ Targets added`);
       return response.data;
