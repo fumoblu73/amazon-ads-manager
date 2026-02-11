@@ -24,6 +24,15 @@ export interface Func1Result {
   itemsProcessed: number;
   itemsIncreased: number;
   errors: string[];
+  details?: Array<{
+    itemId: string;
+    itemName: string;
+    currentBid: number;
+    impressions: number;
+    clicks: number;
+    action: 'increased' | 'skipped' | 'no_bid';
+    newBid?: number;
+  }>;
 }
 
 /**
@@ -69,7 +78,8 @@ export async function executeFunc1(
     campaignName,
     itemsProcessed: 0,
     itemsIncreased: 0,
-    errors: []
+    errors: [],
+    details: []
   };
 
   try {
@@ -122,6 +132,12 @@ export async function executeFunc1(
         const impressions = metrics?.impressions || 0;
         const clicks = metrics?.clicks || 0;
 
+        // Skip items senza bid (es. state=paused senza bid impostato)
+        if (currentBid === undefined || currentBid === null) {
+          result.details!.push({ itemId, itemName, currentBid: 0, impressions, clicks, action: 'no_bid' });
+          continue;
+        }
+
         // 6. Controlla condizione: impressions <= maxImpressions AND clicks <= maxClicks
         if (impressions <= cfg.maxImpressions && clicks <= cfg.maxClicks) {
           const newBid = currentBid + cfg.bidIncrease;
@@ -138,6 +154,9 @@ export async function executeFunc1(
           }
 
           result.itemsIncreased++;
+          result.details!.push({ itemId, itemName, currentBid, impressions, clicks, action: 'increased', newBid });
+        } else {
+          result.details!.push({ itemId, itemName, currentBid, impressions, clicks, action: 'skipped' });
         }
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : 'Unknown error';
