@@ -514,7 +514,7 @@ router.post('/test-bid-increase', authMiddleware, requireAmazonAuth, async (req:
 router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
-    const { asin, functionNumber, marketplace } = req.body;
+    const { asin, functionNumber, marketplace, diagnosticsOnly } = req.body;
 
     if (!asin || !functionNumber || !marketplace) {
       return res.status(400).json({ error: 'asin, functionNumber (1-5), and marketplace are required' });
@@ -688,43 +688,54 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
         configuration: { adProduct: 'SPONSORED_PRODUCTS', groupBy: ['targeting'],
           columns: ['campaignId', 'impressions', 'clicks', 'cost'],
           reportTypeId: 'spTargeting', timeUnit: 'SUMMARY', format: 'GZIP_JSON' }
-      }, { headers: { ...authHeaders, 'Content-Type': 'application/vnd.createasyncreportrequest.v3+json' } });
+      }, { headers: { ...authHeaders, 'Content-Type': 'application/vnd.createasyncreportrequest.v3+json' }, timeout: 15000 });
       apiTestResult.reportV3 = { ok: true, reportId: resp.data.reportId };
     } catch (e: any) {
-      apiTestResult.reportV3 = { ok: false, status: e.response?.status, body: e.response?.data };
+      apiTestResult.reportV3 = { ok: false, status: e.response?.status, body: e.response?.data, timeout: e.code === 'ECONNABORTED' };
     }
 
     // C2: v2 keywords endpoint
     try {
       const resp = await axios.get(`${endpoint}/v2/sp/keywords`, {
-        headers: authHeaders, params: { count: 1 }
+        headers: authHeaders, params: { count: 1 }, timeout: 15000
       });
       apiTestResult.v2Keywords = { ok: true, count: Array.isArray(resp.data) ? resp.data.length : '?' };
     } catch (e: any) {
-      apiTestResult.v2Keywords = { ok: false, status: e.response?.status, body: e.response?.data };
+      apiTestResult.v2Keywords = { ok: false, status: e.response?.status, body: e.response?.data, timeout: e.code === 'ECONNABORTED' };
     }
 
     // C3: v2 targets endpoint
     try {
       const resp = await axios.get(`${endpoint}/v2/sp/targets`, {
-        headers: authHeaders, params: { count: 1 }
+        headers: authHeaders, params: { count: 1 }, timeout: 15000
       });
       apiTestResult.v2Targets = { ok: true, count: Array.isArray(resp.data) ? resp.data.length : '?' };
     } catch (e: any) {
-      apiTestResult.v2Targets = { ok: false, status: e.response?.status, body: e.response?.data };
+      apiTestResult.v2Targets = { ok: false, status: e.response?.status, body: e.response?.data, timeout: e.code === 'ECONNABORTED' };
     }
 
     // C4: v3 campaigns list endpoint (alternativa a v2)
     try {
       const resp = await axios.post(`${endpoint}/sp/campaigns/list`, {
         maxResults: 1
-      }, { headers: authHeaders });
+      }, { headers: authHeaders, timeout: 15000 });
       apiTestResult.v3Campaigns = { ok: true, count: resp.data?.campaigns?.length ?? '?' };
     } catch (e: any) {
-      apiTestResult.v3Campaigns = { ok: false, status: e.response?.status, body: e.response?.data };
+      apiTestResult.v3Campaigns = { ok: false, status: e.response?.status, body: e.response?.data, timeout: e.code === 'ECONNABORTED' };
     }
 
     console.log(`🧪 [TEST] Step C results:`, JSON.stringify(apiTestResult, null, 2));
+
+    // Se diagnosticsOnly, restituisci solo i risultati dei test API
+    if (diagnosticsOnly) {
+      return res.json({
+        success: true,
+        diagnosticsOnly: true,
+        marketplace,
+        auth: directAuthResult,
+        apiTest: apiTestResult
+      });
+    }
 
     // 2. Trova le campagne dell'utente per questo ASIN
     const campaignRepo = AppDataSource.getRepository(Campaign);
