@@ -720,18 +720,26 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
 
     // 2. Trova le campagne dell'utente per questo ASIN
     const campaignRepo = AppDataSource.getRepository(Campaign);
-    const campaigns = await campaignRepo.find({
+    let campaigns = await campaignRepo.find({
       where: { userId, advertisedAsin: asin, marketplace }
     });
 
+    // Fallback: se advertisedAsin non e' popolato, cerca tutte le campagne del marketplace
     if (campaigns.length === 0) {
-      return res.status(404).json({
-        error: `No campaigns found for ASIN ${asin} in marketplace ${marketplace}`,
-        hint: 'Make sure campaigns have advertisedAsin set (run automation once to auto-discover)'
+      console.log(`⚠️ [TEST] No campaigns with advertisedAsin=${asin}, trying all campaigns for marketplace ${marketplace}...`);
+      campaigns = await campaignRepo.find({
+        where: { userId, marketplace }
       });
     }
 
-    console.log(`📊 [TEST] Found ${campaigns.length} campaigns for ASIN ${asin}`);
+    if (campaigns.length === 0) {
+      return res.status(404).json({
+        error: `No campaigns found for user in marketplace ${marketplace}`,
+        hint: 'Make sure campaigns are synced from Amazon (check /api/campaigns/sync)'
+      });
+    }
+
+    console.log(`📊 [TEST] Found ${campaigns.length} campaigns for ASIN ${asin} (marketplace: ${marketplace})`);
 
     const userConfig = await getUserAutomationSettings(userId);
 
