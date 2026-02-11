@@ -867,7 +867,6 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
       asin,
       marketplace,
       auth: directAuthResult,
-      apiTest: apiTestResult,
       book: { title: kdpBook.title, price, fastAcos: fastAcosResult.fastAcos },
       campaignsFound: campaigns.length,
       results
