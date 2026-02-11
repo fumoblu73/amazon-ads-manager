@@ -194,8 +194,6 @@ export default function KdpDashboard() {
 
   useEffect(() => {
     loadDashboardData();
-    const interval = setInterval(loadDashboardData, 30000);
-    return () => clearInterval(interval);
   }, []);
 
   const loadDashboardData = async () => {

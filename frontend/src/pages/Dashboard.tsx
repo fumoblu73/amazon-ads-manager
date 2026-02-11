@@ -63,10 +63,6 @@ export default function Dashboard() {
     };
 
     fetchData();
-
-    // Auto-refresh ogni 30 secondi
-    const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
   }, []);
 
   if (loading) {
