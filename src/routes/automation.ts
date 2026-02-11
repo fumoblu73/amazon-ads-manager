@@ -732,10 +732,44 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
       });
     }
 
+    // Fallback 2: se il DB e' vuoto, carica le campagne direttamente dall'API Amazon
+    if (campaigns.length === 0) {
+      console.log(`⚠️ [TEST] No campaigns in DB. Fetching from Amazon API...`);
+      try {
+        const listResp = await apiService.getCampaigns();
+        const amazonCampaigns = listResp || [];
+        console.log(`📊 [TEST] Amazon API returned ${amazonCampaigns.length} campaigns`);
+
+        // Salva nel DB e usa direttamente
+        for (const ac of amazonCampaigns) {
+          const existing = await campaignRepo.findOne({
+            where: { amazonCampaignId: String(ac.campaignId), marketplace }
+          });
+          if (!existing) {
+            const newCamp = campaignRepo.create({
+              amazonCampaignId: String(ac.campaignId),
+              name: ac.name,
+              state: ac.state || 'enabled',
+              marketplace,
+              userId,
+              dailyBudget: ac.budget?.budget ? parseFloat(ac.budget.budget) : null,
+              campaignType: ac.campaignType || 'sponsoredProducts',
+              biddingStrategy: ac.dynamicBidding?.strategy || null
+            });
+            await campaignRepo.save(newCamp);
+            campaigns.push(newCamp);
+          }
+        }
+        console.log(`✅ [TEST] Synced ${campaigns.length} campaigns from Amazon`);
+      } catch (syncErr: any) {
+        console.error(`❌ [TEST] Amazon campaign sync failed:`, syncErr.message);
+      }
+    }
+
     if (campaigns.length === 0) {
       return res.status(404).json({
         error: `No campaigns found for user in marketplace ${marketplace}`,
-        hint: 'Make sure campaigns are synced from Amazon (check /api/campaigns/sync)'
+        hint: 'Amazon API returned no campaigns. Check profileId and API credentials.'
       });
     }
 
