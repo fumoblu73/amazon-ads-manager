@@ -19,6 +19,7 @@ export interface Func5Config {
   bidExact: number;         // Default: 0.50
   bidPhrase: number;        // Default: 0.40
   bidExpanded: number;      // Default: 0.30
+  dryRun?: boolean;         // Se true, non aggiunge keyword/target (solo analisi)
 }
 
 export interface CampaignMapping {
@@ -40,6 +41,7 @@ export interface Func5Result {
   searchTermsProcessed: number;
   keywordsAdded: number;
   targetsAdded: number;
+  dryRun: boolean;
   destinationCampaigns: {
     campaign1?: number;
     campaign2?: number;
@@ -47,6 +49,12 @@ export interface Func5Result {
     campaign4?: number;
   };
   errors: string[];
+  details?: Array<{
+    searchTerm: string;
+    isAsin: boolean;
+    orders: number;
+    destinations: string[];
+  }>;
 }
 
 /**
@@ -96,8 +104,13 @@ export async function executeFunc5(
     bidBroad: config?.bidBroad || 0.30,
     bidExact: config?.bidExact || 0.50,
     bidPhrase: config?.bidPhrase || 0.40,
-    bidExpanded: config?.bidExpanded || 0.30
+    bidExpanded: config?.bidExpanded || 0.30,
+    dryRun: config?.dryRun || false
   };
+
+  if (cfg.dryRun) {
+    console.log('🔍 MODALITA\' DRY RUN - Nessuna keyword/target verra\' aggiunta');
+  }
 
   const result: Func5Result = {
     sourceCampaignId,
@@ -105,8 +118,10 @@ export async function executeFunc5(
     searchTermsProcessed: 0,
     keywordsAdded: 0,
     targetsAdded: 0,
+    dryRun: cfg.dryRun!,
     destinationCampaigns: {},
-    errors: []
+    errors: [],
+    details: []
   };
 
   try {
@@ -141,47 +156,32 @@ export async function executeFunc5(
         // Determina se è una keyword o un ASIN
         const isAsin = /^B[0-9A-Z]{9}$/.test(term);
 
-        console.log(`\n   ${isAsin ? '📦' : '🔑'} "${term}" (${orders} ordini)`);
+        console.log(`\n   ${isAsin ? '📦' : '🔑'} ${cfg.dryRun ? '[DRY RUN] ' : ''}"${term}" (${orders} ordini)`);
+
+        const destinations: string[] = [];
 
         // Esegue il feeding in base al tipo di campagna sorgente
         if (sourceCampaignType === 5) {
-          // ============================================
-          // CAMPAGNA 5 (Auto) → Altre
-          // ============================================
-          await feedFromCampaign5(term, isAsin, marketplace, campaignMapping, cfg, result, apiService);
-
+          await feedFromCampaign5(term, isAsin, marketplace, campaignMapping, cfg, result, apiService, cfg.dryRun!, destinations);
         } else if (sourceCampaignType === 1) {
-          // ============================================
-          // CAMPAGNA 1 (Keyword Broad) → Altre
-          // ============================================
           if (!isAsin) {
-            await feedFromCampaign1(term, marketplace, campaignMapping, cfg, result, apiService);
+            await feedFromCampaign1(term, marketplace, campaignMapping, cfg, result, apiService, cfg.dryRun!, destinations);
           }
-
         } else if (sourceCampaignType === 3) {
-          // ============================================
-          // CAMPAGNA 3 (Keyword Super) → Altre
-          // ============================================
           if (!isAsin) {
-            await feedFromCampaign3(term, marketplace, campaignMapping, cfg, result, apiService);
+            await feedFromCampaign3(term, marketplace, campaignMapping, cfg, result, apiService, cfg.dryRun!, destinations);
           }
-
         } else if (sourceCampaignType === 2) {
-          // ============================================
-          // CAMPAGNA 2 (Product Exact) → Altre
-          // ============================================
           if (isAsin) {
-            await feedFromCampaign2(term, marketplace, campaignMapping, cfg, result, apiService);
+            await feedFromCampaign2(term, marketplace, campaignMapping, cfg, result, apiService, cfg.dryRun!, destinations);
           }
-
         } else if (sourceCampaignType === 4) {
-          // ============================================
-          // CAMPAGNA 4 (Product Super) → Altre
-          // ============================================
           if (isAsin) {
-            await feedFromCampaign4(term, marketplace, campaignMapping, cfg, result, apiService);
+            await feedFromCampaign4(term, marketplace, campaignMapping, cfg, result, apiService, cfg.dryRun!, destinations);
           }
         }
+
+        result.details!.push({ searchTerm: term, isAsin, orders, destinations });
 
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -191,10 +191,10 @@ export async function executeFunc5(
     }
 
     console.log('────────────────────────────────────────');
-    console.log(`✅ Funzione 5 completata`);
+    console.log(`✅ Funzione 5 completata${cfg.dryRun ? ' (DRY RUN)' : ''}`);
     console.log(`   Search terms processati: ${result.searchTermsProcessed}`);
-    console.log(`   Keywords aggiunte: ${result.keywordsAdded}`);
-    console.log(`   Targets aggiunti: ${result.targetsAdded}`);
+    console.log(`   Keywords ${cfg.dryRun ? 'da aggiungere' : 'aggiunte'}: ${result.keywordsAdded}`);
+    console.log(`   Targets ${cfg.dryRun ? 'da aggiungere' : 'aggiunti'}: ${result.targetsAdded}`);
     console.log(`   Distribuzioni:`);
     if (result.destinationCampaigns.campaign1) console.log(`      → Campagna 1: ${result.destinationCampaigns.campaign1}`);
     if (result.destinationCampaigns.campaign2) console.log(`      → Campagna 2: ${result.destinationCampaigns.campaign2}`);
@@ -228,52 +228,56 @@ async function feedFromCampaign5(
   mapping: CampaignMapping,
   cfg: Func5Config,
   result: Func5Result,
-  apiService: any  // Support both UserAmazonApiService and AmazonApiService
+  apiService: any,
+  dryRun: boolean,
+  destinations: string[]
 ): Promise<void> {
   if (isAsin) {
-    // ASIN → Camp.2 (Exact) + Camp.4 (Expanded)
     if (mapping.campaign2Id && mapping.campaign2AdGroupId) {
-      await apiService.addTargets(mapping.campaign2Id, mapping.campaign2AdGroupId, [{
-        asin: term,
-        bid: cfg.bidBroad,
-        expressionType: 'manual'
-      }]);
+      if (!dryRun) {
+        await apiService.addTargets(mapping.campaign2Id, mapping.campaign2AdGroupId, [{
+          asin: term, bid: cfg.bidBroad, expressionType: 'manual'
+        }]);
+      }
       result.targetsAdded++;
       result.destinationCampaigns.campaign2 = (result.destinationCampaigns.campaign2 || 0) + 1;
-      console.log(`      ✅ → Campagna 2 (Exact)`);
+      destinations.push('Campaign 2 (Exact)');
+      console.log(`      ✅ ${dryRun ? '[DRY RUN] ' : ''}→ Campagna 2 (Exact)`);
     }
-
     if (mapping.campaign4Id && mapping.campaign4AdGroupId) {
-      await apiService.addTargets(mapping.campaign4Id, mapping.campaign4AdGroupId, [{
-        asin: term,
-        bid: cfg.bidExpanded,
-        expressionType: 'manual'
-      }]);
+      if (!dryRun) {
+        await apiService.addTargets(mapping.campaign4Id, mapping.campaign4AdGroupId, [{
+          asin: term, bid: cfg.bidExpanded, expressionType: 'manual'
+        }]);
+      }
       result.targetsAdded++;
       result.destinationCampaigns.campaign4 = (result.destinationCampaigns.campaign4 || 0) + 1;
-      console.log(`      ✅ → Campagna 4 (Expanded)`);
+      destinations.push('Campaign 4 (Expanded)');
+      console.log(`      ✅ ${dryRun ? '[DRY RUN] ' : ''}→ Campagna 4 (Expanded)`);
     }
   } else {
-    // Keyword → Camp.1 (Broad) + Camp.3 (Exact+Phrase)
     if (mapping.campaign1Id && mapping.campaign1AdGroupId) {
-      await apiService.addKeywords(mapping.campaign1Id, mapping.campaign1AdGroupId, [{
-        keywordText: term,
-        matchType: 'broad',
-        bid: cfg.bidBroad
-      }]);
+      if (!dryRun) {
+        await apiService.addKeywords(mapping.campaign1Id, mapping.campaign1AdGroupId, [{
+          keywordText: term, matchType: 'broad', bid: cfg.bidBroad
+        }]);
+      }
       result.keywordsAdded++;
       result.destinationCampaigns.campaign1 = (result.destinationCampaigns.campaign1 || 0) + 1;
-      console.log(`      ✅ → Campagna 1 (Broad)`);
+      destinations.push('Campaign 1 (Broad)');
+      console.log(`      ✅ ${dryRun ? '[DRY RUN] ' : ''}→ Campagna 1 (Broad)`);
     }
-
     if (mapping.campaign3Id && mapping.campaign3AdGroupId) {
-      await apiService.addKeywords(mapping.campaign3Id, mapping.campaign3AdGroupId, [
-        { keywordText: term, matchType: 'exact', bid: cfg.bidExact },
-        { keywordText: term, matchType: 'phrase', bid: cfg.bidPhrase }
-      ]);
+      if (!dryRun) {
+        await apiService.addKeywords(mapping.campaign3Id, mapping.campaign3AdGroupId, [
+          { keywordText: term, matchType: 'exact', bid: cfg.bidExact },
+          { keywordText: term, matchType: 'phrase', bid: cfg.bidPhrase }
+        ]);
+      }
       result.keywordsAdded += 2;
       result.destinationCampaigns.campaign3 = (result.destinationCampaigns.campaign3 || 0) + 2;
-      console.log(`      ✅ → Campagna 3 (Exact + Phrase)`);
+      destinations.push('Campaign 3 (Exact + Phrase)');
+      console.log(`      ✅ ${dryRun ? '[DRY RUN] ' : ''}→ Campagna 3 (Exact + Phrase)`);
     }
   }
 }
@@ -288,29 +292,32 @@ async function feedFromCampaign1(
   mapping: CampaignMapping,
   cfg: Func5Config,
   result: Func5Result,
-  apiService: any  // Support both UserAmazonApiService and AmazonApiService
+  apiService: any,
+  dryRun: boolean,
+  destinations: string[]
 ): Promise<void> {
-  // Auto-feed nella stessa campagna
   if (mapping.campaign1Id && mapping.campaign1AdGroupId) {
-    await apiService.addKeywords(mapping.campaign1Id, mapping.campaign1AdGroupId, [{
-      keywordText: term,
-      matchType: 'broad',
-      bid: cfg.bidBroad
-    }]);
+    if (!dryRun) {
+      await apiService.addKeywords(mapping.campaign1Id, mapping.campaign1AdGroupId, [{
+        keywordText: term, matchType: 'broad', bid: cfg.bidBroad
+      }]);
+    }
     result.keywordsAdded++;
     result.destinationCampaigns.campaign1 = (result.destinationCampaigns.campaign1 || 0) + 1;
-    console.log(`      ✅ → Campagna 1 (auto-feed)`);
+    destinations.push('Campaign 1 (auto-feed)');
+    console.log(`      ✅ ${dryRun ? '[DRY RUN] ' : ''}→ Campagna 1 (auto-feed)`);
   }
-
-  // Feed a Campagna 3
   if (mapping.campaign3Id && mapping.campaign3AdGroupId) {
-    await apiService.addKeywords(mapping.campaign3Id, mapping.campaign3AdGroupId, [
-      { keywordText: term, matchType: 'exact', bid: cfg.bidExact },
-      { keywordText: term, matchType: 'phrase', bid: cfg.bidPhrase }
-    ]);
+    if (!dryRun) {
+      await apiService.addKeywords(mapping.campaign3Id, mapping.campaign3AdGroupId, [
+        { keywordText: term, matchType: 'exact', bid: cfg.bidExact },
+        { keywordText: term, matchType: 'phrase', bid: cfg.bidPhrase }
+      ]);
+    }
     result.keywordsAdded += 2;
     result.destinationCampaigns.campaign3 = (result.destinationCampaigns.campaign3 || 0) + 2;
-    console.log(`      ✅ → Campagna 3 (Exact + Phrase)`);
+    destinations.push('Campaign 3 (Exact + Phrase)');
+    console.log(`      ✅ ${dryRun ? '[DRY RUN] ' : ''}→ Campagna 3 (Exact + Phrase)`);
   }
 }
 
@@ -324,29 +331,32 @@ async function feedFromCampaign3(
   mapping: CampaignMapping,
   cfg: Func5Config,
   result: Func5Result,
-  apiService: any  // Support both UserAmazonApiService and AmazonApiService
+  apiService: any,
+  dryRun: boolean,
+  destinations: string[]
 ): Promise<void> {
-  // Feed a Campagna 1
   if (mapping.campaign1Id && mapping.campaign1AdGroupId) {
-    await apiService.addKeywords(mapping.campaign1Id, mapping.campaign1AdGroupId, [{
-      keywordText: term,
-      matchType: 'broad',
-      bid: cfg.bidBroad
-    }]);
+    if (!dryRun) {
+      await apiService.addKeywords(mapping.campaign1Id, mapping.campaign1AdGroupId, [{
+        keywordText: term, matchType: 'broad', bid: cfg.bidBroad
+      }]);
+    }
     result.keywordsAdded++;
     result.destinationCampaigns.campaign1 = (result.destinationCampaigns.campaign1 || 0) + 1;
-    console.log(`      ✅ → Campagna 1 (Broad)`);
+    destinations.push('Campaign 1 (Broad)');
+    console.log(`      ✅ ${dryRun ? '[DRY RUN] ' : ''}→ Campagna 1 (Broad)`);
   }
-
-  // Auto-feed nella stessa campagna
   if (mapping.campaign3Id && mapping.campaign3AdGroupId) {
-    await apiService.addKeywords(mapping.campaign3Id, mapping.campaign3AdGroupId, [
-      { keywordText: term, matchType: 'exact', bid: cfg.bidExact },
-      { keywordText: term, matchType: 'phrase', bid: cfg.bidPhrase }
-    ]);
+    if (!dryRun) {
+      await apiService.addKeywords(mapping.campaign3Id, mapping.campaign3AdGroupId, [
+        { keywordText: term, matchType: 'exact', bid: cfg.bidExact },
+        { keywordText: term, matchType: 'phrase', bid: cfg.bidPhrase }
+      ]);
+    }
     result.keywordsAdded += 2;
     result.destinationCampaigns.campaign3 = (result.destinationCampaigns.campaign3 || 0) + 2;
-    console.log(`      ✅ → Campagna 3 (auto-feed)`);
+    destinations.push('Campaign 3 (auto-feed)');
+    console.log(`      ✅ ${dryRun ? '[DRY RUN] ' : ''}→ Campagna 3 (auto-feed)`);
   }
 }
 
@@ -360,30 +370,31 @@ async function feedFromCampaign2(
   mapping: CampaignMapping,
   cfg: Func5Config,
   result: Func5Result,
-  apiService: any  // Support both UserAmazonApiService and AmazonApiService
+  apiService: any,
+  dryRun: boolean,
+  destinations: string[]
 ): Promise<void> {
-  // Auto-feed nella stessa campagna
   if (mapping.campaign2Id && mapping.campaign2AdGroupId) {
-    await apiService.addTargets(mapping.campaign2Id, mapping.campaign2AdGroupId, [{
-      asin: term,
-      bid: cfg.bidBroad,
-      expressionType: 'manual'
-    }]);
+    if (!dryRun) {
+      await apiService.addTargets(mapping.campaign2Id, mapping.campaign2AdGroupId, [{
+        asin: term, bid: cfg.bidBroad, expressionType: 'manual'
+      }]);
+    }
     result.targetsAdded++;
     result.destinationCampaigns.campaign2 = (result.destinationCampaigns.campaign2 || 0) + 1;
-    console.log(`      ✅ → Campagna 2 (auto-feed)`);
+    destinations.push('Campaign 2 (auto-feed)');
+    console.log(`      ✅ ${dryRun ? '[DRY RUN] ' : ''}→ Campagna 2 (auto-feed)`);
   }
-
-  // Feed a Campagna 4
   if (mapping.campaign4Id && mapping.campaign4AdGroupId) {
-    await apiService.addTargets(mapping.campaign4Id, mapping.campaign4AdGroupId, [{
-      asin: term,
-      bid: cfg.bidExpanded,
-      expressionType: 'manual'
-    }]);
+    if (!dryRun) {
+      await apiService.addTargets(mapping.campaign4Id, mapping.campaign4AdGroupId, [{
+        asin: term, bid: cfg.bidExpanded, expressionType: 'manual'
+      }]);
+    }
     result.targetsAdded++;
     result.destinationCampaigns.campaign4 = (result.destinationCampaigns.campaign4 || 0) + 1;
-    console.log(`      ✅ → Campagna 4 (Expanded)`);
+    destinations.push('Campaign 4 (Expanded)');
+    console.log(`      ✅ ${dryRun ? '[DRY RUN] ' : ''}→ Campagna 4 (Expanded)`);
   }
 }
 
@@ -397,30 +408,31 @@ async function feedFromCampaign4(
   mapping: CampaignMapping,
   cfg: Func5Config,
   result: Func5Result,
-  apiService: any  // Support both UserAmazonApiService and AmazonApiService
+  apiService: any,
+  dryRun: boolean,
+  destinations: string[]
 ): Promise<void> {
-  // Feed a Campagna 2
   if (mapping.campaign2Id && mapping.campaign2AdGroupId) {
-    await apiService.addTargets(mapping.campaign2Id, mapping.campaign2AdGroupId, [{
-      asin: term,
-      bid: cfg.bidBroad,
-      expressionType: 'manual'
-    }]);
+    if (!dryRun) {
+      await apiService.addTargets(mapping.campaign2Id, mapping.campaign2AdGroupId, [{
+        asin: term, bid: cfg.bidBroad, expressionType: 'manual'
+      }]);
+    }
     result.targetsAdded++;
     result.destinationCampaigns.campaign2 = (result.destinationCampaigns.campaign2 || 0) + 1;
-    console.log(`      ✅ → Campagna 2 (Exact)`);
+    destinations.push('Campaign 2 (Exact)');
+    console.log(`      ✅ ${dryRun ? '[DRY RUN] ' : ''}→ Campagna 2 (Exact)`);
   }
-
-  // Auto-feed nella stessa campagna
   if (mapping.campaign4Id && mapping.campaign4AdGroupId) {
-    await apiService.addTargets(mapping.campaign4Id, mapping.campaign4AdGroupId, [{
-      asin: term,
-      bid: cfg.bidExpanded,
-      expressionType: 'manual'
-    }]);
+    if (!dryRun) {
+      await apiService.addTargets(mapping.campaign4Id, mapping.campaign4AdGroupId, [{
+        asin: term, bid: cfg.bidExpanded, expressionType: 'manual'
+      }]);
+    }
     result.targetsAdded++;
     result.destinationCampaigns.campaign4 = (result.destinationCampaigns.campaign4 || 0) + 1;
-    console.log(`      ✅ → Campagna 4 (auto-feed)`);
+    destinations.push('Campaign 4 (auto-feed)');
+    console.log(`      ✅ ${dryRun ? '[DRY RUN] ' : ''}→ Campagna 4 (auto-feed)`);
   }
 }
 

@@ -15,6 +15,7 @@ import { formatDateForAmazon } from '../../utils/timeframe';
 export interface Func2Config {
   frequency: number;              // Default: 7 giorni
   placementTimeframeWeeks: number; // Default: 4 settimane
+  dryRun?: boolean;               // Se true, non aggiorna i placement (solo analisi)
 }
 
 export interface Book {
@@ -30,6 +31,7 @@ export interface Func2Result {
   fastAcos: number;
   band: number;
   placementsUpdated: boolean;
+  dryRun: boolean;
   oldPlacements: {
     topOfSearch: number;
     restOfSearch: number;
@@ -80,8 +82,13 @@ export async function executeFunc2(
   // Configurazione default
   const cfg: Func2Config = {
     frequency: config?.frequency || 7,
-    placementTimeframeWeeks: config?.placementTimeframeWeeks || 4
+    placementTimeframeWeeks: config?.placementTimeframeWeeks || 4,
+    dryRun: config?.dryRun || false
   };
+
+  if (cfg.dryRun) {
+    console.log('🔍 MODALITA\' DRY RUN - Nessun placement verra\' aggiornato');
+  }
 
   const result: Func2Result = {
     campaignId,
@@ -90,6 +97,7 @@ export async function executeFunc2(
     fastAcos: 0,
     band: 3,
     placementsUpdated: false,
+    dryRun: cfg.dryRun!,
     oldPlacements: { ...currentPlacements },
     newPlacements: { ...currentPlacements },
     errors: []
@@ -157,14 +165,15 @@ export async function executeFunc2(
     console.log(`   Rest of Search: ${currentPlacements.restOfSearch}% → ${result.newPlacements.restOfSearch}%`);
     console.log(`   Product Pages: ${currentPlacements.productPages}% → ${result.newPlacements.productPages}%`);
 
-    // 8. Aggiorna i placement su Amazon
-    await apiService.updateCampaignPlacements(campaignId, result.newPlacements);
-
-    result.placementsUpdated = true;
+    // 8. Aggiorna i placement su Amazon (solo se NON dryRun)
+    if (!cfg.dryRun) {
+      await apiService.updateCampaignPlacements(campaignId, result.newPlacements);
+      result.placementsUpdated = true;
+    }
 
     console.log('────────────────────────────────────────');
-    console.log(`✅ Funzione 2 completata`);
-    console.log(`   Placements aggiornati con successo`);
+    console.log(`✅ Funzione 2 completata${cfg.dryRun ? ' (DRY RUN)' : ''}`);
+    console.log(`   Placements ${cfg.dryRun ? 'da aggiornare' : 'aggiornati con successo'}`);
     console.log('════════════════════════════════════════\n');
 
   } catch (error) {

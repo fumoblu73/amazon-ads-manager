@@ -198,6 +198,34 @@ export class UserAmazonApiService {
   }
 
   // ================================================
+  // AD GROUP METHODS
+  // ================================================
+
+  async getAdGroups(campaignId?: string): Promise<any[]> {
+    try {
+      console.log(`📥 Fetching ad groups (v3)${campaignId ? ` for campaign ${campaignId}` : ''}...`);
+
+      const body: any = { maxResults: 100 };
+      if (campaignId) {
+        body.campaignIdFilter = { include: [campaignId] };
+      }
+      const response = await this.client.post('/sp/adGroups/list', body, {
+        headers: {
+          'Content-Type': 'application/vnd.spAdGroup.v3+json',
+          'Accept': 'application/vnd.spAdGroup.v3+json'
+        }
+      });
+
+      const adGroups = response.data.adGroups || [];
+      console.log(`✅ Found ${adGroups.length} ad groups`);
+      return adGroups;
+    } catch (error) {
+      console.error('❌ Error fetching ad groups:', error);
+      throw error;
+    }
+  }
+
+  // ================================================
   // KEYWORD METHODS
   // ================================================
 

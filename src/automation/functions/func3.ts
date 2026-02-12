@@ -19,6 +19,7 @@ export interface Func3Config {
   timeframeC: number;       // Default: 5000 impressions
   clicksPause: number;      // Default: 10 clicks
   clicks65days: number;     // Default: 30 clicks
+  dryRun?: boolean;         // Se true, non modifica bid/stato (solo analisi)
 }
 
 export interface Book {
@@ -35,7 +36,19 @@ export interface Func3Result {
   itemsBidIncreased: number;
   itemsBidDecreased: number;
   timeframeDays: number;
+  dryRun: boolean;
   errors: string[];
+  details?: Array<{
+    itemId: string;
+    itemName: string;
+    currentBid: number;
+    clicks: number;
+    orders: number;
+    acos?: number;
+    band?: number;
+    action: 'paused' | 'bid_increased' | 'bid_decreased' | 'skipped' | 'no_data';
+    newBid?: number;
+  }>;
 }
 
 /**
@@ -62,8 +75,13 @@ export async function executeFunc3(
     timeframeB: config?.timeframeB || 3000,
     timeframeC: config?.timeframeC || 5000,
     clicksPause: config?.clicksPause || 10,
-    clicks65days: config?.clicks65days || 30
+    clicks65days: config?.clicks65days || 30,
+    dryRun: config?.dryRun || false
   };
+
+  if (cfg.dryRun) {
+    console.log('🔍 MODALITA\' DRY RUN - Nessun bid/stato verra\' modificato');
+  }
 
   const result: Func3Result = {
     campaignId,
@@ -73,7 +91,9 @@ export async function executeFunc3(
     itemsBidIncreased: 0,
     itemsBidDecreased: 0,
     timeframeDays: 0,
-    errors: []
+    dryRun: cfg.dryRun!,
+    errors: [],
+    details: []
   };
 
   try {
@@ -134,7 +154,10 @@ export async function executeFunc3(
           (r.keywordId === itemId) || (r.targetId === itemId)
         );
 
-        if (!metrics) continue;
+        if (!metrics) {
+          result.details!.push({ itemId, itemName, currentBid: currentBid || 0, clicks: 0, orders: 0, action: 'no_data' });
+          continue;
+        }
 
         const clicks = metrics.clicks || 0;
         const orders = metrics.orders || 0;
@@ -149,15 +172,18 @@ export async function executeFunc3(
           (clicks65 >= cfg.clicks65days && orders65 === 0);
 
         if (shouldPause) {
-          console.log(`   ⏸️  PAUSA ${itemName}: clicks=${clicks}/${clicks65}, orders=${orders}/${orders65}`);
+          console.log(`   ⏸️  ${cfg.dryRun ? '[DRY RUN] ' : ''}PAUSA ${itemName}: clicks=${clicks}/${clicks65}, orders=${orders}/${orders65}`);
 
-          if (campaignType === 1 || campaignType === 3) {
-            await apiService.updateKeywordState(itemId, 'paused');
-          } else {
-            await apiService.updateTargetState(itemId, 'paused');
+          if (!cfg.dryRun) {
+            if (campaignType === 1 || campaignType === 3) {
+              await apiService.updateKeywordState(itemId, 'paused');
+            } else {
+              await apiService.updateTargetState(itemId, 'paused');
+            }
           }
 
           result.itemsPaused++;
+          result.details!.push({ itemId, itemName, currentBid: currentBid || 0, clicks, orders, action: 'paused' });
           continue;
         }
 
@@ -171,17 +197,28 @@ export async function executeFunc3(
           const newBid = calculateNewBid(currentBid, bidAdjustment);
 
           if (newBid !== currentBid) {
-            console.log(`   ${bidAdjustment > 0 ? '🔼' : '🔽'} ${itemName}: ${currentBid.toFixed(2)} → ${newBid.toFixed(2)} (Fascia ${band.band})`);
+            console.log(`   ${bidAdjustment > 0 ? '🔼' : '🔽'} ${cfg.dryRun ? '[DRY RUN] ' : ''}${itemName}: ${currentBid.toFixed(2)} → ${newBid.toFixed(2)} (Fascia ${band.band})`);
 
-            if (campaignType === 1 || campaignType === 3) {
-              await apiService.updateKeywordBid(itemId, newBid);
-            } else {
-              await apiService.updateTargetBid(itemId, newBid);
+            if (!cfg.dryRun) {
+              if (campaignType === 1 || campaignType === 3) {
+                await apiService.updateKeywordBid(itemId, newBid);
+              } else {
+                await apiService.updateTargetBid(itemId, newBid);
+              }
             }
 
-            if (bidAdjustment > 0) result.itemsBidIncreased++;
-            else if (bidAdjustment < 0) result.itemsBidDecreased++;
+            if (bidAdjustment > 0) {
+              result.itemsBidIncreased++;
+              result.details!.push({ itemId, itemName, currentBid, clicks, orders, acos, band: band.band, action: 'bid_increased', newBid });
+            } else if (bidAdjustment < 0) {
+              result.itemsBidDecreased++;
+              result.details!.push({ itemId, itemName, currentBid, clicks, orders, acos, band: band.band, action: 'bid_decreased', newBid });
+            }
+          } else {
+            result.details!.push({ itemId, itemName, currentBid, clicks, orders, acos, band: band.band, action: 'skipped' });
           }
+        } else {
+          result.details!.push({ itemId, itemName, currentBid: currentBid || 0, clicks, orders, action: 'skipped' });
         }
 
       } catch (error) {
@@ -191,11 +228,11 @@ export async function executeFunc3(
     }
 
     console.log('────────────────────────────────────────');
-    console.log(`✅ Funzione 3 completata`);
+    console.log(`✅ Funzione 3 completata${cfg.dryRun ? ' (DRY RUN)' : ''}`);
     console.log(`   Items analizzati: ${result.itemsProcessed}`);
-    console.log(`   Items pausati: ${result.itemsPaused}`);
-    console.log(`   Bid aumentati: ${result.itemsBidIncreased}`);
-    console.log(`   Bid ridotti: ${result.itemsBidDecreased}`);
+    console.log(`   Items ${cfg.dryRun ? 'da pausare' : 'pausati'}: ${result.itemsPaused}`);
+    console.log(`   Bid ${cfg.dryRun ? 'da aumentare' : 'aumentati'}: ${result.itemsBidIncreased}`);
+    console.log(`   Bid ${cfg.dryRun ? 'da ridurre' : 'ridotti'}: ${result.itemsBidDecreased}`);
     console.log('════════════════════════════════════════\n');
 
   } catch (error) {

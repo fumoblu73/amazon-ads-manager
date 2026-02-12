@@ -834,14 +834,47 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
     const results: any[] = [];
     const funcNames = ['', 'Progressive Bidding', 'Placement Optimization', 'Targeting Optimization', 'Auto Ad Optimization', 'Campaign Feeding'];
 
-    // Per func5: costruisci mapping di tutte le campagne del libro
-    // Usa solo gli ID campagna dal DB (adGroupId non disponibile direttamente)
+    // 5b. Recupera adGroupId per ogni campagna dall'API Amazon (necessario per func4 e func5)
+    const adGroupIdMap: Record<string, string> = {};
+    if (functionNumber === 4 || functionNumber === 5) {
+      console.log(`📊 [TEST] Fetching adGroupIds for func${functionNumber}...`);
+      for (const c of campaigns) {
+        try {
+          const adGroups = await apiService.getAdGroups?.(c.amazonCampaignId);
+          if (adGroups && adGroups.length > 0) {
+            adGroupIdMap[c.amazonCampaignId] = adGroups[0].adGroupId;
+            console.log(`   ✅ Campaign "${c.name}": adGroupId=${adGroups[0].adGroupId}`);
+          } else {
+            // Fallback: prova a ottenere da keywords/targets
+            const items = await apiService.getKeywords(c.amazonCampaignId);
+            if (items.length > 0 && items[0].adGroupId) {
+              adGroupIdMap[c.amazonCampaignId] = items[0].adGroupId;
+              console.log(`   ✅ Campaign "${c.name}": adGroupId=${items[0].adGroupId} (from keywords)`);
+            } else {
+              const targets = await apiService.getTargets(c.amazonCampaignId);
+              if (targets.length > 0 && targets[0].adGroupId) {
+                adGroupIdMap[c.amazonCampaignId] = targets[0].adGroupId;
+                console.log(`   ✅ Campaign "${c.name}": adGroupId=${targets[0].adGroupId} (from targets)`);
+              } else {
+                console.log(`   ⚠️ Campaign "${c.name}": no adGroupId found`);
+              }
+            }
+          }
+        } catch (err: any) {
+          console.log(`   ⚠️ Campaign "${c.name}": adGroupId fetch failed: ${err.message}`);
+        }
+      }
+    }
+
+    // Per func5: costruisci mapping di tutte le campagne del libro con adGroupIds
     let campaignMapping: any = {};
     if (functionNumber === 5) {
       for (const c of campaigns) {
         const cType = _detectCampaignType(c.name);
         campaignMapping[`campaign${cType}Id`] = c.amazonCampaignId;
+        campaignMapping[`campaign${cType}AdGroupId`] = adGroupIdMap[c.amazonCampaignId] || null;
       }
+      console.log(`📊 [TEST] Campaign mapping:`, JSON.stringify(campaignMapping, null, 2));
     }
 
     for (const campaign of campaigns) {
@@ -876,7 +909,8 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
             const placements = { topOfSearch: 0, restOfSearch: 0, productPages: 0 };
             result = await executeFunc2(campaignId, campaignName, marketplace, book, placements, apiService, {
               frequency: userConfig.func2_frequency,
-              placementTimeframeWeeks: userConfig.func2_timeframeWeeks
+              placementTimeframeWeeks: userConfig.func2_timeframeWeeks,
+              dryRun: !!dryRun
             });
             break;
           }
@@ -888,20 +922,21 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
               timeframeB: userConfig.func3_timeframeB,
               timeframeC: userConfig.func3_timeframeC,
               clicksPause: userConfig.func3_clicksPause,
-              clicks65days: userConfig.func3_clicks65days
+              clicks65days: userConfig.func3_clicks65days,
+              dryRun: !!dryRun
             });
             break;
 
           case 4: {
-            // adGroupId: usa quello dalla campagna se disponibile
-            const adGroupId = (campaign as any).adGroupId || 'unknown';
+            const adGroupId = adGroupIdMap[campaignId] || 'unknown';
             result = await executeFunc4(campaignId, campaignName, marketplace, adGroupId, book, 50000, apiService, {
               frequency: userConfig.func4_frequency,
               timeframeA: userConfig.func4_timeframeA,
               timeframeB: userConfig.func4_timeframeB,
               timeframeC: userConfig.func4_timeframeC,
               clicksNegative: userConfig.func4_clicksNegative,
-              spendNegative: userConfig.func4_spendNegative
+              spendNegative: userConfig.func4_spendNegative,
+              dryRun: !!dryRun
             });
             break;
           }
@@ -913,7 +948,8 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
               bidBroad: userConfig.func5_bidBroad,
               bidExact: userConfig.func5_bidExact,
               bidPhrase: userConfig.func5_bidPhrase,
-              bidExpanded: userConfig.func5_bidExpanded
+              bidExpanded: userConfig.func5_bidExpanded,
+              dryRun: !!dryRun
             });
             break;
         }
@@ -929,6 +965,7 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
     res.json({
       success: true,
       testOnly: true,
+      dryRun: !!dryRun,
       functionNumber,
       functionName: funcNames[functionNumber],
       asin,

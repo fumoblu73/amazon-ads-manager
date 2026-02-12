@@ -20,6 +20,7 @@ export interface Func4Config {
   timeframeC: number;         // Default: 5000 impressions
   clicksNegative: number;     // Default: 10 clicks
   spendNegative: number;      // Default: 10 (valuta locale)
+  dryRun?: boolean;           // Se true, non modifica bid/stato/negative (solo analisi)
 }
 
 export interface Book {
@@ -37,7 +38,26 @@ export interface Func4Result {
   negativeKeywordsAdded: number;
   negativeTargetsAdded: number;
   timeframeDays: number;
+  dryRun: boolean;
   errors: string[];
+  details?: {
+    targetingGroups: Array<{
+      targetId: string;
+      groupName: string;
+      clicks: number;
+      orders: number;
+      action: 'paused' | 'bid_updated' | 'skipped' | 'no_data';
+      currentBid?: number;
+      newBid?: number;
+      band?: number;
+    }>;
+    negatives: Array<{
+      term: string;
+      type: 'keyword' | 'asin';
+      clicks: number;
+      cost: number;
+    }>;
+  };
 }
 
 /**
@@ -85,8 +105,13 @@ export async function executeFunc4(
     timeframeB: config?.timeframeB || 3000,
     timeframeC: config?.timeframeC || 5000,
     clicksNegative: config?.clicksNegative || 10,
-    spendNegative: config?.spendNegative || 10
+    spendNegative: config?.spendNegative || 10,
+    dryRun: config?.dryRun || false
   };
+
+  if (cfg.dryRun) {
+    console.log('🔍 MODALITA\' DRY RUN - Nessuna modifica verra\' applicata');
+  }
 
   const result: Func4Result = {
     campaignId,
@@ -97,7 +122,9 @@ export async function executeFunc4(
     negativeKeywordsAdded: 0,
     negativeTargetsAdded: 0,
     timeframeDays: 0,
-    errors: []
+    dryRun: cfg.dryRun!,
+    errors: [],
+    details: { targetingGroups: [], negatives: [] }
   };
 
   try {
@@ -167,9 +194,12 @@ export async function executeFunc4(
 
         // a) CONTROLLO PAUSA
         if (clicks > cfg.clicksNegative && orders === 0) {
-          console.log(`   ⏸️  PAUSA ${groupName}: clicks=${clicks}, orders=0`);
-          await apiService.updateTargetState(targetId, 'paused');
+          console.log(`   ⏸️  ${cfg.dryRun ? '[DRY RUN] ' : ''}PAUSA ${groupName}: clicks=${clicks}, orders=0`);
+          if (!cfg.dryRun) {
+            await apiService.updateTargetState(targetId, 'paused');
+          }
           result.targetingGroupsPaused++;
+          result.details!.targetingGroups.push({ targetId, groupName, clicks, orders, action: 'paused', currentBid });
           continue;
         }
 
@@ -180,13 +210,20 @@ export async function executeFunc4(
           const newBid = calculateNewBid(currentBid, band.bidAdjustment);
 
           if (newBid !== currentBid) {
-            console.log(`   ${band.bidAdjustment > 0 ? '🔼' : '🔽'} ${groupName}:`);
+            console.log(`   ${band.bidAdjustment > 0 ? '🔼' : '🔽'} ${cfg.dryRun ? '[DRY RUN] ' : ''}${groupName}:`);
             console.log(`      ACoS: ${acos.toFixed(2)}% (Fascia ${band.band})`);
             console.log(`      Bid: ${currentBid.toFixed(2)} → ${newBid.toFixed(2)}`);
 
-            await apiService.updateTargetBid(targetId, newBid);
+            if (!cfg.dryRun) {
+              await apiService.updateTargetBid(targetId, newBid);
+            }
             result.targetingGroupsBidUpdated++;
+            result.details!.targetingGroups.push({ targetId, groupName, clicks, orders, action: 'bid_updated', currentBid, newBid, band: band.band });
+          } else {
+            result.details!.targetingGroups.push({ targetId, groupName, clicks, orders, action: 'skipped', currentBid });
           }
+        } else {
+          result.details!.targetingGroups.push({ targetId, groupName, clicks, orders, action: 'skipped', currentBid });
         }
 
       } catch (error) {
@@ -226,14 +263,20 @@ export async function executeFunc4(
 
           if (isAsin) {
             // Aggiungi a negative products
-            console.log(`   ➖ Negative ASIN: ${term} (clicks=${clicks}, cost=${cost.toFixed(2)})`);
-            await apiService.addNegativeTarget(campaignId, adGroupId, term);
+            console.log(`   ➖ ${cfg.dryRun ? '[DRY RUN] ' : ''}Negative ASIN: ${term} (clicks=${clicks}, cost=${cost.toFixed(2)})`);
+            if (!cfg.dryRun) {
+              await apiService.addNegativeTarget(campaignId, adGroupId, term);
+            }
             result.negativeTargetsAdded++;
+            result.details!.negatives.push({ term, type: 'asin', clicks, cost });
           } else {
             // Aggiungi a negative keywords
-            console.log(`   ➖ Negative Keyword: "${term}" (clicks=${clicks}, cost=${cost.toFixed(2)})`);
-            await apiService.addNegativeKeyword(campaignId, adGroupId, term, 'negativeExact');
+            console.log(`   ➖ ${cfg.dryRun ? '[DRY RUN] ' : ''}Negative Keyword: "${term}" (clicks=${clicks}, cost=${cost.toFixed(2)})`);
+            if (!cfg.dryRun) {
+              await apiService.addNegativeKeyword(campaignId, adGroupId, term, 'negativeExact');
+            }
             result.negativeKeywordsAdded++;
+            result.details!.negatives.push({ term, type: 'keyword', clicks, cost });
           }
         }
 
@@ -245,12 +288,12 @@ export async function executeFunc4(
     }
 
     console.log('────────────────────────────────────────');
-    console.log(`✅ Funzione 4 completata`);
+    console.log(`✅ Funzione 4 completata${cfg.dryRun ? ' (DRY RUN)' : ''}`);
     console.log(`   Targeting groups analizzati: ${result.targetingGroupsProcessed}`);
-    console.log(`   Targeting groups pausati: ${result.targetingGroupsPaused}`);
-    console.log(`   Targeting groups bid aggiornati: ${result.targetingGroupsBidUpdated}`);
-    console.log(`   Negative keywords aggiunte: ${result.negativeKeywordsAdded}`);
-    console.log(`   Negative targets aggiunti: ${result.negativeTargetsAdded}`);
+    console.log(`   Targeting groups ${cfg.dryRun ? 'da pausare' : 'pausati'}: ${result.targetingGroupsPaused}`);
+    console.log(`   Targeting groups bid ${cfg.dryRun ? 'da aggiornare' : 'aggiornati'}: ${result.targetingGroupsBidUpdated}`);
+    console.log(`   Negative keywords ${cfg.dryRun ? 'da aggiungere' : 'aggiunte'}: ${result.negativeKeywordsAdded}`);
+    console.log(`   Negative targets ${cfg.dryRun ? 'da aggiungere' : 'aggiunti'}: ${result.negativeTargetsAdded}`);
     console.log(`   Errori: ${result.errors.length}`);
     console.log('════════════════════════════════════════\n');
 
