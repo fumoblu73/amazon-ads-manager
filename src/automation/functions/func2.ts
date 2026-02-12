@@ -130,15 +130,24 @@ export async function executeFunc2(
 
     const reportData = await apiService.waitAndDownloadReport(reportId);
 
-    // 4. Trova metriche della campagna
-    const campaignMetrics = reportData.find((r: any) => r.campaignId === campaignId);
-
-    if (!campaignMetrics) {
-      throw new Error('Metriche campagna non trovate nel report');
+    // Debug: mostra cosa contiene il report
+    console.log(`📊 Report restituito: ${reportData.length} righe`);
+    if (reportData.length > 0) {
+      console.log(`📊 Colonne disponibili: ${Object.keys(reportData[0]).join(', ')}`);
+      console.log(`📊 CampaignIds nel report: ${reportData.map((r: any) => r.campaignId).join(', ')}`);
+      console.log(`📊 Cerco campaignId: ${campaignId} (type: ${typeof campaignId})`);
     }
 
+    // 4. Trova metriche della campagna (usa toString per evitare mismatch string/number)
+    const campaignMetrics = reportData.find((r: any) => String(r.campaignId) === String(campaignId));
+
+    if (!campaignMetrics) {
+      throw new Error(`Metriche campagna non trovate nel report (${reportData.length} righe, ids: ${reportData.slice(0, 5).map((r: any) => r.campaignId).join(',')})`);
+    }
+
+    // Amazon API v3 usa 'sales14d' invece di 'sales'
     const cost = campaignMetrics.cost || 0;
-    const sales = campaignMetrics.sales || 0;
+    const sales = campaignMetrics.sales14d || campaignMetrics.sales || 0;
 
     // 5. Calcola ACoS della campagna
     result.campaignAcos = calculateAcos(cost, sales);
