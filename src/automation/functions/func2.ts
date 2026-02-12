@@ -149,11 +149,12 @@ export async function executeFunc2(
     const cost = campaignMetrics.cost || 0;
     const sales = campaignMetrics.sales14d || campaignMetrics.sales || 0;
 
-    // 5. Calcola ACoS della campagna
-    result.campaignAcos = calculateAcos(cost, sales);
+    // 5. Calcola ACoS della campagna (se nessuna vendita, usa 999 per evitare Infinity/null in JSON)
+    const rawAcos = calculateAcos(cost, sales);
+    result.campaignAcos = isFinite(rawAcos) ? rawAcos : 999;
 
     console.log(`💰 Spesa: ${cost.toFixed(2)}, Vendite: ${sales.toFixed(2)}`);
-    console.log(`📈 ACoS Campagna: ${result.campaignAcos.toFixed(2)}%`);
+    console.log(`📈 ACoS Campagna: ${result.campaignAcos === 999 ? 'N/A (nessuna vendita)' : result.campaignAcos.toFixed(2) + '%'}`);
 
     // 6. Determina fascia FAST ACoS
     const band = determineFastAcosBand(result.campaignAcos, result.fastAcos);

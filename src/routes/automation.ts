@@ -905,8 +905,21 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
             break;
 
           case 2: {
-            // Placement attuali non disponibili direttamente, usa default 0
-            const placements = { topOfSearch: 0, restOfSearch: 0, productPages: 0 };
+            // Recupera placement attuali dalla campagna Amazon
+            let placements = { topOfSearch: 0, restOfSearch: 0, productPages: 0 };
+            try {
+              const campaignData = await apiService.getCampaign(campaignId);
+              if (campaignData?.dynamicBidding?.placementBidding) {
+                for (const pb of campaignData.dynamicBidding.placementBidding) {
+                  if (pb.placement === 'PLACEMENT_TOP') placements.topOfSearch = pb.percentage || 0;
+                  else if (pb.placement === 'PLACEMENT_REST_OF_SEARCH') placements.restOfSearch = pb.percentage || 0;
+                  else if (pb.placement === 'PLACEMENT_PRODUCT_PAGE') placements.productPages = pb.percentage || 0;
+                }
+              }
+              console.log(`📍 [TEST] Current placements for ${campaignName}: TOS=${placements.topOfSearch}%, ROS=${placements.restOfSearch}%, PP=${placements.productPages}%`);
+            } catch (err: any) {
+              console.log(`⚠️ [TEST] Could not fetch placements for ${campaignName}: ${err.message}`);
+            }
             result = await executeFunc2(campaignId, campaignName, marketplace, book, placements, apiService, {
               frequency: userConfig.func2_frequency,
               placementTimeframeWeeks: userConfig.func2_timeframeWeeks,
