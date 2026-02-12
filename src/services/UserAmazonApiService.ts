@@ -339,8 +339,11 @@ export class UserAmazonApiService {
       } else if (reportType === 'spSearchTerm') {
         requiredCols = ['campaignId', 'adGroupId', 'keywordId', 'keyword', 'searchTerm'];
         groupBy = ['searchTerm'];
+      } else if (reportType === 'spCampaigns') {
+        requiredCols = ['campaignId', 'campaignName'];
+        groupBy = ['campaign'];
       } else {
-        // spTargeting, spCampaigns
+        // spTargeting
         requiredCols = ['campaignId', 'adGroupId', 'keywordId', 'keyword'];
         groupBy = ['targeting'];
       }
@@ -394,7 +397,7 @@ export class UserAmazonApiService {
 
   // Richiede report con date range: startDate → endDate (default: oggi)
   // startDate in formato YYYYMMDD (come restituito da formatDateForAmazon)
-  async requestReport(startDateStr: string, metrics: string[], endDateStr?: string): Promise<string> {
+  async requestReport(startDateStr: string, metrics: string[], endDateStr?: string, reportType: 'spTargeting' | 'spCampaigns' | 'spSearchTerm' | 'spAdvertisedProduct' = 'spTargeting'): Promise<string> {
     // Converte startDate da YYYYMMDD a YYYY-MM-DD
     const startDate = `${startDateStr.substring(0, 4)}-${startDateStr.substring(4, 6)}-${startDateStr.substring(6, 8)}`;
 
@@ -411,7 +414,7 @@ export class UserAmazonApiService {
     const days = Math.round((endMs - startMs) / (1000 * 60 * 60 * 24));
     console.log(`📅 [API v3] Date range: ${startDate} to ${endDate} (${days} giorni)`);
 
-    return this.requestReportV3(startDate, endDate, 'spTargeting', metrics);
+    return this.requestReportV3(startDate, endDate, reportType, metrics);
   }
 
   async getReportStatus(reportId: string): Promise<any> {

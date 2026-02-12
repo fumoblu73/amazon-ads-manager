@@ -121,12 +121,12 @@ export async function executeFunc2(
 
     console.log(`📅 Periodo analisi ACoS: ${startDateStr} - ${endDateStr} (${cfg.placementTimeframeWeeks} settimane)`);
 
-    // 3. Richiedi report della campagna
+    // 3. Richiedi report a livello campagna (spCampaigns, non spTargeting)
     const reportId = await apiService.requestReport(startDateStr, [
       'campaignId',
       'cost',
       'sales'
-    ]);
+    ], undefined, 'spCampaigns');
 
     const reportData = await apiService.waitAndDownloadReport(reportId);
 
