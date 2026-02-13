@@ -833,7 +833,7 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
     if (functionNumber === 3) {
       // Pre-loading con timeout ridotto (36 tentativi × 5s = 3 min max per report)
       // Se fallisce, passa array vuoti → func3 NON ri-richiederà gli stessi report bloccati
-      const PRELOAD_MAX_ATTEMPTS = 36; // ~3 minuti max per report (vs 10 min default)
+      const PRELOAD_MAX_ATTEMPTS = 60; // ~5 minuti max per report (vs 10 min default)
       let reportData: any[] = [];
       let reportData65: any[] = [];
       const reportDiag: any = { reports: [] }; // Diagnostica dettagliata
