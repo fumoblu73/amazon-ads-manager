@@ -112,20 +112,47 @@ export async function executeFunc3(
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - timeframeResult.timeframeDays);
 
-    const startDate65 = new Date();
-    startDate65.setDate(startDate65.getDate() - 65);
-
-    // 4. Richiedi report
+    // 4. Richiedi report principale (timeframe dinamico, max 31 giorni)
     const reportId = await apiService.requestReport(formatDateForAmazon(startDate), [
-      'keywordId', 'targetId', 'impressions', 'clicks', 'cost', 'sales', 'orders', 'bid'
+      'impressions', 'clicks', 'cost', 'sales', 'orders'
     ]);
     const reportData = await apiService.waitAndDownloadReport(reportId);
 
-    // Report ultimi 65 giorni per controllo pausa
-    const reportId65 = await apiService.requestReport(formatDateForAmazon(startDate65), [
-      'keywordId', 'targetId', 'clicks', 'orders'
+    // Report ultimi 65 giorni per controllo pausa: Amazon limita a 31gg,
+    // quindi dividiamo in 2 chunk (0-30gg e 31-65gg) e sommiamo clicks/orders
+    const startDate65a = new Date();
+    startDate65a.setDate(startDate65a.getDate() - 30);
+    const startDate65b = new Date();
+    startDate65b.setDate(startDate65b.getDate() - 65);
+    const endDate65b = new Date();
+    endDate65b.setDate(endDate65b.getDate() - 31);
+
+    console.log(`📅 Report 65gg: chunk A = ultimi 31gg, chunk B = giorni 31-65`);
+
+    const reportId65a = await apiService.requestReport(formatDateForAmazon(startDate65a), [
+      'clicks', 'orders'
     ]);
-    const reportData65 = await apiService.waitAndDownloadReport(reportId65);
+    const reportData65a = await apiService.waitAndDownloadReport(reportId65a);
+
+    const reportId65b = await apiService.requestReport(
+      formatDateForAmazon(startDate65b), ['clicks', 'orders'], formatDateForAmazon(endDate65b)
+    );
+    const reportData65b = await apiService.waitAndDownloadReport(reportId65b);
+
+    // Merge: somma clicks e orders dei 2 chunk per ogni targeting
+    const mergedMap: Record<string, { clicks: number; orders: number }> = {};
+    for (const row of [...reportData65a, ...reportData65b]) {
+      const key = row.targeting || row.keywordId || row.targetId || '';
+      if (!mergedMap[key]) mergedMap[key] = { clicks: 0, orders: 0 };
+      mergedMap[key].clicks += (row.clicks || 0);
+      mergedMap[key].orders += (row.purchases14d || row.orders || 0);
+    }
+    // Converte la mappa in array per compatibilita' con il codice esistente
+    const reportData65 = Object.entries(mergedMap).map(([targeting, data]) => ({
+      targeting,
+      clicks: data.clicks,
+      purchases14d: data.orders
+    }));
 
     // 5. Recupera items
     let items: any[] = [];
@@ -167,7 +194,7 @@ export async function executeFunc3(
         const clicks = metrics.clicks || 0;
         const orders = metrics.purchases14d || metrics.orders || 0;
         const clicks65 = metrics65?.clicks || 0;
-        const orders65 = metrics65?.purchases14d || metrics65?.orders || 0;
+        const orders65 = metrics65?.purchases14d || (metrics65 as any)?.orders || 0;
         const cost = metrics.cost || 0;
         const sales = metrics.sales14d || metrics.sales || 0;
 
