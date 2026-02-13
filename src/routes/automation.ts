@@ -836,6 +836,7 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
       const PRELOAD_MAX_ATTEMPTS = 36; // ~3 minuti max per report (vs 10 min default)
       let reportData: any[] = [];
       let reportData65: any[] = [];
+      const reportDiag: any = { reports: [] }; // Diagnostica dettagliata
 
       try {
         const { formatDateForAmazon, calculateTimeframeFunc3 } = await import('../utils/timeframe');
@@ -846,13 +847,26 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
         });
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - tf.timeframeDays);
-        console.log(`📊 [TEST] Pre-loading func3 reports (3 report, timeout ${PRELOAD_MAX_ATTEMPTS * 5}s each)...`);
+        const startStr = formatDateForAmazon(startDate);
+        console.log(`📊 [TEST] Pre-loading func3 reports (timeout ${PRELOAD_MAX_ATTEMPTS * 5}s each)...`);
 
-        // Report principale
-        const reportId = await apiService.requestReport(formatDateForAmazon(startDate), ['impressions', 'clicks', 'cost', 'sales', 'orders']);
+        // Report principale - cattura reportId e primo status per diagnostica
+        const reportId = await apiService.requestReport(startStr, ['impressions', 'clicks', 'cost', 'sales', 'orders']);
+        reportDiag.mainReportId = reportId;
+        reportDiag.mainDateRange = `${startStr} → today`;
+
+        // Check status una volta prima del polling per diagnostica
+        const firstStatus = await apiService.getReportStatus(reportId);
+        reportDiag.mainFirstStatus = firstStatus?.status;
+        reportDiag.mainFirstStatusFull = firstStatus;
+
         reportData = await apiService.waitAndDownloadReport(reportId, PRELOAD_MAX_ATTEMPTS);
+        reportDiag.mainResult = 'OK';
+        reportDiag.mainRows = reportData.length;
         console.log(`✅ [TEST] Report principale: ${reportData.length} righe`);
       } catch (reportErr: any) {
+        reportDiag.mainResult = 'FAILED';
+        reportDiag.mainError = reportErr.message;
         console.error(`⚠️ [TEST] Report principale fallito (${reportErr.message}). Continuo con dati vuoti.`);
       }
 
@@ -861,13 +875,19 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
         // Report 65gg chunk A (ultimi 31gg)
         const start65a = new Date(); start65a.setDate(start65a.getDate() - 30);
         const reportId65a = await apiService.requestReport(formatDateForAmazon(start65a), ['clicks', 'orders']);
+        reportDiag.report65aId = reportId65a;
+
         const data65a = await apiService.waitAndDownloadReport(reportId65a, PRELOAD_MAX_ATTEMPTS);
+        reportDiag.report65aRows = data65a.length;
 
         // Report 65gg chunk B (giorni 31-65)
         const start65b = new Date(); start65b.setDate(start65b.getDate() - 65);
         const end65b = new Date(); end65b.setDate(end65b.getDate() - 31);
         const reportId65b = await apiService.requestReport(formatDateForAmazon(start65b), ['clicks', 'orders'], formatDateForAmazon(end65b));
+        reportDiag.report65bId = reportId65b;
+
         const data65b = await apiService.waitAndDownloadReport(reportId65b, PRELOAD_MAX_ATTEMPTS);
+        reportDiag.report65bRows = data65b.length;
 
         // Merge 65gg
         const mergedMap: Record<string, { clicks: number; orders: number }> = {};
@@ -880,14 +900,18 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
         reportData65 = Object.entries(mergedMap).map(([targeting, data]) => ({
           targeting, clicks: data.clicks, purchases14d: data.orders
         }));
+        reportDiag.report65Result = 'OK';
         console.log(`✅ [TEST] Report 65gg merged: ${reportData65.length} righe`);
       } catch (reportErr: any) {
+        reportDiag.report65Result = 'FAILED';
+        reportDiag.report65Error = reportErr.message;
         console.error(`⚠️ [TEST] Report 65gg fallito (${reportErr.message}). Continuo con dati vuoti.`);
       }
 
       // Passa SEMPRE preloadedFunc3Reports (anche con array vuoti) per evitare
       // che func3 ri-richieda gli stessi report bloccati
       preloadedFunc3Reports = { reportData, reportData65 };
+      (preloadedFunc3Reports as any)._diagnostics = reportDiag;
       console.log(`📊 [TEST] Pre-loading completato: ${reportData.length} righe principali, ${reportData65.length} righe 65gg`);
     }
 
@@ -1040,12 +1064,13 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
     const preloadDiagnostics = preloadedFunc3Reports ? {
       mainReportRows: preloadedFunc3Reports.reportData.length,
       report65Rows: preloadedFunc3Reports.reportData65.length,
-      sampleTargeting: preloadedFunc3Reports.reportData.slice(0, 3).map((r: any) => ({
-        targeting: r.targeting, clicks: r.clicks, impressions: r.impressions
+      sampleTargeting: preloadedFunc3Reports.reportData.slice(0, 5).map((r: any) => ({
+        targeting: r.targeting, clicks: r.clicks, impressions: r.impressions, cost: r.cost
       })),
       sampleTargeting65: preloadedFunc3Reports.reportData65.slice(0, 3).map((r: any) => ({
         targeting: r.targeting, clicks: r.clicks
-      }))
+      })),
+      reportDetails: (preloadedFunc3Reports as any)?._diagnostics || null
     } : undefined;
 
     res.json({
