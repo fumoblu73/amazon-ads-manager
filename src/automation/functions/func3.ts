@@ -178,13 +178,41 @@ export async function executeFunc3(
 
     console.log(`📊 Trovati ${items.length} items da analizzare`);
 
+    // Debug: mostra campione dati report e items per diagnostica matching
+    if (reportData.length > 0) {
+      const sampleTargeting = reportData.slice(0, 3).map((r: any) => r.targeting);
+      console.log(`📊 Report: ${reportData.length} righe. Campione targeting: ${JSON.stringify(sampleTargeting)}`);
+    } else {
+      console.log(`⚠️ Report vuoto: 0 righe (tutti gli items saranno no_data)`);
+    }
+    if (items.length > 0) {
+      const sampleItems = items.slice(0, 3).map((i: any) => ({
+        id: i.keywordId || i.targetId,
+        text: i.keywordText || i.expression?.[0]?.value || '(no text)'
+      }));
+      console.log(`📊 Items campione: ${JSON.stringify(sampleItems)}`);
+    }
+
+    // Helper: confronta targeting report con matchTarget dell'item
+    // API v3 usa formati come: 'asin="B0XXXX"', 'keyword text', ecc.
+    const matchTargeting = (reportTargeting: string, itemMatchTarget: string): boolean => {
+      if (!reportTargeting || !itemMatchTarget) return false;
+      // Match esatto
+      if (reportTargeting === itemMatchTarget) return true;
+      // Match parziale: il report può contenere il valore tra virgolette (es. asin="B0XXXX")
+      if (reportTargeting.includes(itemMatchTarget)) return true;
+      // Match inverso: l'item potrebbe essere più lungo del targeting
+      if (itemMatchTarget.includes(reportTargeting)) return true;
+      return false;
+    };
+
     // 6. Processa ogni item
     for (const item of items) {
       result.itemsProcessed++;
 
       try {
         const itemId = item.keywordId || item.targetId;
-        const itemName = item.keywordText || item.asin || itemId;
+        const itemName = item.keywordText || item.expression?.[0]?.value || item.asin || itemId;
         const currentBid = item.bid;
 
         // Trova metriche - API v3 usa 'targeting' (testo keyword/ASIN) per matching
@@ -192,12 +220,12 @@ export async function executeFunc3(
         const metrics = reportData.find((r: any) =>
           (r.keywordId && String(r.keywordId) === String(itemId)) ||
           (r.targetId && String(r.targetId) === String(itemId)) ||
-          (r.targeting && matchTarget && r.targeting === matchTarget)
+          matchTargeting(r.targeting, matchTarget)
         );
         const metrics65 = reportData65.find((r: any) =>
           (r.keywordId && String(r.keywordId) === String(itemId)) ||
           (r.targetId && String(r.targetId) === String(itemId)) ||
-          (r.targeting && matchTarget && r.targeting === matchTarget)
+          matchTargeting(r.targeting, matchTarget)
         );
 
         if (!metrics) {

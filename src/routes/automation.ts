@@ -1036,6 +1036,18 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
       }
     }
 
+    // Diagnostica pre-loading per func3 (visibile nel JSON di risposta)
+    const preloadDiagnostics = preloadedFunc3Reports ? {
+      mainReportRows: preloadedFunc3Reports.reportData.length,
+      report65Rows: preloadedFunc3Reports.reportData65.length,
+      sampleTargeting: preloadedFunc3Reports.reportData.slice(0, 3).map((r: any) => ({
+        targeting: r.targeting, clicks: r.clicks, impressions: r.impressions
+      })),
+      sampleTargeting65: preloadedFunc3Reports.reportData65.slice(0, 3).map((r: any) => ({
+        targeting: r.targeting, clicks: r.clicks
+      }))
+    } : undefined;
+
     res.json({
       success: true,
       testOnly: true,
@@ -1046,6 +1058,7 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
       marketplace,
       auth: directAuthResult,
       ...(kdpBook ? { book: { title: kdpBook.title, price: book?.price, fastAcos: fastAcosValue } } : {}),
+      ...(preloadDiagnostics ? { preloadDiagnostics } : {}),
       campaignsFound: campaigns.length,
       results
     });
