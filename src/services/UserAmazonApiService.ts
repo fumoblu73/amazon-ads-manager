@@ -343,15 +343,15 @@ export class UserAmazonApiService {
         requiredCols = ['campaignId', 'campaignName'];
         groupBy = ['campaign'];
       } else {
-        // spTargeting
-        requiredCols = ['campaignId', 'adGroupId', 'keywordId', 'keyword'];
+        // spTargeting - usa solo colonne valide per API v3
+        requiredCols = ['campaignId', 'adGroupId', 'targeting'];
         groupBy = ['targeting'];
       }
 
       const allColumns = [...new Set([...requiredCols, ...v3Columns])];
 
-      // Rimuovi solo colonne sicuramente non valide
-      const invalidColumns = ['targetId', 'bid', 'orders14d', 'spend'];
+      // Rimuovi colonne non valide (nomi legacy o non supportati da spTargeting v3)
+      const invalidColumns = ['targetId', 'bid', 'orders14d', 'spend', 'keywordId', 'keyword', 'keywordBid'];
       const validColumns = allColumns.filter(col => !invalidColumns.includes(col));
 
       const requestBody = {
@@ -390,8 +390,11 @@ export class UserAmazonApiService {
           return existingReportId;
         }
       }
-      console.error('❌ [API v3] Error requesting report:', error.response?.data || error.message);
-      throw error;
+      console.error('❌ [API v3] Error requesting report:', JSON.stringify(error.response?.data || error.message, null, 2));
+      console.error('❌ [API v3] HTTP status:', error.response?.status);
+      // Include dettaglio errore Amazon nel messaggio
+      const detail = error.response?.data?.message || error.response?.data?.detail || error.response?.data?.details || '';
+      throw new Error(`Report request failed (${error.response?.status}): ${detail || error.message}`);
     }
   }
 

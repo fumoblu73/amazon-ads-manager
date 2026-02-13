@@ -146,12 +146,17 @@ export async function executeFunc3(
         const itemName = item.keywordText || item.asin || itemId;
         const currentBid = item.bid;
 
-        // Trova metriche
+        // Trova metriche - API v3 usa 'targeting' (testo keyword/ASIN) per matching
+        const matchTarget = item.keywordText || item.resolvedExpression?.value || item.expression?.[0]?.value || '';
         const metrics = reportData.find((r: any) =>
-          (r.keywordId === itemId) || (r.targetId === itemId)
+          (r.keywordId && String(r.keywordId) === String(itemId)) ||
+          (r.targetId && String(r.targetId) === String(itemId)) ||
+          (r.targeting && matchTarget && r.targeting === matchTarget)
         );
         const metrics65 = reportData65.find((r: any) =>
-          (r.keywordId === itemId) || (r.targetId === itemId)
+          (r.keywordId && String(r.keywordId) === String(itemId)) ||
+          (r.targetId && String(r.targetId) === String(itemId)) ||
+          (r.targeting && matchTarget && r.targeting === matchTarget)
         );
 
         if (!metrics) {
@@ -160,11 +165,11 @@ export async function executeFunc3(
         }
 
         const clicks = metrics.clicks || 0;
-        const orders = metrics.orders || 0;
+        const orders = metrics.purchases14d || metrics.orders || 0;
         const clicks65 = metrics65?.clicks || 0;
-        const orders65 = metrics65?.orders || 0;
+        const orders65 = metrics65?.purchases14d || metrics65?.orders || 0;
         const cost = metrics.cost || 0;
-        const sales = metrics.sales || 0;
+        const sales = metrics.sales14d || metrics.sales || 0;
 
         // a) CONTROLLO PAUSA
         const shouldPause =
