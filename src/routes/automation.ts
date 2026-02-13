@@ -831,6 +831,12 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
       }
     }
     if (functionNumber === 3) {
+      // Pre-loading con timeout ridotto (36 tentativi × 5s = 3 min max per report)
+      // Se fallisce, passa array vuoti → func3 NON ri-richiederà gli stessi report bloccati
+      const PRELOAD_MAX_ATTEMPTS = 36; // ~3 minuti max per report (vs 10 min default)
+      let reportData: any[] = [];
+      let reportData65: any[] = [];
+
       try {
         const { formatDateForAmazon, calculateTimeframeFunc3 } = await import('../utils/timeframe');
         const tf = calculateTimeframeFunc3(50000, {
@@ -840,23 +846,28 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
         });
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - tf.timeframeDays);
-        console.log(`📊 [TEST] Pre-loading func3 reports (3 report, una volta sola)...`);
+        console.log(`📊 [TEST] Pre-loading func3 reports (3 report, timeout ${PRELOAD_MAX_ATTEMPTS * 5}s each)...`);
 
         // Report principale
         const reportId = await apiService.requestReport(formatDateForAmazon(startDate), ['impressions', 'clicks', 'cost', 'sales', 'orders']);
-        const reportData = await apiService.waitAndDownloadReport(reportId);
+        reportData = await apiService.waitAndDownloadReport(reportId, PRELOAD_MAX_ATTEMPTS);
         console.log(`✅ [TEST] Report principale: ${reportData.length} righe`);
+      } catch (reportErr: any) {
+        console.error(`⚠️ [TEST] Report principale fallito (${reportErr.message}). Continuo con dati vuoti.`);
+      }
 
+      try {
+        const { formatDateForAmazon } = await import('../utils/timeframe');
         // Report 65gg chunk A (ultimi 31gg)
         const start65a = new Date(); start65a.setDate(start65a.getDate() - 30);
         const reportId65a = await apiService.requestReport(formatDateForAmazon(start65a), ['clicks', 'orders']);
-        const data65a = await apiService.waitAndDownloadReport(reportId65a);
+        const data65a = await apiService.waitAndDownloadReport(reportId65a, PRELOAD_MAX_ATTEMPTS);
 
         // Report 65gg chunk B (giorni 31-65)
         const start65b = new Date(); start65b.setDate(start65b.getDate() - 65);
         const end65b = new Date(); end65b.setDate(end65b.getDate() - 31);
         const reportId65b = await apiService.requestReport(formatDateForAmazon(start65b), ['clicks', 'orders'], formatDateForAmazon(end65b));
-        const data65b = await apiService.waitAndDownloadReport(reportId65b);
+        const data65b = await apiService.waitAndDownloadReport(reportId65b, PRELOAD_MAX_ATTEMPTS);
 
         // Merge 65gg
         const mergedMap: Record<string, { clicks: number; orders: number }> = {};
@@ -866,15 +877,18 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
           mergedMap[key].clicks += (row.clicks || 0);
           mergedMap[key].orders += (row.purchases14d || row.orders || 0);
         }
-        const reportData65 = Object.entries(mergedMap).map(([targeting, data]) => ({
+        reportData65 = Object.entries(mergedMap).map(([targeting, data]) => ({
           targeting, clicks: data.clicks, purchases14d: data.orders
         }));
         console.log(`✅ [TEST] Report 65gg merged: ${reportData65.length} righe`);
-
-        preloadedFunc3Reports = { reportData, reportData65 };
       } catch (reportErr: any) {
-        console.error(`❌ [TEST] Errore pre-loading func3 reports:`, reportErr.message);
+        console.error(`⚠️ [TEST] Report 65gg fallito (${reportErr.message}). Continuo con dati vuoti.`);
       }
+
+      // Passa SEMPRE preloadedFunc3Reports (anche con array vuoti) per evitare
+      // che func3 ri-richieda gli stessi report bloccati
+      preloadedFunc3Reports = { reportData, reportData65 };
+      console.log(`📊 [TEST] Pre-loading completato: ${reportData.length} righe principali, ${reportData65.length} righe 65gg`);
     }
 
     // 6. Esegui la funzione su ogni campagna compatibile

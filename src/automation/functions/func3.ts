@@ -121,6 +121,11 @@ export async function executeFunc3(
       console.log(`📊 Usando report pre-caricati (${preloadedReports.reportData.length} righe + ${preloadedReports.reportData65.length} righe 65gg)`);
       reportData = preloadedReports.reportData;
       reportData65 = preloadedReports.reportData65;
+
+      // Se i report pre-caricati sono vuoti (timeout durante pre-loading), avvisa e continua
+      if (reportData.length === 0) {
+        console.log(`⚠️ Report pre-caricati vuoti (probabile timeout Amazon). Tutti gli items saranno 'no_data'.`);
+      }
     } else {
       // Richiedi report principale (timeframe dinamico, max 31 giorni)
       const reportId = await apiService.requestReport(formatDateForAmazon(startDate), [
