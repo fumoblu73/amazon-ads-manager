@@ -815,7 +815,8 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
 
     // 5. Pre-scarica il report una volta sola (condiviso tra campagne)
     let preloadedReportData: any[] | undefined;
-    if (functionNumber === 1 || functionNumber === 3) {
+    let preloadedFunc3Reports: { reportData: any[]; reportData65: any[] } | undefined;
+    if (functionNumber === 1) {
       try {
         const { formatDateForAmazon } = await import('../utils/timeframe');
         const reportStartDate = new Date();
@@ -827,6 +828,52 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
         console.log(`✅ [TEST] Report pre-scaricato: ${preloadedReportData.length} righe`);
       } catch (reportErr: any) {
         console.error(`❌ [TEST] Errore pre-loading report:`, reportErr.message);
+      }
+    }
+    if (functionNumber === 3) {
+      try {
+        const { formatDateForAmazon, calculateTimeframeFunc3 } = await import('../utils/timeframe');
+        const tf = calculateTimeframeFunc3(50000, {
+          timeframeA: userConfig.func3_timeframeA,
+          timeframeB: userConfig.func3_timeframeB,
+          timeframeC: userConfig.func3_timeframeC
+        });
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - tf.timeframeDays);
+        console.log(`📊 [TEST] Pre-loading func3 reports (3 report, una volta sola)...`);
+
+        // Report principale
+        const reportId = await apiService.requestReport(formatDateForAmazon(startDate), ['impressions', 'clicks', 'cost', 'sales', 'orders']);
+        const reportData = await apiService.waitAndDownloadReport(reportId);
+        console.log(`✅ [TEST] Report principale: ${reportData.length} righe`);
+
+        // Report 65gg chunk A (ultimi 31gg)
+        const start65a = new Date(); start65a.setDate(start65a.getDate() - 30);
+        const reportId65a = await apiService.requestReport(formatDateForAmazon(start65a), ['clicks', 'orders']);
+        const data65a = await apiService.waitAndDownloadReport(reportId65a);
+
+        // Report 65gg chunk B (giorni 31-65)
+        const start65b = new Date(); start65b.setDate(start65b.getDate() - 65);
+        const end65b = new Date(); end65b.setDate(end65b.getDate() - 31);
+        const reportId65b = await apiService.requestReport(formatDateForAmazon(start65b), ['clicks', 'orders'], formatDateForAmazon(end65b));
+        const data65b = await apiService.waitAndDownloadReport(reportId65b);
+
+        // Merge 65gg
+        const mergedMap: Record<string, { clicks: number; orders: number }> = {};
+        for (const row of [...data65a, ...data65b]) {
+          const key = row.targeting || row.keywordId || row.targetId || '';
+          if (!mergedMap[key]) mergedMap[key] = { clicks: 0, orders: 0 };
+          mergedMap[key].clicks += (row.clicks || 0);
+          mergedMap[key].orders += (row.purchases14d || row.orders || 0);
+        }
+        const reportData65 = Object.entries(mergedMap).map(([targeting, data]) => ({
+          targeting, clicks: data.clicks, purchases14d: data.orders
+        }));
+        console.log(`✅ [TEST] Report 65gg merged: ${reportData65.length} righe`);
+
+        preloadedFunc3Reports = { reportData, reportData65 };
+      } catch (reportErr: any) {
+        console.error(`❌ [TEST] Errore pre-loading func3 reports:`, reportErr.message);
       }
     }
 
@@ -937,7 +984,7 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
               clicksPause: userConfig.func3_clicksPause,
               clicks65days: userConfig.func3_clicks65days,
               dryRun: !!dryRun
-            });
+            }, preloadedFunc3Reports);
             break;
 
           case 4: {
