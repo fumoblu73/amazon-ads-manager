@@ -158,17 +158,18 @@ export async function executeFunc4(
     console.log(`   Trovati ${targetingGroups.length} targeting groups`);
 
     // 5. Richiedi report per targeting groups
+    // API v3: targetId/bid/orders/sales sono invalidi, usiamo colonne v3 valide
+    // Il report spTargeting con groupBy targeting restituisce targeting (stringa), non targetId
     const reportIdGroups = await apiService.requestReport(startDateStr, [
-      'targetId',
       'impressions',
       'clicks',
       'cost',
-      'sales',
-      'orders',
-      'bid'
+      'sales14d',
+      'purchases14d'
     ]);
 
     const reportDataGroups = await apiService.waitAndDownloadReport(reportIdGroups);
+    console.log(`   Report targeting: ${reportDataGroups.length} righe`);
 
     // 6. Processa ogni targeting group
     for (const group of targetingGroups) {
@@ -176,21 +177,33 @@ export async function executeFunc4(
 
       try {
         const targetId = group.targetId;
-        const groupName = group.expression?.[0]?.type || targetId; // es: "complements", "close_match"
+        const groupName = group.expression?.[0]?.type || targetId; // es: "queryBroadRelMatches", "close_match"
         const currentBid = group.bid;
 
-        // Trova metriche del report
-        const metrics = reportDataGroups.find((r: any) => r.targetId === targetId);
+        // API v3: il report spTargeting ha campo "targeting" (stringa), non "targetId"
+        // Per auto campaigns, il targeting è il tipo di match (es: "queryBroadRelMatches")
+        // Cerchiamo per targeting type match
+        const matchTargeting = (reportTargeting: string): boolean => {
+          if (!reportTargeting || !groupName) return false;
+          // Matching diretto
+          if (reportTargeting === groupName) return true;
+          // Il report potrebbe avere formati diversi per auto targeting
+          if (reportTargeting.toLowerCase().includes(groupName.toLowerCase())) return true;
+          if (groupName.toLowerCase().includes(reportTargeting.toLowerCase())) return true;
+          return false;
+        };
+        const metrics = reportDataGroups.find((r: any) => matchTargeting(r.targeting));
 
         if (!metrics) {
-          console.log(`   ⏭️  Nessun dato per ${groupName}`);
+          console.log(`   ⏭️  Nessun dato per ${groupName} (targetId: ${targetId})`);
+          result.details!.targetingGroups.push({ targetId, groupName, clicks: 0, orders: 0, action: 'no_data', currentBid });
           continue;
         }
 
         const clicks = metrics.clicks || 0;
-        const orders = metrics.orders || 0;
+        const orders = metrics.purchases14d || metrics.orders || 0;
         const cost = metrics.cost || 0;
-        const sales = metrics.sales || 0;
+        const sales = metrics.sales14d || metrics.sales || 0;
 
         // a) CONTROLLO PAUSA
         if (clicks > cfg.clicksNegative && orders === 0) {
@@ -249,7 +262,7 @@ export async function executeFunc4(
       try {
         const term = searchTerm.searchTerm;
         const clicks = searchTerm.clicks || 0;
-        const orders = searchTerm.orders || 0;
+        const orders = searchTerm.purchases14d || searchTerm.orders || 0;
         const cost = searchTerm.cost || 0;
 
         // Controlla condizioni per negative targeting
