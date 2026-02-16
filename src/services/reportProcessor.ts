@@ -12,6 +12,7 @@ import { createMarketplaceApiService } from './MarketplaceApiFactory';
 import { In, IsNull } from 'typeorm';
 import { parseKdpPrice, calculateBookFastAcos, InkType, TrimSize } from '../utils/printingCost';
 
+import { sendAutomationSummary, ReportSummaryItem } from './emailService';
 import { executeFunc1 } from '../automation/functions/func1';
 import { executeFunc2 } from '../automation/functions/func2';
 import { executeFunc3 } from '../automation/functions/func3';
@@ -119,6 +120,7 @@ export async function processCompletedReports(): Promise<{
   console.log('='.repeat(60));
 
   const stats = { checked: 0, completed: 0, processed: 0, failed: 0, stillPending: 0 };
+  const emailItems: ReportSummaryItem[] = [];
 
   try {
     const reportRepo = AppDataSource.getRepository(PendingReport);
@@ -169,6 +171,7 @@ export async function processCompletedReports(): Promise<{
             report.errorMessage = `Exceeded max attempts (${report.maxAttempts})`;
             await reportRepo.save(report);
             stats.failed++;
+            emailItems.push({ campaignName: report.campaignName, campaignId: report.campaignId, functions: JSON.parse(report.functionNumbers), status: 'failed', error: report.errorMessage });
             console.log(`   ❌ ${report.reportId}: exceeded max attempts`);
             continue;
           }
@@ -197,6 +200,7 @@ export async function processCompletedReports(): Promise<{
                 report.status = 'processed';
                 await reportRepo.save(report);
                 stats.processed++;
+                emailItems.push({ campaignName: report.campaignName, campaignId: report.campaignId, functions: JSON.parse(report.functionNumbers), status: 'processed', details: 'KDP books enriched' });
                 console.log(`   ✅ ${report.reportId}: kdp_books enriched successfully`);
               } else {
                 await executeAutomationFunctions(
@@ -205,6 +209,7 @@ export async function processCompletedReports(): Promise<{
                 report.status = 'processed';
                 await reportRepo.save(report);
                 stats.processed++;
+                emailItems.push({ campaignName: report.campaignName, campaignId: report.campaignId, functions: JSON.parse(report.functionNumbers), status: 'processed', details: 'Functions executed' });
                 console.log(`   ✅ ${report.reportId}: functions executed successfully`);
               }
             } catch (error: any) {
@@ -212,6 +217,7 @@ export async function processCompletedReports(): Promise<{
               report.errorMessage = `Function execution error: ${error.message}`;
               await reportRepo.save(report);
               stats.failed++;
+              emailItems.push({ campaignName: report.campaignName, campaignId: report.campaignId, functions: JSON.parse(report.functionNumbers), status: 'failed', error: error.message });
               console.error(`   ❌ ${report.reportId}: function execution failed: ${error.message}`);
             }
 
@@ -220,6 +226,7 @@ export async function processCompletedReports(): Promise<{
             report.errorMessage = `Amazon report failed: ${statusResponse.failureReason || 'Unknown'}`;
             await reportRepo.save(report);
             stats.failed++;
+            emailItems.push({ campaignName: report.campaignName, campaignId: report.campaignId, functions: JSON.parse(report.functionNumbers), status: 'failed', error: report.errorMessage });
             console.log(`   ❌ ${report.reportId}: FAILED by Amazon`);
 
           } else {
@@ -255,6 +262,11 @@ export async function processCompletedReports(): Promise<{
     console.log(`   Failed: ${stats.failed}`);
     console.log(`   Still pending: ${stats.stillPending}`);
     console.log('='.repeat(60));
+
+    // Invia email riepilogo (solo se ci sono stati report processati o falliti)
+    if (emailItems.length > 0) {
+      await sendAutomationSummary(emailItems, stats);
+    }
 
     return stats;
   } catch (error: any) {

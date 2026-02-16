@@ -13,6 +13,7 @@ import { createMarketplaceApiService, getConfiguredMarketplaces } from './Market
 import { createUserAmazonApiService } from './UserAmazonApiFactory';
 import { isInWarmupPeriod, getCampaignCreatedAt, formatDateForAmazon } from '../utils/timeframe';
 import { automationScheduler } from '../automation/scheduler';
+import { sendSubmitConfirmation, SubmitSummaryItem } from './emailService';
 
 /**
  * Extracts reportId from a 425 duplicate error response.
@@ -102,6 +103,29 @@ export async function submitReportsForAllUsers(): Promise<{
     console.log('\n' + '='.repeat(60));
     console.log(`📤 FASE 1 COMPLETATA: ${stats.reportsSubmitted} report sottomessi, ${stats.errors} errori`);
     console.log('='.repeat(60));
+
+    // Invia email conferma submit (se ci sono report)
+    if (stats.reportsSubmitted > 0) {
+      try {
+        // Recupera i report appena creati per il riepilogo email
+        const reportRepo = AppDataSource.getRepository(PendingReport);
+        const recentReports = await reportRepo.find({
+          where: { status: 'submitted' },
+          order: { createdAt: 'DESC' },
+          take: stats.reportsSubmitted
+        });
+        const emailItems: SubmitSummaryItem[] = recentReports.map(r => ({
+          campaignName: r.campaignName,
+          campaignId: r.campaignId,
+          reportId: r.reportId,
+          functions: JSON.parse(r.functionNumbers),
+        }));
+        const marketplaces = [...new Set(recentReports.map(r => r.marketplace))].join(', ');
+        await sendSubmitConfirmation(emailItems, marketplaces);
+      } catch (emailErr: any) {
+        console.error(`📧 Errore invio email submit: ${emailErr.message}`);
+      }
+    }
 
     return stats;
   } catch (error: any) {
