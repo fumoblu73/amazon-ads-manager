@@ -296,10 +296,17 @@ export async function executeFunc4(
     const searchTermsData = await apiService.waitAndDownloadReport(reportIdSearchTerms);
     console.log(`   Trovati ${searchTermsData.length} search terms`);
 
-    // 8. Processa ogni search term
+    // 8. Processa ogni search term (con deduplicazione)
+    const processedTerms = new Set<string>();
+
     for (const searchTerm of searchTermsData) {
       try {
         const term = searchTerm.searchTerm;
+
+        // Skip termini già processati (il report può avere duplicati da targeting groups diversi)
+        if (processedTerms.has(term)) continue;
+        processedTerms.add(term);
+
         const clicks = searchTerm.clicks || 0;
         const orders = searchTerm.purchases14d || searchTerm.orders || 0;
         const cost = searchTerm.cost || 0;
@@ -310,14 +317,15 @@ export async function executeFunc4(
           (cost >= cfg.spendNegative && orders === 0);
 
         if (shouldAddNegative) {
-          // Determina se è una keyword o un ASIN
-          const isAsin = /^B[0-9A-Z]{9}$/.test(term); // Formato ASIN Amazon
+          // Determina se è una keyword o un ASIN (case-insensitive)
+          const isAsin = /^B[0-9A-Z]{9}$/i.test(term); // Formato ASIN Amazon
 
           if (isAsin) {
-            // Aggiungi a negative products
-            console.log(`   ➖ ${cfg.dryRun ? '[DRY RUN] ' : ''}Negative ASIN: ${term} (clicks=${clicks}, cost=${cost.toFixed(2)})`);
+            // Aggiungi a negative products (ASIN in maiuscolo per l'API)
+            const asinUpper = term.toUpperCase();
+            console.log(`   ➖ ${cfg.dryRun ? '[DRY RUN] ' : ''}Negative ASIN: ${asinUpper} (clicks=${clicks}, cost=${cost.toFixed(2)})`);
             if (!cfg.dryRun) {
-              await apiService.addNegativeTarget(campaignId, adGroupId, term);
+              await apiService.addNegativeTarget(campaignId, adGroupId, asinUpper);
             }
             result.negativeTargetsAdded++;
             result.details!.negatives.push({ term, type: 'asin', clicks, cost });
