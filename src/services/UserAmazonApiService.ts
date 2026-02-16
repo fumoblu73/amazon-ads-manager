@@ -739,7 +739,16 @@ export class UserAmazonApiService {
     campaignIdFilter?: string
   ): Promise<string> {
     try {
-      console.log(`📊 [API v3] Requesting search terms report ${startDate} - ${endDate}...`);
+      // Converti da YYYYMMDD a YYYY-MM-DD se necessario
+      let start = startDate;
+      let end = endDate;
+      if (start.length === 8 && !start.includes('-')) {
+        start = `${start.substring(0, 4)}-${start.substring(4, 6)}-${start.substring(6, 8)}`;
+      }
+      if (end.length === 8 && !end.includes('-')) {
+        end = `${end.substring(0, 4)}-${end.substring(4, 6)}-${end.substring(6, 8)}`;
+      }
+      console.log(`📊 [API v3] Requesting search terms report ${start} - ${end}...`);
 
       // Colonne valide per API v3 spSearchTerm
       const columns = [
@@ -755,8 +764,8 @@ export class UserAmazonApiService {
       ];
 
       const requestBody: any = {
-        startDate: startDate,
-        endDate: endDate,
+        startDate: start,
+        endDate: end,
         configuration: {
           adProduct: 'SPONSORED_PRODUCTS',
           groupBy: ['searchTerm'],

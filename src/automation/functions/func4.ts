@@ -168,8 +168,20 @@ export async function executeFunc4(
       'purchases14d'
     ]);
 
-    const reportDataGroups = await apiService.waitAndDownloadReport(reportIdGroups);
-    console.log(`   Report targeting: ${reportDataGroups.length} righe`);
+    const reportDataGroupsAll = await apiService.waitAndDownloadReport(reportIdGroups);
+    console.log(`   Report targeting (totale): ${reportDataGroupsAll.length} righe`);
+
+    // Filtra per campaignId (il report contiene TUTTE le campagne)
+    const reportDataGroups = reportDataGroupsAll.filter((r: any) => String(r.campaignId) === String(campaignId));
+    console.log(`   Report targeting (campagna ${campaignId}): ${reportDataGroups.length} righe`);
+
+    // Debug: mostra i targeting trovati per questa campagna
+    if (reportDataGroups.length > 0) {
+      console.log(`   Sample targeting values: ${reportDataGroups.slice(0, 10).map((r: any) => r.targeting).join(', ')}`);
+    }
+
+    // Debug: mostra i nomi dei targeting groups dall'API
+    console.log(`   Targeting group names: ${targetingGroups.map((g: any) => g.expression?.[0]?.type || g.targetId).join(', ')}`);
 
     // 6. Processa ogni targeting group
     for (const group of targetingGroups) {
