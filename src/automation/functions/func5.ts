@@ -141,20 +141,26 @@ export async function executeFunc5(
     const searchTermsData = await apiService.waitAndDownloadReport(reportId);
     console.log(`📊 Trovati ${searchTermsData.length} search terms`);
 
-    // 3. Filtra solo search terms con almeno 1 ordine
-    const performingSearchTerms = searchTermsData.filter((st: any) => (st.orders || 0) >= cfg.minOrders);
+    // 3. Filtra solo search terms con almeno 1 ordine (API v3: purchases14d)
+    const performingSearchTerms = searchTermsData.filter((st: any) => (st.purchases14d || st.orders || 0) >= cfg.minOrders);
     console.log(`✅ Search terms con >= ${cfg.minOrders} ordini: ${performingSearchTerms.length}`);
 
-    // 4. Processa ogni search term
-    for (const searchTerm of performingSearchTerms) {
-      result.searchTermsProcessed++;
+    // 4. Processa ogni search term (con deduplicazione)
+    const processedTerms = new Set<string>();
 
+    for (const searchTerm of performingSearchTerms) {
       try {
         const term = searchTerm.searchTerm;
-        const orders = searchTerm.orders || 0;
 
-        // Determina se è una keyword o un ASIN
-        const isAsin = /^B[0-9A-Z]{9}$/.test(term);
+        // Skip termini già processati
+        if (processedTerms.has(term)) continue;
+        processedTerms.add(term);
+
+        result.searchTermsProcessed++;
+        const orders = searchTerm.purchases14d || searchTerm.orders || 0;
+
+        // Determina se è una keyword o un ASIN (case-insensitive)
+        const isAsin = /^B[0-9A-Z]{9}$/i.test(term);
 
         console.log(`\n   ${isAsin ? '📦' : '🔑'} ${cfg.dryRun ? '[DRY RUN] ' : ''}"${term}" (${orders} ordini)`);
 
@@ -236,7 +242,7 @@ async function feedFromCampaign5(
     if (mapping.campaign2Id && mapping.campaign2AdGroupId) {
       if (!dryRun) {
         await apiService.addTargets(mapping.campaign2Id, mapping.campaign2AdGroupId, [{
-          asin: term, bid: cfg.bidBroad, expressionType: 'manual'
+          asin: term.toUpperCase(), bid: cfg.bidBroad, expressionType: 'manual'
         }]);
       }
       result.targetsAdded++;
@@ -247,7 +253,7 @@ async function feedFromCampaign5(
     if (mapping.campaign4Id && mapping.campaign4AdGroupId) {
       if (!dryRun) {
         await apiService.addTargets(mapping.campaign4Id, mapping.campaign4AdGroupId, [{
-          asin: term, bid: cfg.bidExpanded, expressionType: 'manual'
+          asin: term.toUpperCase(), bid: cfg.bidExpanded, expressionType: 'manual'
         }]);
       }
       result.targetsAdded++;
