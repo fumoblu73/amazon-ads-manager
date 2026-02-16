@@ -21,6 +21,7 @@ export interface Func4Config {
   clicksNegative: number;     // Default: 10 clicks
   spendNegative: number;      // Default: 10 (valuta locale)
   dryRun?: boolean;           // Se true, non modifica bid/stato/negative (solo analisi)
+  skipPart1?: boolean;         // Se true, salta Parte 1 (targeting groups) - solo per test
 }
 
 export interface Book {
@@ -106,7 +107,8 @@ export async function executeFunc4(
     timeframeC: config?.timeframeC || 5000,
     clicksNegative: config?.clicksNegative || 10,
     spendNegative: config?.spendNegative || 10,
-    dryRun: config?.dryRun || false
+    dryRun: config?.dryRun || false,
+    skipPart1: config?.skipPart1 || false
   };
 
   if (cfg.dryRun) {
@@ -151,6 +153,9 @@ export async function executeFunc4(
     // ================================================
     // PARTE 1: OTTIMIZZAZIONE TARGETING GROUPS
     // ================================================
+    if (cfg.skipPart1) {
+      console.log('\n⏭️  PARTE 1: Skippata (skipPart1=true)');
+    } else {
     console.log('\n📊 PARTE 1: Ottimizzazione Targeting Groups');
 
     // 4. Recupera targeting groups
@@ -284,6 +289,8 @@ export async function executeFunc4(
         console.error(`   ❌ Errore:`, error);
       }
     }
+
+    } // end if !skipPart1
 
     // ================================================
     // PARTE 2: NEGATIVE TARGETING (Search Terms)

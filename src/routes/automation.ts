@@ -1072,7 +1072,8 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
               timeframeC: configOverrides?.timeframeC ?? userConfig.func4_timeframeC,
               clicksNegative: configOverrides?.clicksNegative ?? userConfig.func4_clicksNegative,
               spendNegative: configOverrides?.spendNegative ?? userConfig.func4_spendNegative,
-              dryRun: !!dryRun
+              dryRun: !!dryRun,
+              skipPart1: !!configOverrides?.skipPart1
             });
             break;
           }
