@@ -831,12 +831,14 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
       }
     }
     if (functionNumber === 3) {
-      // Pre-loading con timeout ridotto (36 tentativi × 5s = 3 min max per report)
-      // Se fallisce, passa array vuoti → func3 NON ri-richiederà gli stessi report bloccati
-      const PRELOAD_MAX_ATTEMPTS = 60; // ~5 minuti max per report (vs 10 min default)
+      // STRATEGIA: 2 report (non 3!) richiesti in PARALLELO
+      // - Report principale (30gg): impressions, clicks, cost, sales, orders
+      // - Report 65gg chunk B (da -61gg a -31gg): clicks, orders
+      // Il main report copre già gli ultimi 30gg, quindi lo riusiamo per il chunk A dei 65gg
+      const PRELOAD_MAX_ATTEMPTS = 60; // ~5 minuti max per report
       let reportData: any[] = [];
       let reportData65: any[] = [];
-      const reportDiag: any = { reports: [] }; // Diagnostica dettagliata
+      const reportDiag: any = { strategy: '2-reports-parallel' };
 
       try {
         const { formatDateForAmazon, calculateTimeframeFunc3 } = await import('../utils/timeframe');
@@ -848,71 +850,104 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - tf.timeframeDays);
         const startStr = formatDateForAmazon(startDate);
-        console.log(`📊 [TEST] Pre-loading func3 reports (timeout ${PRELOAD_MAX_ATTEMPTS * 5}s each)...`);
 
-        // Report principale - cattura reportId e primo status per diagnostica
-        const reportId = await apiService.requestReport(startStr, ['impressions', 'clicks', 'cost', 'sales', 'orders']);
-        reportDiag.mainReportId = reportId;
-        reportDiag.mainDateRange = `${startStr} → today`;
-
-        // Check status una volta prima del polling per diagnostica
-        const firstStatus = await apiService.getReportStatus(reportId);
-        reportDiag.mainFirstStatus = firstStatus?.status;
-        reportDiag.mainFirstStatusFull = firstStatus;
-
-        reportData = await apiService.waitAndDownloadReport(reportId, PRELOAD_MAX_ATTEMPTS);
-        reportDiag.mainResult = 'OK';
-        reportDiag.mainRows = reportData.length;
-        console.log(`✅ [TEST] Report principale: ${reportData.length} righe`);
-      } catch (reportErr: any) {
-        reportDiag.mainResult = 'FAILED';
-        reportDiag.mainError = reportErr.message;
-        console.error(`⚠️ [TEST] Report principale fallito (${reportErr.message}). Continuo con dati vuoti.`);
-      }
-
-      try {
-        const { formatDateForAmazon } = await import('../utils/timeframe');
-        // Report 65gg chunk A (da -30gg a -1gg = 29 giorni, ben sotto il limite 31)
-        const start65a = new Date(); start65a.setDate(start65a.getDate() - 30);
-        const end65a = new Date(); end65a.setDate(end65a.getDate() - 1);
-        const reportId65a = await apiService.requestReport(formatDateForAmazon(start65a), ['clicks', 'orders'], formatDateForAmazon(end65a));
-        reportDiag.report65aId = reportId65a;
-        reportDiag.report65aRange = `${formatDateForAmazon(start65a)} → ${formatDateForAmazon(end65a)}`;
-
-        const data65a = await apiService.waitAndDownloadReport(reportId65a, PRELOAD_MAX_ATTEMPTS);
-        reportDiag.report65aRows = data65a.length;
-
-        // Report 65gg chunk B (da -61gg a -31gg = 30 giorni, sotto il limite 31)
+        // Chunk B: da -61gg a -31gg (30 giorni)
         const start65b = new Date(); start65b.setDate(start65b.getDate() - 61);
         const end65b = new Date(); end65b.setDate(end65b.getDate() - 31);
-        const reportId65b = await apiService.requestReport(formatDateForAmazon(start65b), ['clicks', 'orders'], formatDateForAmazon(end65b));
-        reportDiag.report65bRange = `${formatDateForAmazon(start65b)} → ${formatDateForAmazon(end65b)}`;
-        reportDiag.report65bId = reportId65b;
+        const start65bStr = formatDateForAmazon(start65b);
+        const end65bStr = formatDateForAmazon(end65b);
 
-        const data65b = await apiService.waitAndDownloadReport(reportId65b, PRELOAD_MAX_ATTEMPTS);
-        reportDiag.report65bRows = data65b.length;
+        console.log(`📊 [TEST] Requesting 2 reports in PARALLEL...`);
+        reportDiag.mainDateRange = `${startStr} → today`;
+        reportDiag.chunk65bRange = `${start65bStr} → ${end65bStr}`;
 
-        // Merge 65gg
-        const mergedMap: Record<string, { clicks: number; orders: number }> = {};
-        for (const row of [...data65a, ...data65b]) {
-          const key = row.targeting || row.keywordId || row.targetId || '';
-          if (!mergedMap[key]) mergedMap[key] = { clicks: 0, orders: 0 };
-          mergedMap[key].clicks += (row.clicks || 0);
-          mergedMap[key].orders += (row.purchases14d || row.orders || 0);
+        // 1. Richiedi ENTRAMBI i report subito (Amazon inizia a generarli in parallelo)
+        const [mainReportId, chunk65bReportId] = await Promise.all([
+          apiService.requestReport(startStr, ['impressions', 'clicks', 'cost', 'sales', 'orders']),
+          apiService.requestReport(start65bStr, ['clicks', 'orders'], end65bStr)
+        ]);
+        reportDiag.mainReportId = mainReportId;
+        reportDiag.chunk65bReportId = chunk65bReportId;
+        console.log(`📊 [TEST] Both reports requested. Polling in parallel...`);
+
+        // 2. Attendi ENTRAMBI i report in parallelo (max ~5 min totali, non 10)
+        const results = await Promise.allSettled([
+          apiService.waitAndDownloadReport(mainReportId, PRELOAD_MAX_ATTEMPTS),
+          apiService.waitAndDownloadReport(chunk65bReportId, PRELOAD_MAX_ATTEMPTS)
+        ]);
+
+        // 3. Gestisci risultato report principale
+        if (results[0].status === 'fulfilled') {
+          reportData = results[0].value;
+          reportDiag.mainResult = 'OK';
+          reportDiag.mainRows = reportData.length;
+          console.log(`✅ [TEST] Report principale: ${reportData.length} righe`);
+        } else {
+          reportDiag.mainResult = 'FAILED';
+          reportDiag.mainError = results[0].reason?.message;
+          console.error(`⚠️ [TEST] Report principale fallito: ${results[0].reason?.message}`);
         }
-        reportData65 = Object.entries(mergedMap).map(([targeting, data]) => ({
-          targeting, clicks: data.clicks, purchases14d: data.orders
-        }));
-        reportDiag.report65Result = 'OK';
-        console.log(`✅ [TEST] Report 65gg merged: ${reportData65.length} righe`);
-      } catch (reportErr: any) {
-        reportDiag.report65Result = 'FAILED';
-        reportDiag.report65Error = reportErr.message;
-        console.error(`⚠️ [TEST] Report 65gg fallito (${reportErr.message}). Continuo con dati vuoti.`);
+
+        // 4. Gestisci risultato chunk B e merge con dati dal main report
+        if (results[1].status === 'fulfilled') {
+          const data65b = results[1].value;
+          reportDiag.chunk65bResult = 'OK';
+          reportDiag.chunk65bRows = data65b.length;
+          console.log(`✅ [TEST] Report chunk B (61-31gg): ${data65b.length} righe`);
+
+          // Merge: main report (ultimi 30gg = chunk A) + chunk B (31-61gg)
+          const mergedMap: Record<string, { clicks: number; orders: number }> = {};
+          // Chunk A = dati dal main report (clicks + orders degli ultimi 30gg)
+          for (const row of reportData) {
+            const key = row.targeting || row.keywordId || row.targetId || '';
+            if (!key) continue;
+            if (!mergedMap[key]) mergedMap[key] = { clicks: 0, orders: 0 };
+            mergedMap[key].clicks += (row.clicks || 0);
+            mergedMap[key].orders += (row.purchases14d || row.orders || 0);
+          }
+          // Chunk B = report separato (31-61gg)
+          for (const row of data65b) {
+            const key = row.targeting || row.keywordId || row.targetId || '';
+            if (!key) continue;
+            if (!mergedMap[key]) mergedMap[key] = { clicks: 0, orders: 0 };
+            mergedMap[key].clicks += (row.clicks || 0);
+            mergedMap[key].orders += (row.purchases14d || row.orders || 0);
+          }
+          reportData65 = Object.entries(mergedMap).map(([targeting, data]) => ({
+            targeting, clicks: data.clicks, purchases14d: data.orders
+          }));
+          reportDiag.report65Result = 'OK';
+          reportDiag.report65MergedRows = reportData65.length;
+          console.log(`✅ [TEST] Report 65gg merged: ${reportData65.length} righe`);
+        } else {
+          // Chunk B fallito, ma possiamo ancora usare il main report come 65gg parziale (solo ultimi 30gg)
+          reportDiag.chunk65bResult = 'FAILED';
+          reportDiag.chunk65bError = results[1].reason?.message;
+          console.error(`⚠️ [TEST] Chunk B fallito: ${results[1].reason?.message}`);
+
+          if (reportData.length > 0) {
+            const mergedMap: Record<string, { clicks: number; orders: number }> = {};
+            for (const row of reportData) {
+              const key = row.targeting || row.keywordId || row.targetId || '';
+              if (!key) continue;
+              if (!mergedMap[key]) mergedMap[key] = { clicks: 0, orders: 0 };
+              mergedMap[key].clicks += (row.clicks || 0);
+              mergedMap[key].orders += (row.purchases14d || row.orders || 0);
+            }
+            reportData65 = Object.entries(mergedMap).map(([targeting, data]) => ({
+              targeting, clicks: data.clicks, purchases14d: data.orders
+            }));
+            reportDiag.report65Result = 'PARTIAL (main report only, ~30gg)';
+            reportDiag.report65MergedRows = reportData65.length;
+            console.log(`⚠️ [TEST] Report 65gg parziale (solo 30gg dal main): ${reportData65.length} righe`);
+          }
+        }
+      } catch (err: any) {
+        reportDiag.fatalError = err.message;
+        console.error(`❌ [TEST] Errore fatale pre-loading: ${err.message}`);
       }
 
-      // Passa SEMPRE preloadedFunc3Reports (anche con array vuoti) per evitare
-      // che func3 ri-richieda gli stessi report bloccati
+      // Passa SEMPRE preloadedFunc3Reports (anche con array vuoti)
       preloadedFunc3Reports = { reportData, reportData65 };
       (preloadedFunc3Reports as any)._diagnostics = reportDiag;
       console.log(`📊 [TEST] Pre-loading completato: ${reportData.length} righe principali, ${reportData65.length} righe 65gg`);
