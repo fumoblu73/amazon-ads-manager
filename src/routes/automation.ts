@@ -514,7 +514,7 @@ router.post('/test-bid-increase', authMiddleware, requireAmazonAuth, async (req:
 router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
-    const { asin, functionNumber, marketplace, diagnosticsOnly, dryRun } = req.body;
+    const { asin, functionNumber, marketplace, diagnosticsOnly, dryRun, configOverrides } = req.body;
 
     if (!asin || !functionNumber || !marketplace) {
       return res.status(400).json({ error: 'asin, functionNumber (1-5), and marketplace are required' });
@@ -1066,12 +1066,12 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
           case 4: {
             const adGroupId = adGroupIdMap[campaignId] || 'unknown';
             result = await executeFunc4(campaignId, campaignName, marketplace, adGroupId, book, 50000, apiService, {
-              frequency: userConfig.func4_frequency,
-              timeframeA: userConfig.func4_timeframeA,
-              timeframeB: userConfig.func4_timeframeB,
-              timeframeC: userConfig.func4_timeframeC,
-              clicksNegative: userConfig.func4_clicksNegative,
-              spendNegative: userConfig.func4_spendNegative,
+              frequency: configOverrides?.frequency ?? userConfig.func4_frequency,
+              timeframeA: configOverrides?.timeframeA ?? userConfig.func4_timeframeA,
+              timeframeB: configOverrides?.timeframeB ?? userConfig.func4_timeframeB,
+              timeframeC: configOverrides?.timeframeC ?? userConfig.func4_timeframeC,
+              clicksNegative: configOverrides?.clicksNegative ?? userConfig.func4_clicksNegative,
+              spendNegative: configOverrides?.spendNegative ?? userConfig.func4_spendNegative,
               dryRun: !!dryRun
             });
             break;
