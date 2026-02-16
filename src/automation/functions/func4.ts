@@ -324,15 +324,17 @@ export async function executeFunc4(
           (cost >= cfg.spendNegative && orders === 0);
 
         if (shouldAddNegative) {
-          // Determina se è una keyword o un ASIN (case-insensitive)
+          // Determina se è un prodotto (ASIN o ISBN-10) o una keyword
           const isAsin = /^B[0-9A-Z]{9}$/i.test(term); // Formato ASIN Amazon
+          const isIsbn10 = /^[0-9]{9}[0-9Xx]$/.test(term); // Formato ISBN-10
+          const isProduct = isAsin || isIsbn10;
 
-          if (isAsin) {
-            // Aggiungi a negative products (ASIN in maiuscolo per l'API)
-            const asinUpper = term.toUpperCase();
-            console.log(`   ➖ ${cfg.dryRun ? '[DRY RUN] ' : ''}Negative ASIN: ${asinUpper} (clicks=${clicks}, cost=${cost.toFixed(2)})`);
+          if (isProduct) {
+            // Aggiungi a negative products (ASIN/ISBN come target)
+            const productId = isAsin ? term.toUpperCase() : term;
+            console.log(`   ➖ ${cfg.dryRun ? '[DRY RUN] ' : ''}Negative Product: ${productId} (clicks=${clicks}, cost=${cost.toFixed(2)})`);
             if (!cfg.dryRun) {
-              await apiService.addNegativeTarget(campaignId, adGroupId, asinUpper);
+              await apiService.addNegativeTarget(campaignId, adGroupId, productId);
             }
             result.negativeTargetsAdded++;
             result.details!.negatives.push({ term, type: 'asin', clicks, cost });

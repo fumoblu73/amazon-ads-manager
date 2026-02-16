@@ -159,35 +159,37 @@ export async function executeFunc5(
         result.searchTermsProcessed++;
         const orders = searchTerm.purchases14d || searchTerm.orders || 0;
 
-        // Determina se è una keyword o un ASIN (case-insensitive)
+        // Determina se è un prodotto (ASIN o ISBN-10) o una keyword
         const isAsin = /^B[0-9A-Z]{9}$/i.test(term);
+        const isIsbn10 = /^[0-9]{9}[0-9Xx]$/.test(term);
+        const isProduct = isAsin || isIsbn10;
 
-        console.log(`\n   ${isAsin ? '📦' : '🔑'} ${cfg.dryRun ? '[DRY RUN] ' : ''}"${term}" (${orders} ordini)`);
+        console.log(`\n   ${isProduct ? '📦' : '🔑'} ${cfg.dryRun ? '[DRY RUN] ' : ''}"${term}" (${orders} ordini${isIsbn10 ? ', ISBN-10' : ''})`);
 
         const destinations: string[] = [];
 
         // Esegue il feeding in base al tipo di campagna sorgente
         if (sourceCampaignType === 5) {
-          await feedFromCampaign5(term, isAsin, marketplace, campaignMapping, cfg, result, apiService, cfg.dryRun!, destinations);
+          await feedFromCampaign5(term, isProduct, marketplace, campaignMapping, cfg, result, apiService, cfg.dryRun!, destinations);
         } else if (sourceCampaignType === 1) {
-          if (!isAsin) {
+          if (!isProduct) {
             await feedFromCampaign1(term, marketplace, campaignMapping, cfg, result, apiService, cfg.dryRun!, destinations);
           }
         } else if (sourceCampaignType === 3) {
-          if (!isAsin) {
+          if (!isProduct) {
             await feedFromCampaign3(term, marketplace, campaignMapping, cfg, result, apiService, cfg.dryRun!, destinations);
           }
         } else if (sourceCampaignType === 2) {
-          if (isAsin) {
+          if (isProduct) {
             await feedFromCampaign2(term, marketplace, campaignMapping, cfg, result, apiService, cfg.dryRun!, destinations);
           }
         } else if (sourceCampaignType === 4) {
-          if (isAsin) {
+          if (isProduct) {
             await feedFromCampaign4(term, marketplace, campaignMapping, cfg, result, apiService, cfg.dryRun!, destinations);
           }
         }
 
-        result.details!.push({ searchTerm: term, isAsin, orders, destinations });
+        result.details!.push({ searchTerm: term, isAsin: isProduct, orders, destinations });
 
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : 'Unknown error';
