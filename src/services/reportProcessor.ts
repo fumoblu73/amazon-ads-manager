@@ -441,7 +441,59 @@ async function executeAutomationFunctions(
 
   const mockPlacements = { topOfSearch: 0, restOfSearch: 10, productPages: 5 };
   const mockTotalImpressions = 50000;
-  const mockAdGroupId = 'mock-adgroup-id';
+
+  // Recupera adGroupId reale per func4/func5 (necessario per negative targeting e keyword/target adding)
+  let realAdGroupId = 'unknown';
+  const needsAdGroup = functionNumbers.some(f => f === 4 || f === 5);
+  if (needsAdGroup) {
+    try {
+      const adGroups = await apiService.getAdGroups?.(report.campaignId);
+      if (adGroups && adGroups.length > 0) {
+        realAdGroupId = adGroups[0].adGroupId;
+        console.log(`     📋 AdGroupId: ${realAdGroupId}`);
+      }
+    } catch (e: any) {
+      console.warn(`     ⚠️ Could not fetch adGroupId: ${e.message}`);
+    }
+  }
+
+  // Costruisci campaignMapping per func5 (tutte le campagne dello stesso ASIN)
+  let campaignMapping: CampaignMapping = {};
+  const needsMapping = functionNumbers.includes(5);
+  if (needsMapping && campaignRecord?.advertisedAsin) {
+    try {
+      const campaignRepo = AppDataSource.getRepository(Campaign);
+      const siblingCampaigns = await campaignRepo.find({
+        where: { advertisedAsin: campaignRecord.advertisedAsin, marketplace, userId: campaignRecord.userId }
+      });
+
+      // Detect campaign type by name and build mapping
+      for (const c of siblingCampaigns) {
+        const lower = c.name.toLowerCase();
+        let cType: number;
+        if (lower.includes('auto') || lower.includes('automatic')) cType = 5;
+        else if (lower.includes('product')) cType = 2;
+        else if (lower.includes('super')) cType = 3;
+        else cType = 1;
+
+        // Recupera adGroupId per ogni campagna sibling
+        let siblingAdGroupId: string | null = null;
+        try {
+          const adGroups = await apiService.getAdGroups?.(c.amazonCampaignId);
+          if (adGroups && adGroups.length > 0) {
+            siblingAdGroupId = adGroups[0].adGroupId;
+          }
+        } catch (_) { /* ignore */ }
+
+        const key = `campaign${cType}`;
+        (campaignMapping as any)[`${key}Id`] = c.amazonCampaignId;
+        (campaignMapping as any)[`${key}AdGroupId`] = siblingAdGroupId;
+      }
+      console.log(`     📋 CampaignMapping: ${JSON.stringify(campaignMapping)}`);
+    } catch (e: any) {
+      console.warn(`     ⚠️ Could not build campaign mapping: ${e.message}`);
+    }
+  }
 
   for (const funcNum of functionNumbers) {
     try {
@@ -504,7 +556,7 @@ async function executeAutomationFunctions(
             report.campaignId,
             report.campaignName,
             marketplace,
-            mockAdGroupId,
+            realAdGroupId,
             book,
             mockTotalImpressions,
             cachedApiService,
@@ -520,16 +572,11 @@ async function executeAutomationFunctions(
           break;
 
         case 5:
-          const mockCampaignMapping: CampaignMapping = {
-            campaign5Id: report.campaignId,
-            campaign5AdGroupId: mockAdGroupId
-          };
-
           await executeFunc5(
             report.campaignId,
             report.campaignType as 1 | 2 | 3 | 4 | 5,
             marketplace,
-            mockCampaignMapping,
+            campaignMapping,
             cachedApiService,
             {
               frequency: config.func5_frequency,
