@@ -183,39 +183,66 @@ export async function executeFunc4(
     // Debug: mostra i nomi dei targeting groups dall'API
     console.log(`   Targeting group names: ${targetingGroups.map((g: any) => g.expression?.[0]?.type || g.targetId).join(', ')}`);
 
+    // Mapping tra nomi API (expression type) e nomi nel report spTargeting
+    const autoTargetingMap: Record<string, string[]> = {
+      'QUERY_HIGH_REL_MATCHES': ['close-match', 'close_match', 'queryHighRelMatches'],
+      'QUERY_BROAD_REL_MATCHES': ['loose-match', 'loose_match', 'queryBroadRelMatches'],
+      'ASIN_SUBSTITUTE_RELATED': ['substitutes', 'asinSubstituteRelated'],
+      'ASIN_ACCESSORY_RELATED': ['complements', 'asinAccessoryRelated'],
+    };
+
+    // Per auto campaigns, aggreghiamo le metriche per tipo di targeting
+    // Il report ha righe individuali (keyword/ASIN), non per gruppo
+    // Quindi sommiamo tutte le righe del report per questa campagna
+    const aggregatedByGroup: Record<string, { clicks: number; orders: number; cost: number; sales: number; impressions: number }> = {};
+
+    for (const row of reportDataGroups) {
+      const targeting = (row.targeting || '').toLowerCase();
+      // Determina a quale gruppo appartiene questa riga
+      let matchedGroup = 'unknown';
+      for (const [apiName, reportNames] of Object.entries(autoTargetingMap)) {
+        if (reportNames.some(name => targeting === name || targeting.includes(name))) {
+          matchedGroup = apiName;
+          break;
+        }
+      }
+      // Se non matcha nessun gruppo auto, potrebbe essere un keyword/ASIN specifico
+      // Per auto campaigns, ogni search term/ASIN viene associato a un gruppo
+      // ma il report non indica esplicitamente il gruppo
+      if (!aggregatedByGroup[matchedGroup]) {
+        aggregatedByGroup[matchedGroup] = { clicks: 0, orders: 0, cost: 0, sales: 0, impressions: 0 };
+      }
+      aggregatedByGroup[matchedGroup].clicks += (row.clicks || 0);
+      aggregatedByGroup[matchedGroup].orders += (row.purchases14d || row.orders || 0);
+      aggregatedByGroup[matchedGroup].cost += (row.cost || 0);
+      aggregatedByGroup[matchedGroup].sales += (row.sales14d || row.sales || 0);
+      aggregatedByGroup[matchedGroup].impressions += (row.impressions || 0);
+    }
+
+    console.log(`   Aggregated groups: ${JSON.stringify(aggregatedByGroup)}`);
+
     // 6. Processa ogni targeting group
     for (const group of targetingGroups) {
       result.targetingGroupsProcessed++;
 
       try {
         const targetId = group.targetId;
-        const groupName = group.expression?.[0]?.type || targetId; // es: "queryBroadRelMatches", "close_match"
+        const groupName = group.expression?.[0]?.type || targetId;
         const currentBid = group.bid;
 
-        // API v3: il report spTargeting ha campo "targeting" (stringa), non "targetId"
-        // Per auto campaigns, il targeting è il tipo di match (es: "queryBroadRelMatches")
-        // Cerchiamo per targeting type match
-        const matchTargeting = (reportTargeting: string): boolean => {
-          if (!reportTargeting || !groupName) return false;
-          // Matching diretto
-          if (reportTargeting === groupName) return true;
-          // Il report potrebbe avere formati diversi per auto targeting
-          if (reportTargeting.toLowerCase().includes(groupName.toLowerCase())) return true;
-          if (groupName.toLowerCase().includes(reportTargeting.toLowerCase())) return true;
-          return false;
-        };
-        const metrics = reportDataGroups.find((r: any) => matchTargeting(r.targeting));
+        // Cerca nelle metriche aggregate o nella mappatura diretta
+        const metrics = aggregatedByGroup[groupName];
 
-        if (!metrics) {
+        if (!metrics || metrics.impressions === 0) {
           console.log(`   ⏭️  Nessun dato per ${groupName} (targetId: ${targetId})`);
           result.details!.targetingGroups.push({ targetId, groupName, clicks: 0, orders: 0, action: 'no_data', currentBid });
           continue;
         }
 
-        const clicks = metrics.clicks || 0;
-        const orders = metrics.purchases14d || metrics.orders || 0;
-        const cost = metrics.cost || 0;
-        const sales = metrics.sales14d || metrics.sales || 0;
+        const clicks = metrics.clicks;
+        const orders = metrics.orders;
+        const cost = metrics.cost;
+        const sales = metrics.sales;
 
         // a) CONTROLLO PAUSA
         if (clicks > cfg.clicksNegative && orders === 0) {
