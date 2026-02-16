@@ -207,6 +207,18 @@ export const automationApi = {
     });
     return response.data;
   },
+
+  // Test automation functions (F1-F5)
+  testFunction: async (asin: string, functionNumber: number, marketplace: string, dryRun: boolean = true, configOverrides?: any) => {
+    const response = await apiClient.post<any>('/api/automation/test-function', {
+      asin,
+      functionNumber,
+      marketplace,
+      dryRun,
+      configOverrides
+    });
+    return response.data;
+  },
 };
 
 // ================================================

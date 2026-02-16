@@ -10,6 +10,7 @@ import SyncCampaigns from './pages/SyncCampaigns';
 // Temporarily disabled - import Campaigns from './pages/Campaigns';
 import Logs from './pages/Logs';
 import Help from './pages/Help';
+import TestFunctions from './pages/TestFunctions';
 import KdpDashboard from './pages/kdp/KdpDashboard';
 import Bookshelf from './pages/kdp/Bookshelf';
 import HistoricalStats from './pages/kdp/HistoricalStats';
@@ -33,6 +34,7 @@ function App() {
             <Route path="/settings" element={<Settings />} />
             {/* Temporarily disabled - <Route path="/campaigns" element={<Campaigns />} /> */}
             <Route path="/logs" element={<Logs />} />
+            <Route path="/test-functions" element={<TestFunctions />} />
             <Route path="/help" element={<Help />} />
 
             {/* KDP Analytics Routes */}
