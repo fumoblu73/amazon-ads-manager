@@ -872,18 +872,21 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
 
       try {
         const { formatDateForAmazon } = await import('../utils/timeframe');
-        // Report 65gg chunk A (ultimi 31gg)
+        // Report 65gg chunk A (da -30gg a -1gg = 29 giorni, ben sotto il limite 31)
         const start65a = new Date(); start65a.setDate(start65a.getDate() - 30);
-        const reportId65a = await apiService.requestReport(formatDateForAmazon(start65a), ['clicks', 'orders']);
+        const end65a = new Date(); end65a.setDate(end65a.getDate() - 1);
+        const reportId65a = await apiService.requestReport(formatDateForAmazon(start65a), ['clicks', 'orders'], formatDateForAmazon(end65a));
         reportDiag.report65aId = reportId65a;
+        reportDiag.report65aRange = `${formatDateForAmazon(start65a)} → ${formatDateForAmazon(end65a)}`;
 
         const data65a = await apiService.waitAndDownloadReport(reportId65a, PRELOAD_MAX_ATTEMPTS);
         reportDiag.report65aRows = data65a.length;
 
-        // Report 65gg chunk B (giorni 31-65)
-        const start65b = new Date(); start65b.setDate(start65b.getDate() - 65);
+        // Report 65gg chunk B (da -61gg a -31gg = 30 giorni, sotto il limite 31)
+        const start65b = new Date(); start65b.setDate(start65b.getDate() - 61);
         const end65b = new Date(); end65b.setDate(end65b.getDate() - 31);
         const reportId65b = await apiService.requestReport(formatDateForAmazon(start65b), ['clicks', 'orders'], formatDateForAmazon(end65b));
+        reportDiag.report65bRange = `${formatDateForAmazon(start65b)} → ${formatDateForAmazon(end65b)}`;
         reportDiag.report65bId = reportId65b;
 
         const data65b = await apiService.waitAndDownloadReport(reportId65b, PRELOAD_MAX_ATTEMPTS);
