@@ -456,17 +456,18 @@ router.post('/auto-sync', authMiddleware, requireAmazonAuth, async (req: AuthReq
       }
     }
 
-    // Rispondi subito, sync in background
-    res.json({ success: true, started: true });
-
-    // Sync in background (fire-and-forget)
     const apiService = createUserAmazonApiService(req.userId!);
+    const profileId = req.user!.profileId?.toString();
     const marketplace = req.user!.countryCode || 'US';
-    console.log(`🔄 Auto-sync campagne per user ${req.userId} (${marketplace})...`);
 
-    syncCampaignsForUser(req.userId!, apiService, { marketplace }).catch(err => {
-      console.error(`❌ Auto-sync fallito per user ${req.userId}:`, err.message);
-    });
+    if (!profileId) {
+      return res.json({ success: true, skipped: true, reason: 'no_profile' });
+    }
+
+    console.log(`🔄 Auto-sync campagne per user ${req.userId} (${marketplace}, profile ${profileId})...`);
+
+    const result = await syncCampaignsForUser(req.userId!, apiService, { profileId, marketplace });
+    res.json({ success: true, ...result });
   } catch (error: any) {
     console.error('❌ Errore POST /api/campaigns/auto-sync:', error);
     if (!res.headersSent) {
