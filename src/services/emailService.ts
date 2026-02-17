@@ -1,66 +1,28 @@
-import nodemailer from 'nodemailer';
-import dns from 'dns';
-
-// Forza IPv4 (Render non supporta IPv6 in uscita)
-dns.setDefaultResultOrder('ipv4first');
-
 // ================================================
-// EMAIL SERVICE - Notifiche automazione
+// EMAIL SERVICE - Notifiche automazione via Resend
 // ================================================
 
-// Risolve hostname SMTP a IPv4 e crea il transporter
-let transporter: nodemailer.Transporter | null = null;
-
-async function initTransporter(): Promise<nodemailer.Transporter | null> {
-  if (!process.env.SMTP_HOST) return null;
-  if (transporter) return transporter;
-
-  const port = parseInt(process.env.SMTP_PORT || '465');
-  const secure = port === 465;
-  let host = process.env.SMTP_HOST;
-
-  // Risolvi hostname a IPv4 per evitare ENETUNREACH su IPv6
-  try {
-    const { resolve4 } = dns.promises;
-    const addresses = await resolve4(host);
-    if (addresses.length > 0) {
-      console.log(`📧 SMTP: ${host} risolto a IPv4 ${addresses[0]}`);
-      host = addresses[0];
-    }
-  } catch (err: any) {
-    console.log(`📧 DNS resolve fallita per ${host}, uso hostname originale: ${err.message}`);
-  }
-
-  transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASSWORD,
-    },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
-    tls: {
-      rejectUnauthorized: false,
-      servername: process.env.SMTP_HOST, // TLS verifica il nome originale, non l'IP
-    },
-  });
-
-  return transporter;
-}
-
-const EMAIL_FROM = process.env.EMAIL_FROM || 'Amazon Ads Manager <noreply@example.com>';
+const EMAIL_FROM = process.env.EMAIL_FROM || 'Amazon Ads Manager <noreply@rainbookeditions.com>';
 const EMAIL_TO = process.env.EMAIL_TO || '';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://amazon-ads-manager-qsio.onrender.com';
 
-async function getTransporter(): Promise<nodemailer.Transporter | null> {
-  return initTransporter();
+function isConfigured(): boolean {
+  return !!(process.env.RESEND_API_KEY && EMAIL_TO);
 }
 
-function isConfiguredSync(): boolean {
-  return !!(process.env.SMTP_HOST && EMAIL_TO);
+async function sendViaResend(to: string, subject: string, html: string): Promise<void> {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ from: EMAIL_FROM, to, subject, html }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: `HTTP ${res.status}` }));
+    throw new Error(err.message || `Resend API error: ${res.status}`);
+  }
 }
 
 // ================================================
@@ -69,28 +31,19 @@ function isConfiguredSync(): boolean {
 
 export async function sendTestEmail(): Promise<{ success: boolean; message: string; config: any }> {
   const config = {
-    smtpHost: process.env.SMTP_HOST || '(non configurato)',
-    smtpPort: process.env.SMTP_PORT || '(non configurato)',
-    smtpUser: process.env.SMTP_USER ? '***configurato***' : '(non configurato)',
-    smtpPassword: process.env.SMTP_PASSWORD ? '***configurato***' : '(non configurato)',
+    resendApiKey: process.env.RESEND_API_KEY ? '***configurato***' : '(non configurato)',
     emailFrom: EMAIL_FROM,
     emailTo: EMAIL_TO || '(non configurato)',
     frontendUrl: FRONTEND_URL,
   };
 
-  if (!isConfiguredSync()) {
-    return { success: false, message: 'Email non configurata. Verifica le variabili SMTP_HOST, SMTP_USER, SMTP_PASSWORD, EMAIL_TO su Render.', config };
+  if (!isConfigured()) {
+    return { success: false, message: 'Email non configurata. Verifica le variabili RESEND_API_KEY e EMAIL_TO su Render.', config };
   }
 
   try {
-    const mailer = await getTransporter();
-    if (!mailer) {
-      return { success: false, message: 'Impossibile creare il transporter SMTP', config };
-    }
-
     const date = new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' });
 
-    // Invia email di test con dati simulati
     const html = buildEmailTemplate({
       title: 'Test Notifica Email',
       date,
@@ -138,22 +91,15 @@ export async function sendTestEmail(): Promise<{ success: boolean; message: stri
         </div>
 
         <p style="color:#9ca3af;font-size:12px;margin-top:20px">
-          Configurazione: ${config.smtpHost}:${config.smtpPort} | Da: ${config.emailFrom} | A: ${config.emailTo}
+          Configurazione: Resend API | Da: ${config.emailFrom} | A: ${config.emailTo}
         </p>
       `,
     });
 
-    await mailer.sendMail({
-      from: EMAIL_FROM,
-      to: EMAIL_TO,
-      subject: '[ADS Manager] Test notifica email - Configurazione OK',
-      html,
-    });
+    await sendViaResend(EMAIL_TO, '[ADS Manager] Test notifica email - Configurazione OK', html);
 
     return { success: true, message: `Email di test inviata a ${EMAIL_TO}`, config };
   } catch (error: any) {
-    // Reset transporter per riprovare con nuovo DNS resolve
-    transporter = null;
     return { success: false, message: `Errore invio: ${error.message}`, config };
   }
 }
@@ -186,14 +132,12 @@ export async function sendAutomationSummary(
   items: ReportSummaryItem[],
   stats: { processed: number; failed: number; stillPending: number }
 ): Promise<void> {
-  if (!isConfiguredSync()) {
+  if (!isConfigured()) {
     console.log('📧 Email non configurata, skip invio riepilogo');
     return;
   }
 
   try {
-    const mailer = await getTransporter();
-    if (!mailer) return;
     const hasErrors = stats.failed > 0;
     const date = new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' });
 
@@ -255,16 +199,10 @@ export async function sendAutomationSummary(
       `,
     });
 
-    await mailer.sendMail({
-      from: EMAIL_FROM,
-      to: EMAIL_TO,
-      subject,
-      html,
-    });
+    await sendViaResend(EMAIL_TO, subject, html);
 
     console.log(`📧 Email riepilogo inviata a ${EMAIL_TO}`);
   } catch (error: any) {
-    transporter = null; // Reset per riprovare
     console.error(`📧 Errore invio email riepilogo: ${error.message}`);
   }
 }
@@ -277,12 +215,9 @@ export async function sendSubmitConfirmation(
   items: SubmitSummaryItem[],
   marketplace: string
 ): Promise<void> {
-  if (!isConfiguredSync()) return;
+  if (!isConfigured()) return;
 
   try {
-    const mailer = await getTransporter();
-    if (!mailer) return;
-
     const date = new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' });
 
     const rowsHtml = items.map(item => {
@@ -316,16 +251,10 @@ export async function sendSubmitConfirmation(
       `,
     });
 
-    await mailer.sendMail({
-      from: EMAIL_FROM,
-      to: EMAIL_TO,
-      subject: `[ADS Manager] Fase 1: ${items.length} report inviati (${marketplace})`,
-      html,
-    });
+    await sendViaResend(EMAIL_TO, `[ADS Manager] Fase 1: ${items.length} report inviati (${marketplace})`, html);
 
     console.log(`📧 Email conferma submit inviata a ${EMAIL_TO}`);
   } catch (error: any) {
-    transporter = null; // Reset per riprovare
     console.error(`📧 Errore invio email submit: ${error.message}`);
   }
 }
