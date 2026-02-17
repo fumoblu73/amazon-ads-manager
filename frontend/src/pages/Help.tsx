@@ -24,6 +24,25 @@ export default function Help() {
           </div>
         </section>
 
+        {/* Sync Campaigns Section */}
+        <section className="bg-black rounded-xl p-6">
+          <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
+            <svg className="w-8 h-8 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Sync Campaigns
+          </h2>
+          <div className="text-gray-300 space-y-3">
+            <p><strong>Importa le campagne da Amazon Advertising nel database locale</strong></p>
+            <ul className="list-disc list-inside space-y-2 ml-4">
+              <li><strong>Profilo:</strong> Seleziona il profilo Amazon Advertising (marketplace) da cui importare</li>
+              <li><strong>Sync Now:</strong> Importa tutte le campagne attive e in pausa dal profilo selezionato</li>
+              <li><strong>Risultato:</strong> Mostra il numero di campagne create, aggiornate e totali trovate</li>
+            </ul>
+            <p className="text-sm italic mt-3">Esegui la sincronizzazione ogni volta che crei nuove campagne su Amazon o modifichi quelle esistenti. Le automazioni F1-F5 lavorano solo sulle campagne presenti nel database.</p>
+          </div>
+        </section>
+
         {/* Campaigns Section */}
         <section className="bg-black rounded-xl p-6">
           <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
