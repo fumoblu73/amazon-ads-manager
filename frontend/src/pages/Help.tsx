@@ -244,6 +244,87 @@ export default function Help() {
           </div>
         </section>
 
+        {/* Test Functions Section */}
+        <section className="bg-black rounded-xl p-6">
+          <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
+            <svg className="w-8 h-8 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+            </svg>
+            Test Funzioni
+          </h2>
+          <div className="text-gray-300 space-y-4">
+            <p><strong>Pagina per testare manualmente le funzioni di automazione F1-F5</strong></p>
+
+            <div className="ml-4">
+              <h3 className="font-bold text-white mb-2">Come usare</h3>
+              <ol className="list-decimal list-inside space-y-2">
+                <li><strong>Seleziona un libro</strong> dal menu a tendina (i libri vengono caricati dal database)</li>
+                <li><strong>Scegli il marketplace</strong> (US, UK, DE, ecc.)</li>
+                <li><strong>Dry Run</strong> (attivo di default): simula l'esecuzione senza applicare modifiche reali su Amazon. Disattivalo solo quando vuoi eseguire le modifiche effettive</li>
+                <li><strong>Clicca sulla funzione</strong> (F1-F5) da testare</li>
+                <li>Attendi il risultato (i report Amazon possono richiedere 3-7 minuti)</li>
+              </ol>
+            </div>
+
+            <div className="ml-4">
+              <h3 className="font-bold text-white mb-2">Override Parametri</h3>
+              <p className="mb-2">Cliccando su "Override Parametri" puoi sovrascrivere temporaneamente i valori di configurazione <strong>solo per il test</strong>, senza modificare i parametri di produzione:</p>
+              <ul className="list-disc list-inside space-y-1 text-sm">
+                <li><strong>clicksNegative / spendNegative</strong> (F4): soglie per il negative targeting</li>
+                <li><strong>skipPart1</strong> (F4): salta la Parte 1 (bid optimization) e testa solo la Parte 2 (negative targeting)</li>
+                <li><strong>minOrders</strong> (F5): ordini minimi per considerare un search term performante</li>
+              </ul>
+            </div>
+
+            <div className="ml-4">
+              <h3 className="font-bold text-white mb-2">Interpretare i risultati</h3>
+              <ul className="list-disc list-inside space-y-1 text-sm">
+                <li><span className="text-green-400">Verde (executed)</span>: la funzione ha trovato dati e ha eseguito (o simulato) le modifiche</li>
+                <li><span className="text-gray-400">Grigio (skipped)</span>: la funzione non ha trovato dati rilevanti o la campagna non era idonea</li>
+                <li><span className="text-red-400">Rosso (error)</span>: si e' verificato un errore (report timeout, errore API, ecc.)</li>
+              </ul>
+              <p className="text-sm mt-2">Usa il pulsante <strong>"Copia JSON"</strong> per copiare il risultato completo negli appunti.</p>
+            </div>
+          </div>
+        </section>
+
+        {/* Email Notifications Section */}
+        <section className="bg-black rounded-xl p-6">
+          <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
+            <svg className="w-8 h-8 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            Notifiche Email
+          </h2>
+          <div className="text-gray-300 space-y-4">
+            <p><strong>Sistema di notifiche automatiche via email (Resend API)</strong></p>
+
+            <div className="ml-4">
+              <h3 className="font-bold text-white mb-2">Quando ricevi una email</h3>
+              <ul className="list-disc list-inside space-y-2">
+                <li><strong>Fase 1 - Report inviati:</strong> conferma che i report sono stati richiesti ad Amazon, con elenco delle campagne e funzioni coinvolte</li>
+                <li><strong>Fase 2 - Riepilogo automazione:</strong> risultato completo dell'esecuzione con status per ogni campagna (OK, ERRORE, PENDING) e dettagli delle azioni eseguite</li>
+                <li><strong>Errori:</strong> se ci sono fallimenti, l'email li evidenzia in rosso con il dettaglio dell'errore</li>
+              </ul>
+            </div>
+
+            <div className="ml-4">
+              <h3 className="font-bold text-white mb-2">Test Email</h3>
+              <p>Nella pagina <strong>Test Funzioni</strong> c'e' il pulsante <strong>"Invia Email Test"</strong> che invia una email di prova con dati simulati per verificare che la configurazione funzioni correttamente.</p>
+            </div>
+
+            <div className="ml-4">
+              <h3 className="font-bold text-white mb-2">Configurazione (Render env vars)</h3>
+              <ul className="list-disc list-inside space-y-1 text-sm">
+                <li><strong>RESEND_API_KEY</strong>: chiave API ottenuta da resend.com</li>
+                <li><strong>EMAIL_FROM</strong>: indirizzo mittente (es. <code className="bg-gray-800 px-1 rounded">Amazon Ads Manager &lt;onboarding@resend.dev&gt;</code>)</li>
+                <li><strong>EMAIL_TO</strong>: indirizzo destinatario dove ricevere le notifiche</li>
+              </ul>
+              <p className="text-sm mt-2 text-gray-400">Per inviare da un indirizzo personalizzato (es. @tuodominio.com) serve verificare il dominio su Resend e configurare i record DNS (SPF, DKIM).</p>
+            </div>
+          </div>
+        </section>
+
         {/* FAST ACoS Info */}
         <section className="bg-black border-2 border-orange-500 rounded-xl p-6">
           <h3 className="font-bold text-lg text-white mb-3">Formula FAST ACoS</h3>
