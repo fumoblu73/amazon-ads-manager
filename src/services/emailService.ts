@@ -4,15 +4,30 @@ import nodemailer from 'nodemailer';
 // EMAIL SERVICE - Notifiche automazione
 // ================================================
 
-const transporter = process.env.SMTP_HOST ? nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASSWORD,
-  },
-}) : null;
+function createTransporter() {
+  if (!process.env.SMTP_HOST) return null;
+
+  const port = parseInt(process.env.SMTP_PORT || '465');
+  const secure = port === 465; // true per SSL (465), false per STARTTLS (587)
+
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port,
+    secure,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASSWORD,
+    },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
+    tls: {
+      rejectUnauthorized: false,
+    },
+  });
+}
+
+const transporter = createTransporter();
 
 const EMAIL_FROM = process.env.EMAIL_FROM || 'Amazon Ads Manager <noreply@example.com>';
 const EMAIL_TO = process.env.EMAIL_TO || '';
