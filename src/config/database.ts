@@ -79,6 +79,13 @@ export const initializeDatabase = async () => {
   try {
     await AppDataSource.initialize();
     console.log('✅ Database connesso con successo!');
+
+    // Auto-apply pending column additions (safe, idempotent)
+    try {
+      await AppDataSource.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS campaign_last_sync_at TIMESTAMP`);
+    } catch (e) {
+      // Ignore if column already exists or table doesn't exist yet
+    }
   } catch (error) {
     console.error('❌ Errore connessione database:', error);
     process.exit(1);
