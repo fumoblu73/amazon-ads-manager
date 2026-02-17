@@ -1,4 +1,8 @@
 import nodemailer from 'nodemailer';
+import dns from 'dns';
+
+// Forza IPv4 (Render non supporta IPv6 in uscita)
+dns.setDefaultResultOrder('ipv4first');
 
 // ================================================
 // EMAIL SERVICE - Notifiche automazione
@@ -8,7 +12,7 @@ function createTransporter() {
   if (!process.env.SMTP_HOST) return null;
 
   const port = parseInt(process.env.SMTP_PORT || '465');
-  const secure = port === 465; // true per SSL (465), false per STARTTLS (587)
+  const secure = port === 465;
 
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST,
