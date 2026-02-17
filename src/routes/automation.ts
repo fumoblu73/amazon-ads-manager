@@ -4,6 +4,7 @@ import { authMiddleware } from '../middleware/auth';
 import { requireAmazonAuth, AuthRequest } from '../middleware/requireAmazonAuth';
 import { submitReportsForAllUsers, submitReportsForUser } from '../services/reportSubmitter';
 import { processCompletedReports, processCompletedReportsForUser } from '../services/reportProcessor';
+import { syncCampaignsForUser } from './campaigns';
 
 const router = Router();
 
@@ -131,6 +132,35 @@ router.post('/trigger-manual', async (req: Request, res: Response) => {
     };
 
     try {
+      // PRE-SYNC: Aggiorna campagne da Amazon prima di submit
+      try {
+        const { AppDataSource: ds } = await import('../config/database');
+        const { User } = await import('../entities/User');
+        const { createUserAmazonApiService } = await import('../services/UserAmazonApiFactory');
+        const { IsNull, Not } = await import('typeorm');
+
+        const userRepo = ds.getRepository(User);
+        const users = await userRepo.find({
+          where: { isActive: true, amazonUserId: Not(IsNull()) }
+        });
+        console.log(`🔄 [Manual] Pre-sync campaigns for ${users.length} users...`);
+        for (const user of users) {
+          try {
+            const profileId = user.profileId?.toString();
+            if (!profileId) continue;
+            const apiService = createUserAmazonApiService(user.id);
+            const result = await syncCampaignsForUser(user.id, apiService, { profileId });
+            console.log(`✅ [Manual] ${user.email}: ${result.created} new, ${result.updated} updated`);
+            user.campaignLastSyncAt = new Date();
+            await userRepo.save(user);
+          } catch (e: any) {
+            console.error(`⚠️ [Manual] ${user.email} sync failed: ${e.message}`);
+          }
+        }
+      } catch (e: any) {
+        console.error(`⚠️ [Manual] Campaign pre-sync failed: ${e.message}`);
+      }
+
       // FASE 1: Submit report per tutti gli utenti
       console.log('🚀 [Manual] Fase 1: Submit reports per tutti gli utenti...');
       const submitStats = await submitReportsForAllUsers();
@@ -381,18 +411,59 @@ router.post('/submit-reports', async (req: Request, res: Response) => {
   // Respond immediately
   res.json({
     success: true,
-    message: 'Report submission started (Phase 1)',
+    message: 'Campaign sync + report submission started (Phase 1)',
     timestamp: new Date().toISOString()
   });
 
-  // Run in background
-  submitReportsForAllUsers()
-    .then((stats) => {
+  // Run in background: sync campaigns first, then submit reports
+  (async () => {
+    // Pre-sync: aggiorna campagne da Amazon per tutti gli utenti attivi
+    try {
+      const { AppDataSource: ds } = await import('../config/database');
+      const { User } = await import('../entities/User');
+      const { createUserAmazonApiService } = await import('../services/UserAmazonApiFactory');
+      const { IsNull, Not } = await import('typeorm');
+
+      const userRepo = ds.getRepository(User);
+      const users = await userRepo.find({
+        where: { isActive: true, amazonUserId: Not(IsNull()) }
+      });
+
+      console.log(`🔄 [Pre-sync] Syncing campaigns for ${users.length} active users...`);
+
+      for (const user of users) {
+        try {
+          const profileId = user.profileId?.toString();
+          if (!profileId) {
+            console.log(`⚠️ [Pre-sync] User ${user.email}: no profileId, skipping`);
+            continue;
+          }
+          const apiService = createUserAmazonApiService(user.id);
+          const result = await syncCampaignsForUser(user.id, apiService, { profileId });
+          console.log(`✅ [Pre-sync] User ${user.email}: ${result.created} new, ${result.updated} updated campaigns`);
+
+          // Aggiorna timestamp sync
+          user.campaignLastSyncAt = new Date();
+          await userRepo.save(user);
+        } catch (syncErr: any) {
+          console.error(`⚠️ [Pre-sync] User ${user.email} sync failed: ${syncErr.message}`);
+          // Non bloccare: continua con gli altri utenti
+        }
+      }
+      console.log(`✅ [Pre-sync] Campaign sync completed`);
+    } catch (preSyncErr: any) {
+      console.error(`⚠️ [Pre-sync] Campaign sync failed globally: ${preSyncErr.message}`);
+      // Non bloccare: procedi comunque con i report
+    }
+
+    // Poi submit reports
+    try {
+      const stats = await submitReportsForAllUsers();
       console.log(`✅ Phase 1 completed: ${stats.reportsSubmitted} reports submitted`);
-    })
-    .catch((error) => {
+    } catch (error) {
       console.error('❌ Phase 1 failed:', error);
-    });
+    }
+  })();
 });
 
 // ================================================

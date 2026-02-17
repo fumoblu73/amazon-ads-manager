@@ -366,7 +366,7 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
 // ================================================
 // Funzione riutilizzabile: sincronizza campagne per un utente
 // ================================================
-async function syncCampaignsForUser(
+export async function syncCampaignsForUser(
   userId: string,
   apiService: any,
   options?: { profileId?: string; marketplace?: string }
