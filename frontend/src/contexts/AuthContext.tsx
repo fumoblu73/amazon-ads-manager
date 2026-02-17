@@ -34,6 +34,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         withCredentials: true
       });
       setUser(response.data.user);
+      // Auto-sync campagne in background (fire-and-forget)
+      if (response.data.user?.profileId) {
+        fetch(`${API_BASE_URL}/api/campaigns/auto-sync`, {
+          method: 'POST',
+          credentials: 'include'
+        }).catch(() => {});
+      }
     } catch (error) {
       setUser(null);
     } finally {

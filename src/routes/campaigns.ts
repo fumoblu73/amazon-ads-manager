@@ -364,106 +364,137 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
 });
 
 // ================================================
-// POST /api/campaigns/sync-from-amazon - Sincronizza campagne da Amazon API (per-user)
+// Funzione riutilizzabile: sincronizza campagne per un utente
+// ================================================
+async function syncCampaignsForUser(
+  userId: string,
+  apiService: any,
+  options?: { profileId?: string; marketplace?: string }
+): Promise<{ created: number; updated: number; errors: number; total: number; marketplace: string }> {
+  const campaignRepository = AppDataSource.getRepository(Campaign);
+  let created = 0;
+  let updated = 0;
+  let errors = 0;
+
+  let amazonCampaigns: any[];
+  let marketplace: string;
+
+  if (options?.profileId) {
+    const profiles = await apiService.getProfiles();
+    const selectedProfile = profiles.find((p: any) => p.profileId.toString() === options.profileId!.toString());
+    if (!selectedProfile) throw new Error(`Profile ${options.profileId} not found`);
+
+    marketplace = selectedProfile.countryCode;
+    amazonCampaigns = await apiService.getCampaignsForProfile(options.profileId);
+  } else {
+    marketplace = options?.marketplace || 'US';
+    amazonCampaigns = await apiService.getCampaigns();
+  }
+
+  console.log(`📥 Found ${amazonCampaigns.length} campaigns on Amazon for ${marketplace}`);
+
+  for (const amazonCampaign of amazonCampaigns) {
+    try {
+      let campaign = await campaignRepository.findOne({
+        where: {
+          amazonCampaignId: amazonCampaign.campaignId.toString(),
+          marketplace,
+          userId
+        }
+      });
+
+      if (campaign) {
+        campaign.name = amazonCampaign.name;
+        campaign.state = amazonCampaign.state;
+        campaign.dailyBudget = amazonCampaign.budget?.budget || null;
+        campaign.campaignType = amazonCampaign.targetingType || null;
+        campaign.biddingStrategy = amazonCampaign.biddingStrategy || null;
+        await campaignRepository.save(campaign);
+        updated++;
+      } else {
+        campaign = campaignRepository.create({
+          userId,
+          amazonCampaignId: amazonCampaign.campaignId.toString(),
+          marketplace,
+          name: amazonCampaign.name,
+          state: amazonCampaign.state,
+          dailyBudget: amazonCampaign.budget?.budget || null,
+          campaignType: amazonCampaign.targetingType || null,
+          biddingStrategy: amazonCampaign.biddingStrategy || null,
+          notes: `Synced from Amazon (${marketplace}) on ${new Date().toISOString()}`
+        });
+        await campaignRepository.save(campaign);
+        created++;
+      }
+    } catch (error: any) {
+      console.error(`❌ Error syncing campaign ${amazonCampaign.campaignId}:`, error.message);
+      errors++;
+    }
+  }
+
+  // Aggiorna timestamp ultimo sync
+  const userRepository = AppDataSource.getRepository(User);
+  await userRepository.update(userId, { campaignLastSyncAt: new Date() });
+
+  console.log(`✅ Sync completed: ${created} created, ${updated} updated, ${errors} errors`);
+  return { created, updated, errors, total: created + updated + errors, marketplace };
+}
+
+// ================================================
+// POST /api/campaigns/auto-sync - Sync automatico al login (fire-and-forget)
+// ================================================
+router.post('/auto-sync', authMiddleware, requireAmazonAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    // Controlla se il sync è recente (< 4 ore)
+    const userRepository = AppDataSource.getRepository(User);
+    const user = await userRepository.findOne({ where: { id: req.userId } });
+
+    if (user?.campaignLastSyncAt) {
+      const hoursSinceSync = (Date.now() - new Date(user.campaignLastSyncAt).getTime()) / (1000 * 60 * 60);
+      if (hoursSinceSync < 4) {
+        return res.json({ success: true, skipped: true, reason: 'recent', hoursSinceSync: Math.round(hoursSinceSync * 10) / 10 });
+      }
+    }
+
+    // Rispondi subito, sync in background
+    res.json({ success: true, started: true });
+
+    // Sync in background (fire-and-forget)
+    const apiService = createUserAmazonApiService(req.userId!);
+    const marketplace = req.user!.countryCode || 'US';
+    console.log(`🔄 Auto-sync campagne per user ${req.userId} (${marketplace})...`);
+
+    syncCampaignsForUser(req.userId!, apiService, { marketplace }).catch(err => {
+      console.error(`❌ Auto-sync fallito per user ${req.userId}:`, err.message);
+    });
+  } catch (error: any) {
+    console.error('❌ Errore POST /api/campaigns/auto-sync:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+});
+
+// ================================================
+// POST /api/campaigns/sync-from-amazon - Sincronizza campagne da Amazon API (manuale)
 // ================================================
 router.post('/sync-from-amazon', authMiddleware, requireAmazonAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { profileId } = req.body;
-
-    console.log(`🔄 Starting campaign sync for user ${req.userId}...`);
+    console.log(`🔄 Starting manual campaign sync for user ${req.userId}...`);
 
     const apiService = createUserAmazonApiService(req.userId!);
-    const campaignRepository = AppDataSource.getRepository(Campaign);
-    let created = 0;
-    let updated = 0;
-    let errors = 0;
+    const marketplace = req.user!.countryCode || 'US';
 
-    // 1. Get campaigns from Amazon API (uses user's profile automatically)
-    let amazonCampaigns: any[];
-    let marketplace: string;
-
-    if (profileId) {
-      // Sync specific profile
-      const profiles = await apiService.getProfiles();
-      const selectedProfile = profiles.find(p => p.profileId.toString() === profileId.toString());
-
-      if (!selectedProfile) {
-        return res.status(400).json({
-          success: false,
-          error: `Profile ${profileId} not found`
-        });
-      }
-
-      marketplace = selectedProfile.countryCode;
-      console.log(`📍 Marketplace: ${marketplace} (Profile ID: ${profileId})`);
-
-      amazonCampaigns = await apiService.getCampaignsForProfile(profileId);
-    } else {
-      // Sync user's default profile
-      marketplace = req.user!.countryCode || 'US';
-      amazonCampaigns = await apiService.getCampaigns();
-    }
-
-    console.log(`📥 Found ${amazonCampaigns.length} campaigns on Amazon for marketplace ${marketplace}`);
-
-    // 2. For each Amazon campaign, create or update in database
-    for (const amazonCampaign of amazonCampaigns) {
-      try {
-        // Find existing campaign (by amazonCampaignId, marketplace AND userId)
-        let campaign = await campaignRepository.findOne({
-          where: {
-            amazonCampaignId: amazonCampaign.campaignId.toString(),
-            marketplace: marketplace,
-            userId: req.userId  // IMPORTANT: Filter by user
-          }
-        });
-
-        if (campaign) {
-          // Update existing campaign
-          campaign.name = amazonCampaign.name;
-          campaign.state = amazonCampaign.state;
-          campaign.dailyBudget = amazonCampaign.budget?.budget || null;
-          campaign.campaignType = amazonCampaign.targetingType || null;
-          campaign.biddingStrategy = amazonCampaign.biddingStrategy || null;
-
-          await campaignRepository.save(campaign);
-          updated++;
-          console.log(`✏️  Updated: ${campaign.name} (${marketplace})`);
-        } else {
-          // Create new campaign
-          campaign = campaignRepository.create({
-            userId: req.userId,  // IMPORTANT: Associate with user
-            amazonCampaignId: amazonCampaign.campaignId.toString(),
-            marketplace: marketplace,
-            name: amazonCampaign.name,
-            state: amazonCampaign.state,
-            dailyBudget: amazonCampaign.budget?.budget || null,
-            campaignType: amazonCampaign.targetingType || null,
-            biddingStrategy: amazonCampaign.biddingStrategy || null,
-            notes: `Synced from Amazon (${marketplace}) on ${new Date().toISOString()}`
-          });
-
-          await campaignRepository.save(campaign);
-          created++;
-          console.log(`✅ Created: ${campaign.name} (${marketplace})`);
-        }
-      } catch (error: any) {
-        console.error(`❌ Error syncing campaign ${amazonCampaign.campaignId}:`, error.message);
-        errors++;
-      }
-    }
-
-    console.log(`✅ Sync completed: ${created} created, ${updated} updated, ${errors} errors`);
+    const result = await syncCampaignsForUser(req.userId!, apiService, {
+      profileId,
+      marketplace
+    });
 
     res.json({
       success: true,
       message: 'Sincronizzazione completata',
-      data: {
-        total: created + updated + errors,
-        created,
-        updated,
-        errors
-      }
+      data: result
     });
   } catch (error: any) {
     console.error('❌ Errore POST /api/campaigns/sync-from-amazon:', error);

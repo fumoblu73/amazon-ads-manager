@@ -35,11 +35,12 @@ export default function Help() {
           <div className="text-gray-300 space-y-3">
             <p><strong>Importa le campagne da Amazon Advertising nel database locale</strong></p>
             <ul className="list-disc list-inside space-y-2 ml-4">
+              <li><strong>Auto-Sync:</strong> Le campagne vengono sincronizzate automaticamente in background ogni volta che accedi all'app (se sono passate piu' di 4 ore dall'ultimo sync)</li>
               <li><strong>Profilo:</strong> Seleziona il profilo Amazon Advertising (marketplace) da cui importare</li>
-              <li><strong>Sync Now:</strong> Importa tutte le campagne attive e in pausa dal profilo selezionato</li>
+              <li><strong>Sync Now:</strong> Importa manualmente tutte le campagne attive e in pausa dal profilo selezionato</li>
               <li><strong>Risultato:</strong> Mostra il numero di campagne create, aggiornate e totali trovate</li>
             </ul>
-            <p className="text-sm italic mt-3">Esegui la sincronizzazione ogni volta che crei nuove campagne su Amazon o modifichi quelle esistenti. Le automazioni F1-F5 lavorano solo sulle campagne presenti nel database.</p>
+            <p className="text-sm italic mt-3">L'auto-sync al login garantisce che le campagne siano sempre aggiornate. Puoi comunque usare il sync manuale se hai appena creato nuove campagne su Amazon e non vuoi attendere il prossimo login.</p>
           </div>
         </section>
 

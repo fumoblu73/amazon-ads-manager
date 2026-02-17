@@ -62,6 +62,9 @@ export class User {
   @Column({ type: 'boolean', name: 'kdp_sync_enabled', default: false })
   kdpSyncEnabled: boolean;
 
+  @Column({ type: 'timestamp', name: 'campaign_last_sync_at', nullable: true })
+  campaignLastSyncAt: Date | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
