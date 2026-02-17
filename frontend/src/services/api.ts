@@ -219,6 +219,12 @@ export const automationApi = {
     });
     return response.data;
   },
+
+  // Test email notification
+  testEmail: async () => {
+    const response = await apiClient.post<any>('/api/automation/test-email');
+    return response.data;
+  },
 };
 
 // ================================================

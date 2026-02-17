@@ -426,6 +426,19 @@ router.post('/process-reports', async (req: Request, res: Response) => {
 });
 
 // ================================================
+// ENDPOINT: TEST EMAIL NOTIFICATION
+// ================================================
+router.post('/test-email', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { sendTestEmail } = await import('../services/emailService');
+    const result = await sendTestEmail();
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ================================================
 // ENDPOINT: TEST BID INCREASE (Real API verification)
 // ================================================
 // Test endpoint to verify real connection to Amazon Ads API

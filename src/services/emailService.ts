@@ -23,6 +23,94 @@ function isConfigured(): boolean {
 }
 
 // ================================================
+// EMAIL: Test di verifica configurazione
+// ================================================
+
+export async function sendTestEmail(): Promise<{ success: boolean; message: string; config: any }> {
+  const config = {
+    smtpHost: process.env.SMTP_HOST || '(non configurato)',
+    smtpPort: process.env.SMTP_PORT || '(non configurato)',
+    smtpUser: process.env.SMTP_USER ? '***configurato***' : '(non configurato)',
+    smtpPassword: process.env.SMTP_PASSWORD ? '***configurato***' : '(non configurato)',
+    emailFrom: EMAIL_FROM,
+    emailTo: EMAIL_TO || '(non configurato)',
+    frontendUrl: FRONTEND_URL,
+  };
+
+  if (!isConfigured()) {
+    return { success: false, message: 'Email non configurata. Verifica le variabili SMTP_HOST, SMTP_USER, SMTP_PASSWORD, EMAIL_TO su Render.', config };
+  }
+
+  try {
+    const date = new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' });
+
+    // Invia email di test con dati simulati
+    const html = buildEmailTemplate({
+      title: 'Test Notifica Email',
+      date,
+      body: `
+        <p style="color:#22c55e;font-size:16px;font-weight:bold">La configurazione email funziona correttamente!</p>
+
+        <p style="color:#e5e7eb">Questo e' un test del sistema di notifiche. In produzione riceverai:</p>
+
+        <ul style="color:#e5e7eb;line-height:2">
+          <li><strong>Fase 1</strong>: conferma invio report ad Amazon</li>
+          <li><strong>Fase 2</strong>: riepilogo con status per campagna</li>
+          <li><strong>Errori</strong>: alert con dettagli dei fallimenti</li>
+        </ul>
+
+        <h3 style="color:#f97316;margin:20px 0 10px">Esempio riepilogo:</h3>
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="border-bottom:2px solid #f97316">
+              <th style="text-align:left;padding:8px;color:#f97316">Campagna</th>
+              <th style="text-align:left;padding:8px;color:#f97316">Funzioni</th>
+              <th style="text-align:left;padding:8px;color:#f97316">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding:8px;border-bottom:1px solid #333;color:#e5e7eb">Product - 7/2/2025</td>
+              <td style="padding:8px;border-bottom:1px solid #333;color:#e5e7eb">F1, F2, F3</td>
+              <td style="padding:8px;border-bottom:1px solid #333">
+                <span style="background:#22c55e;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px">OK</span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:8px;border-bottom:1px solid #333;color:#e5e7eb">Auto - 7/2/2025</td>
+              <td style="padding:8px;border-bottom:1px solid #333;color:#e5e7eb">F2, F4</td>
+              <td style="padding:8px;border-bottom:1px solid #333">
+                <span style="background:#ef4444;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px">ERRORE</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="background:#450a0a;border:1px solid #ef4444;border-radius:8px;padding:16px;margin:16px 0">
+          <h3 style="color:#ef4444;margin:0 0 8px 0">Esempio errore:</h3>
+          <div style="color:#fca5a5">&#10060; <strong>Auto - 7/2/2025</strong>: Report not ready after 20 attempts</div>
+        </div>
+
+        <p style="color:#9ca3af;font-size:12px;margin-top:20px">
+          Configurazione: ${config.smtpHost}:${config.smtpPort} | Da: ${config.emailFrom} | A: ${config.emailTo}
+        </p>
+      `,
+    });
+
+    await transporter!.sendMail({
+      from: EMAIL_FROM,
+      to: EMAIL_TO,
+      subject: '[ADS Manager] Test notifica email - Configurazione OK',
+      html,
+    });
+
+    return { success: true, message: `Email di test inviata a ${EMAIL_TO}`, config };
+  } catch (error: any) {
+    return { success: false, message: `Errore invio: ${error.message}`, config };
+  }
+}
+
+// ================================================
 // INTERFACES
 // ================================================
 

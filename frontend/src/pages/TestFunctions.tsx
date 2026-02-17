@@ -103,6 +103,22 @@ export default function TestFunctions() {
     }
   };
 
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [emailResult, setEmailResult] = useState<any>(null);
+
+  const testEmail = async () => {
+    setEmailLoading(true);
+    setEmailResult(null);
+    try {
+      const data = await automationApi.testEmail();
+      setEmailResult(data);
+    } catch (err: any) {
+      setEmailResult({ success: false, message: err.response?.data?.message || err.message });
+    } finally {
+      setEmailLoading(false);
+    }
+  };
+
   const copyJson = () => {
     if (result) {
       navigator.clipboard.writeText(JSON.stringify(result, null, 2));
@@ -252,6 +268,28 @@ export default function TestFunctions() {
             <div className="text-xs text-gray-500 mt-1">{FUNCTION_NAMES[num].description}</div>
           </button>
         ))}
+      </div>
+
+      {/* Test Email */}
+      <div className="bg-gray-900 rounded-lg p-4 mb-6 border border-gray-800 flex items-center justify-between">
+        <div>
+          <span className="text-white font-semibold text-sm">Test Notifica Email</span>
+          <span className="text-gray-500 text-xs ml-2">Invia un'email di prova per verificare la configurazione SMTP</span>
+        </div>
+        <div className="flex items-center gap-3">
+          {emailResult && (
+            <span className={`text-xs ${emailResult.success ? 'text-green-400' : 'text-red-400'}`}>
+              {emailResult.message}
+            </span>
+          )}
+          <button
+            onClick={testEmail}
+            disabled={emailLoading}
+            className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded text-sm font-semibold disabled:opacity-50"
+          >
+            {emailLoading ? 'Invio...' : 'Invia Email Test'}
+          </button>
+        </div>
       </div>
 
       {/* Errore */}
