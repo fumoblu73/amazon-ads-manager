@@ -57,7 +57,7 @@ function getFuncLabel(ruleName: string): string {
 export default function Dashboard() {
   const [campaignStats, setCampaignStats] = useState<CampaignStats | null>(null);
   const [logStats, setLogStats] = useState<LogStats | null>(null);
-  const [automationStatus, setAutomationStatus] = useState<AutomationStatus | null>(null);
+  const [, setAutomationStatus] = useState<AutomationStatus | null>(null);
   const [weeklyLogs, setWeeklyLogs] = useState<AutomationLog[]>([]);
   const [recentLogs, setRecentLogs] = useState<AutomationLog[]>([]);
   const [adsSummary, setAdsSummary] = useState<AmazonAdsSummary | null>(null);
