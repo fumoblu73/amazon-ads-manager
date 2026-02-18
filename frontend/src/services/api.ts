@@ -521,10 +521,10 @@ export const journalEventsApi = {
 
 export const amazonAdsApi = {
   getSummary: async (startDate: string, endDate: string) => {
-    const response = await apiClient.get<AmazonAdsSummary>('/api/amazon-ads/summary', {
+    const response = await apiClient.get<{ success: boolean; data: AmazonAdsSummary }>('/api/amazon-ads/summary', {
       params: { startDate, endDate }
     });
-    return response.data;
+    return response.data.data; // endpoint ritorna { success, dateRange, data: {...} }
   },
 };
 
