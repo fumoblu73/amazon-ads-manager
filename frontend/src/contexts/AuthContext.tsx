@@ -67,13 +67,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const syncData = await syncRes.json();
 
           if (syncData.skipped) {
-            removeNotification('campaigns');
-          } else if (syncData.success) {
-            const mkts = syncData.marketplaces?.map((m: any) => m.marketplace).join(', ') || '';
             addNotification({
               type: 'campaigns',
               status: 'success',
-              message: `Sync: +${syncData.created} nuove, ${syncData.updated} aggiornate${mkts ? ` (${mkts})` : ''}`
+              message: `Campagne aggiornate (ultimo sync ${Math.round(syncData.hoursSinceSync || 0)}h fa)`
+            });
+            setTimeout(() => removeNotification('campaigns'), 5000);
+          } else if (syncData.success) {
+            const mkts = syncData.marketplaces?.map((m: any) => m.marketplace).join(', ') || '';
+            const hasNew = (syncData.created || 0) > 0;
+            addNotification({
+              type: 'campaigns',
+              status: 'success',
+              message: hasNew
+                ? `Sync: +${syncData.created} nuove, ${syncData.updated} aggiornate (${mkts})`
+                : `Campagne aggiornate, nessuna novità (${mkts})`
             });
             setTimeout(() => removeNotification('campaigns'), 5000);
           }
