@@ -486,13 +486,13 @@ export async function syncCampaignsForUser(
 // ================================================
 router.post('/auto-sync', authMiddleware, requireAmazonAuth, async (req: AuthRequest, res: Response) => {
   try {
-    // Controlla se il sync è recente (< 4 ore)
+    // Controlla se il sync è recente (< 6 ore)
     const userRepository = AppDataSource.getRepository(User);
     const user = await userRepository.findOne({ where: { id: req.userId } });
 
     if (user?.campaignLastSyncAt) {
       const hoursSinceSync = (Date.now() - new Date(user.campaignLastSyncAt).getTime()) / (1000 * 60 * 60);
-      if (hoursSinceSync < 4) {
+      if (hoursSinceSync < 6) {
         return res.json({ success: true, skipped: true, reason: 'recent', hoursSinceSync: Math.round(hoursSinceSync * 10) / 10 });
       }
     }

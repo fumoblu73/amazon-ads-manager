@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             addNotification({
               type: 'campaigns',
               status: 'success',
-              message: `Campagne aggiornate (ultimo sync ${Math.round(syncData.hoursSinceSync || 0)}h fa)`
+              message: `Campagne aggiornate (ultimo sync <6h)`
             });
           } else if (syncData.success) {
             const mktDetails = syncData.marketplaces?.map((m: any) =>
@@ -109,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               addNotification({
                 type: 'kdp',
                 status: 'success',
-                message: `KDP aggiornato (ultimo sync ${kdpData.hoursSinceSync || 0}h fa)`
+                message: `KDP aggiornato (ultimo sync <6h)`
               });
             }
           } else if (kdpData.success) {
