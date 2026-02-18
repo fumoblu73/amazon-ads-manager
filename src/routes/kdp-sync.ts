@@ -4,6 +4,7 @@ import { User } from '../entities/User';
 import { KdpSalesSnapshot } from '../entities/KdpSalesSnapshot';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { encryptCookies, extractKdpAuthCookies, Cookie } from '../utils/encryption';
+import { kdpSyncScheduler } from '../services/kdp-sync-scheduler';
 
 const router = Router();
 
@@ -88,6 +89,85 @@ router.post('/cookies', authMiddleware, async (req: AuthRequest, res: Response) 
     res.status(500).json({
       success: false,
       error: 'Failed to sync KDP cookies',
+      details: error.message
+    });
+  }
+});
+
+// ================================================
+// POST /api/kdp-sync/auto-sync - Sync KDP automatico al login (server-side Puppeteer)
+// ================================================
+router.post('/auto-sync', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    const userRepository = AppDataSource.getRepository(User);
+
+    const user = await userRepository.findOne({
+      where: { id: userId },
+      select: ['id', 'email', 'kdpSyncEnabled', 'kdpCookiesEncrypted', 'kdpCookiesUpdatedAt', 'kdpLastSyncAt']
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    // Verifica se KDP sync è abilitato e cookie presenti
+    if (!user.kdpSyncEnabled || !user.kdpCookiesEncrypted) {
+      return res.json({
+        success: true,
+        skipped: true,
+        reason: 'no_cookies',
+        message: 'KDP sync non configurato (installa estensione Chrome)'
+      });
+    }
+
+    // Verifica se cookie sono scaduti (> 7 giorni)
+    const COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+    if (user.kdpCookiesUpdatedAt && (Date.now() - user.kdpCookiesUpdatedAt.getTime()) > COOKIE_MAX_AGE_MS) {
+      return res.json({
+        success: true,
+        skipped: true,
+        reason: 'cookies_expired',
+        message: 'Cookie KDP scaduti (rinnova con estensione Chrome)'
+      });
+    }
+
+    // Controlla se ultimo sync è recente (< 6 ore)
+    const SYNC_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+    if (user.kdpLastSyncAt) {
+      const hoursSinceSync = (Date.now() - user.kdpLastSyncAt.getTime()) / (1000 * 60 * 60);
+      if ((Date.now() - user.kdpLastSyncAt.getTime()) < SYNC_COOLDOWN_MS) {
+        return res.json({
+          success: true,
+          skipped: true,
+          reason: 'recent',
+          hoursSinceSync: Math.round(hoursSinceSync),
+          message: `KDP sync recente (${Math.round(hoursSinceSync)}h fa)`
+        });
+      }
+    }
+
+    // Esegui sync server-side
+    console.log(`📚 [KDP Auto-Sync] Starting for user ${user.email}`);
+    const result = await kdpSyncScheduler.syncUser(userId);
+
+    // Aggiorna timestamp
+    await userRepository.update(userId, { kdpLastSyncAt: new Date() });
+
+    console.log(`✅ [KDP Auto-Sync] User ${user.email}: ${result.books} books, ${result.stats} stats records`);
+
+    res.json({
+      success: true,
+      skipped: false,
+      books: result.books,
+      stats: result.stats,
+      message: `KDP sync completato: ${result.books} libri, ${result.stats} record`
+    });
+  } catch (error: any) {
+    console.error('❌ [KDP Auto-Sync] Error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'KDP sync failed',
       details: error.message
     });
   }

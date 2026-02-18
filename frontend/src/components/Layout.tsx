@@ -47,7 +47,8 @@ export default function Layout() {
           <img
             src="/logoADS.png"
             alt="Amazon Ads Manager"
-            className="w-full object-contain"
+            className="object-contain mx-auto"
+            style={{ width: '75%' }}
           />
         </div>
 

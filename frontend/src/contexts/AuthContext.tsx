@@ -87,6 +87,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           addNotification({ type: 'campaigns', status: 'error', message: 'Errore sync campagne' });
         }
       }
+
+      // Auto-sync KDP (server-side con cookie salvati)
+      if (response.data.user) {
+        addNotification({ type: 'kdp', status: 'syncing', message: 'Sincronizzazione KDP...' });
+
+        try {
+          const kdpRes = await fetch(`${API_BASE_URL}/api/kdp-sync/auto-sync`, {
+            method: 'POST',
+            credentials: 'include'
+          });
+          const kdpData = await kdpRes.json();
+
+          if (kdpData.skipped) {
+            if (kdpData.reason === 'no_cookies') {
+              // Nessun cookie KDP → rimuovi notifica silenziosamente
+              removeNotification('kdp');
+            } else if (kdpData.reason === 'cookies_expired') {
+              addNotification({ type: 'kdp', status: 'error', message: 'Cookie KDP scaduti (rinnova con estensione)' });
+            } else {
+              addNotification({
+                type: 'kdp',
+                status: 'success',
+                message: `KDP aggiornato (ultimo sync ${kdpData.hoursSinceSync || 0}h fa)`
+              });
+            }
+          } else if (kdpData.success) {
+            addNotification({
+              type: 'kdp',
+              status: 'success',
+              message: `KDP sync: ${kdpData.books} libri, ${kdpData.stats} record`
+            });
+          }
+        } catch {
+          addNotification({ type: 'kdp', status: 'error', message: 'Errore sync KDP' });
+        }
+      }
     } catch (error) {
       setUser(null);
     } finally {

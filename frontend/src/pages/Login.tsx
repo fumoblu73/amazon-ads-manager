@@ -14,7 +14,7 @@ export default function Login() {
           <img
             src="/logoADS.png"
             alt="Amazon Ads Manager"
-            className="w-48 mx-auto mb-6"
+            className="w-36 mx-auto mb-6"
           />
           <h1 className="text-3xl font-bold text-white mb-2">
             Amazon Ads Manager

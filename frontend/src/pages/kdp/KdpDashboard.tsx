@@ -44,15 +44,6 @@ export default function KdpDashboard() {
     percent: 0,
     text: ''
   });
-  const [showSyncAlert, setShowSyncAlert] = useState(false);
-
-  // Verifica se serve sync (ultimo sync > 24 ore fa o mai fatto)
-  const needsSync = useCallback(() => {
-    if (!extensionStatus.lastSync) return true;
-    const lastSyncDate = new Date(extensionStatus.lastSync);
-    const hoursSinceSync = (Date.now() - lastSyncDate.getTime()) / (1000 * 60 * 60);
-    return hoursSinceSync > 24;
-  }, [extensionStatus.lastSync]);
 
   // Controlla stato estensione
   const checkExtensionStatus = useCallback(() => {
@@ -133,8 +124,6 @@ export default function KdpDashboard() {
       if (type === 'KDP_SYNC_COMPLETE') {
         setSyncProgress({ active: false, percent: 100, text: 'Completato!' });
         if (event.data.success) {
-          setShowSyncAlert(false);
-          // Aggiorna lastSync per evitare che l'alert ricompaia
           setExtensionStatus(prev => ({
             ...prev,
             lastSync: new Date().toISOString(),
@@ -163,34 +152,11 @@ export default function KdpDashboard() {
       checkExtensionStatus();
     }, 1000);
 
-    // Se dopo 3 secondi l'estensione non risponde, mostra alert solo per "estensione non installata"
-    const timeout2 = setTimeout(() => {
-      // Solo se l'estensione non è stata rilevata, mostra l'alert
-      setExtensionStatus(prev => {
-        if (!prev.installed) {
-          console.log('[Dashboard] Extension not detected after 3s, showing install alert');
-          setShowSyncAlert(true);
-        }
-        return prev;
-      });
-    }, 3000);
-
     return () => {
       window.removeEventListener('message', handleMessage);
       clearTimeout(timeout1);
-      clearTimeout(timeout2);
     };
   }, [checkExtensionStatus]);
-
-  // Mostra/nascondi alert in base a se serve sync (quando estensione è rilevata)
-  useEffect(() => {
-    if (extensionStatus.installed) {
-      const syncNeeded = needsSync();
-      console.log('[Dashboard] Extension installed, needsSync:', syncNeeded);
-      // Mostra alert solo se serve sync, altrimenti nascondilo
-      setShowSyncAlert(syncNeeded);
-    }
-  }, [extensionStatus.installed, extensionStatus.lastSync, needsSync]);
 
   useEffect(() => {
     loadDashboardData();
@@ -253,120 +219,28 @@ export default function KdpDashboard() {
 
   const { monthlyStats, dailyStats } = summary.overall;
 
-  // Formatta ultima sync
-  const formatLastSync = () => {
-    if (!extensionStatus.lastSync) return 'Mai';
-    const date = new Date(extensionStatus.lastSync);
-    return date.toLocaleString('it-IT', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
   return (
     <div className="p-6 space-y-6">
-      {/* Sync Alert Banner */}
-      {(showSyncAlert || syncProgress.active) && (
-        <div className={`rounded-xl p-4 border ${
-          syncProgress.active
-            ? 'bg-blue-500/10 border-blue-500/30'
-            : !extensionStatus.installed
-              ? 'bg-yellow-500/10 border-yellow-500/30'
-              : 'bg-orange-500/10 border-orange-500/30'
-        }`}>
+      {/* Sync Progress Bar (solo quando sync via estensione è attivo) */}
+      {syncProgress.active && (
+        <div className="rounded-xl p-4 border bg-blue-500/10 border-blue-500/30">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-3">
-              {syncProgress.active ? (
-                <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-              ) : !extensionStatus.installed ? (
-                <svg className="w-10 h-10 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              ) : (
-                <svg className="w-10 h-10 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              )}
+              <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
               <div>
-                {syncProgress.active ? (
-                  <>
-                    <p className="text-white font-medium">Sincronizzazione in corso...</p>
-                    <p className="text-blue-400 text-sm">{syncProgress.text}</p>
-                  </>
-                ) : !extensionStatus.installed ? (
-                  <>
-                    <p className="text-white font-medium">Estensione Chrome non rilevata</p>
-                    <p className="text-gray-400 text-sm">
-                      Installa o ricarica l'estensione "Amazon Ads Manager - KDP Sync" per sincronizzare i dati
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-white font-medium">Sincronizzazione dati KDP necessaria</p>
-                    <p className="text-gray-400 text-sm">
-                      Ultimo sync: {formatLastSync()}
-                      {!extensionStatus.authenticated && ' • Estensione non autenticata'}
-                    </p>
-                  </>
-                )}
+                <p className="text-white font-medium">Sincronizzazione in corso...</p>
+                <p className="text-blue-400 text-sm">{syncProgress.text}</p>
               </div>
             </div>
-
-            {syncProgress.active ? (
-              <div className="flex-1 min-w-[200px] max-w-md">
-                <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-blue-500 transition-all duration-300"
-                    style={{ width: `${syncProgress.percent}%` }}
-                  ></div>
-                </div>
-                <p className="text-xs text-gray-400 mt-1 text-right">{syncProgress.percent}%</p>
+            <div className="flex-1 min-w-[200px] max-w-md">
+              <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-blue-500 transition-all duration-300"
+                  style={{ width: `${syncProgress.percent}%` }}
+                ></div>
               </div>
-            ) : !extensionStatus.installed ? (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => window.location.reload()}
-                  className="px-4 py-2 bg-yellow-500 text-black rounded-lg hover:bg-yellow-400 transition-colors flex items-center gap-2"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Ricarica Pagina
-                </button>
-                <button
-                  onClick={() => setShowSyncAlert(false)}
-                  className="px-3 py-2 text-gray-400 hover:text-white transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            ) : (
-              <div className="flex gap-2">
-                <button
-                  onClick={startAutoSync}
-                  disabled={!extensionStatus.installed || !extensionStatus.authenticated || syncProgress.active}
-                  className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Sincronizza Ora
-                </button>
-                <button
-                  onClick={() => setShowSyncAlert(false)}
-                  className="px-3 py-2 text-gray-400 hover:text-white transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            )}
+              <p className="text-xs text-gray-400 mt-1 text-right">{syncProgress.percent}%</p>
+            </div>
           </div>
         </div>
       )}
