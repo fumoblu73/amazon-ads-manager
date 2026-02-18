@@ -564,14 +564,14 @@ router.get('/stats/summary', async (req: Request, res: Response) => {
 
     const [campaigns, totalCount] = await campaignRepository.findAndCount();
 
-    // Conteggi per stato
-    const enabledCount = campaigns.filter(c => c.state === 'enabled').length;
-    const pausedCount = campaigns.filter(c => c.state === 'paused').length;
-    const archivedCount = campaigns.filter(c => c.state === 'archived').length;
+    // Conteggi per stato (case-insensitive: Amazon API ritorna ENABLED/PAUSED/ARCHIVED)
+    const enabledCount = campaigns.filter(c => c.state?.toUpperCase() === 'ENABLED').length;
+    const pausedCount = campaigns.filter(c => c.state?.toUpperCase() === 'PAUSED').length;
+    const archivedCount = campaigns.filter(c => c.state?.toUpperCase() === 'ARCHIVED').length;
 
-    // Budget totale
+    // Budget totale (solo campagne attive)
     const totalBudget = campaigns
-      .filter(c => c.dailyBudget)
+      .filter(c => c.dailyBudget && c.state?.toUpperCase() === 'ENABLED')
       .reduce((sum, c) => sum + parseFloat(c.dailyBudget.toString()), 0);
 
     res.json({
