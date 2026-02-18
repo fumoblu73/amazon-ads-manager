@@ -27,6 +27,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
   syncNotifications: SyncNotification[];
+  dismissNotification: (type: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -72,22 +73,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               status: 'success',
               message: `Campagne aggiornate (ultimo sync ${Math.round(syncData.hoursSinceSync || 0)}h fa)`
             });
-            setTimeout(() => removeNotification('campaigns'), 5000);
           } else if (syncData.success) {
-            const mkts = syncData.marketplaces?.map((m: any) => m.marketplace).join(', ') || '';
-            const hasNew = (syncData.created || 0) > 0;
+            const mktDetails = syncData.marketplaces?.map((m: any) =>
+              `${m.marketplace} +${m.created}/${m.totalCampaigns || (m.created + m.updated)}`
+            ).join(' | ') || '';
             addNotification({
               type: 'campaigns',
               status: 'success',
-              message: hasNew
-                ? `Sync: +${syncData.created} nuove, ${syncData.updated} aggiornate (${mkts})`
-                : `Campagne aggiornate, nessuna novità (${mkts})`
+              message: `Sync completato: ${mktDetails}`
             });
-            setTimeout(() => removeNotification('campaigns'), 5000);
           }
         } catch {
           addNotification({ type: 'campaigns', status: 'error', message: 'Errore sync campagne' });
-          setTimeout(() => removeNotification('campaigns'), 5000);
         }
       }
     } catch (error) {
@@ -118,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, checkAuth, syncNotifications }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, checkAuth, syncNotifications, dismissNotification: removeNotification }}>
       {children}
     </AuthContext.Provider>
   );

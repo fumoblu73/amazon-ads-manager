@@ -373,9 +373,9 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
 export async function syncAllMarketplacesForUser(
   userId: string,
   apiService: any
-): Promise<{ total: { created: number; updated: number; errors: number }; marketplaces: Array<{ marketplace: string; profileId: string; created: number; updated: number; errors: number }> }> {
+): Promise<{ total: { created: number; updated: number; errors: number }; marketplaces: Array<{ marketplace: string; profileId: string; created: number; updated: number; errors: number; totalCampaigns: number }> }> {
   const totals = { created: 0, updated: 0, errors: 0 };
-  const marketplaces: Array<{ marketplace: string; profileId: string; created: number; updated: number; errors: number }> = [];
+  const marketplaces: Array<{ marketplace: string; profileId: string; created: number; updated: number; errors: number; totalCampaigns: number }> = [];
 
   try {
     const profiles = await apiService.getProfiles();
@@ -391,11 +391,11 @@ export async function syncAllMarketplacesForUser(
         totals.created += result.created;
         totals.updated += result.updated;
         totals.errors += result.errors;
-        marketplaces.push({ marketplace: countryCode, profileId, created: result.created, updated: result.updated, errors: result.errors });
-        console.log(`✅ [AllMarkets] ${countryCode}: ${result.created} new, ${result.updated} updated`);
+        marketplaces.push({ marketplace: countryCode, profileId, created: result.created, updated: result.updated, errors: result.errors, totalCampaigns: result.total });
+        console.log(`✅ [AllMarkets] ${countryCode}: ${result.created} new, ${result.updated} updated, ${result.total} total`);
       } catch (err: any) {
         console.error(`⚠️ [AllMarkets] ${countryCode} sync failed: ${err.message}`);
-        marketplaces.push({ marketplace: countryCode, profileId, created: 0, updated: 0, errors: 1 });
+        marketplaces.push({ marketplace: countryCode, profileId, created: 0, updated: 0, errors: 1, totalCampaigns: 0 });
         totals.errors++;
       }
     }
@@ -478,7 +478,7 @@ export async function syncCampaignsForUser(
   await userRepository.update(userId, { campaignLastSyncAt: new Date() });
 
   console.log(`✅ Sync completed: ${created} created, ${updated} updated, ${errors} errors`);
-  return { created, updated, errors, total: created + updated + errors, marketplace };
+  return { created, updated, errors, total: amazonCampaigns.length, marketplace };
 }
 
 // ================================================

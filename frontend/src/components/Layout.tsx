@@ -2,7 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth, type SyncNotification } from '../contexts/AuthContext';
 
 export default function Layout() {
-  const { user, logout, syncNotifications } = useAuth();
+  const { user, logout, syncNotifications, dismissNotification } = useAuth();
   const navItems = [
     { path: '/kdp/dashboard', icon: (
       <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -102,7 +102,7 @@ export default function Layout() {
             {syncNotifications.map((n: SyncNotification) => (
               <div
                 key={n.type}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm shadow-lg transition-all ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm shadow-lg transition-all max-w-sm ${
                   n.status === 'syncing' ? 'bg-gray-800 border border-gray-600 text-gray-300' :
                   n.status === 'success' ? 'bg-green-900/80 border border-green-600 text-green-300' :
                   n.status === 'error' ? 'bg-red-900/80 border border-red-600 text-red-300' :
@@ -110,19 +110,29 @@ export default function Layout() {
                 }`}
               >
                 {n.status === 'syncing' && (
-                  <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
                 )}
                 {n.status === 'success' && (
-                  <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                 )}
                 {n.status === 'error' && (
-                  <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 )}
-                {n.message}
+                <span className="flex-1">{n.message}</span>
+                {n.status !== 'syncing' && (
+                  <button
+                    onClick={() => dismissNotification(n.type)}
+                    className="flex-shrink-0 ml-1 hover:opacity-70 transition-opacity"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
               </div>
             ))}
           </div>
