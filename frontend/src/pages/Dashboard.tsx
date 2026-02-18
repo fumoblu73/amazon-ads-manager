@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react';
 import { campaignsApi, logsApi, automationApi, amazonAdsApi } from '../services/api';
-import type { CampaignStats, LogStats, AutomationStatus, AutomationLog, AmazonAdsSummary } from '../types';
+import type { CampaignStats, LogStats, AutomationStatus, AutomationLog } from '../types';
+
+interface SpendCache {
+  totalSpend7d: number | null;
+  totalSales7d: number | null;
+  avgDailySpend: number | null;
+  acos: number | null;
+  updatedAt: string | null;
+}
 
 // Helper: last N days date strings
 function getDateRange(daysBack: number): { startDate: string; endDate: string } {
@@ -60,7 +68,7 @@ export default function Dashboard() {
   const [, setAutomationStatus] = useState<AutomationStatus | null>(null);
   const [weeklyLogs, setWeeklyLogs] = useState<AutomationLog[]>([]);
   const [recentLogs, setRecentLogs] = useState<AutomationLog[]>([]);
-  const [adsSummary, setAdsSummary] = useState<AmazonAdsSummary | null>(null);
+  const [spendCache, setSpendCache] = useState<SpendCache | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [triggeringAutomation, setTriggeringAutomation] = useState(false);
@@ -118,7 +126,7 @@ export default function Dashboard() {
           automationApi.getStatus(),
           logsApi.getAll({ dateFrom: startDate, dateTo: endDate, limit: 500, sortBy: 'createdAt', sortOrder: 'DESC' }),
           logsApi.getRecent(5),
-          amazonAdsApi.getSummary(startDate, endDate),
+          amazonAdsApi.getSpendCache(),
         ]);
 
         if (campaignsRes.status === 'fulfilled' && campaignsRes.value.success) setCampaignStats(campaignsRes.value.data!);
@@ -126,7 +134,7 @@ export default function Dashboard() {
         if (automationRes.status === 'fulfilled') setAutomationStatus(automationRes.value);
         if (weeklyLogsRes.status === 'fulfilled' && weeklyLogsRes.value.success) setWeeklyLogs(weeklyLogsRes.value.data || []);
         if (recentLogsRes.status === 'fulfilled' && recentLogsRes.value.success) setRecentLogs(recentLogsRes.value.data || []);
-        if (adsRes.status === 'fulfilled') setAdsSummary(adsRes.value);
+        if (adsRes.status === 'fulfilled') setSpendCache(adsRes.value);
       } catch (err: any) {
         setError(err.message || 'Errore nel caricamento dati');
       } finally {
@@ -180,9 +188,10 @@ export default function Dashboard() {
     else funcBreakdown[label].failed++;
   });
 
-  // Spesa media giornaliera (7gg)
-  const avgDailySpend = adsSummary ? adsSummary.totalSpendUSD / 7 : null;
-  const acos = adsSummary?.overallAcos;
+  // Spesa da cache DB
+  const avgDailySpend = spendCache?.avgDailySpend ?? null;
+  const acos = spendCache?.acos ?? null;
+  const spendUpdatedAt = spendCache?.updatedAt ?? null;
 
   // Format azione log per mini-feed
   const formatLogAction = (log: AutomationLog) => {
@@ -369,11 +378,12 @@ export default function Dashboard() {
                       )}
                     </div>
                   ) : (
-                    <div className="text-sm text-gray-500">Dati spesa non disponibili</div>
+                    <div className="text-sm text-gray-500">Cache spesa non ancora disponibile</div>
                   )}
-                  {adsSummary && (
+                  {spendCache?.totalSpend7d != null && (
                     <div className="mt-2 text-xs text-gray-500">
-                      Tot 7gg: ${adsSummary.totalSpendUSD.toFixed(2)} · Vendite: ${adsSummary.totalSalesUSD.toFixed(2)}
+                      Tot 7gg: ${spendCache.totalSpend7d.toFixed(2)} · Vendite: ${spendCache.totalSales7d?.toFixed(2) ?? '0.00'}
+                      {spendUpdatedAt && <span className="ml-2">· agg. {formatTimeAgo(spendUpdatedAt)}</span>}
                     </div>
                   )}
                 </div>

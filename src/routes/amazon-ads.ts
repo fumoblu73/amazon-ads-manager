@@ -6,6 +6,9 @@
 import { Router, Request, Response } from 'express';
 import { amazonAdsService } from '../services/amazon-ads.service';
 import { adsSpendSyncService } from '../services/ads-spend-sync.service';
+import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { AppDataSource } from '../config/database';
+import { User } from '../entities/User';
 
 const router = Router();
 
@@ -276,6 +279,78 @@ router.post('/sync-spend/:marketplace', async (req: Request, res: Response) => {
       success: false,
       error: error.message
     });
+  }
+});
+
+// ================================================
+// GET /api/amazon-ads/spend-cache - Legge spesa 7gg dalla cache DB (istantaneo)
+// ================================================
+router.get('/spend-cache', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const userRepo = AppDataSource.getRepository(User);
+    const user = await userRepo.findOne({
+      where: { id: req.userId! },
+      select: ['spendCache7d', 'salesCache7d', 'spendCacheUpdatedAt']
+    });
+
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+    res.json({
+      success: true,
+      data: {
+        totalSpend7d: user.spendCache7d ? parseFloat(user.spendCache7d.toString()) : null,
+        totalSales7d: user.salesCache7d ? parseFloat(user.salesCache7d.toString()) : null,
+        avgDailySpend: user.spendCache7d ? parseFloat(user.spendCache7d.toString()) / 7 : null,
+        acos: user.spendCache7d && user.salesCache7d && parseFloat(user.salesCache7d.toString()) > 0
+          ? (parseFloat(user.spendCache7d.toString()) / parseFloat(user.salesCache7d.toString())) * 100
+          : null,
+        updatedAt: user.spendCacheUpdatedAt
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ================================================
+// POST /api/amazon-ads/refresh-spend - Aggiorna cache spesa (chiamato dallo scheduler, richiede ADMIN_TOKEN)
+// ================================================
+router.post('/refresh-spend', async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const adminToken = process.env.ADMIN_TOKEN;
+    if (!authHeader || authHeader !== `Bearer ${adminToken}`) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const end = new Date().toISOString().split('T')[0];
+    const start = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    console.log(`💰 [Spend Cache] Aggiornamento cache spesa ${start} → ${end}`);
+
+    const summary = await amazonAdsService.getTotalSpendSummary(start, end);
+
+    // Salva per tutti gli utenti attivi (unico tenant per ora)
+    const userRepo = AppDataSource.getRepository(User);
+    const users = await userRepo.find({ where: { isActive: true } });
+
+    for (const user of users) {
+      await userRepo.update(user.id, {
+        spendCache7d: summary.totalSpendUSD,
+        salesCache7d: summary.totalSalesUSD,
+        spendCacheUpdatedAt: new Date()
+      });
+    }
+
+    console.log(`✅ [Spend Cache] Aggiornata: $${summary.totalSpendUSD.toFixed(2)} spesa, $${summary.totalSalesUSD.toFixed(2)} vendite`);
+
+    res.json({
+      success: true,
+      data: { totalSpend7d: summary.totalSpendUSD, totalSales7d: summary.totalSalesUSD, usersUpdated: users.length }
+    });
+  } catch (error: any) {
+    console.error('❌ [Spend Cache] Errore:', error.message);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

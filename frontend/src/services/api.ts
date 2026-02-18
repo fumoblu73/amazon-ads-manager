@@ -520,11 +520,16 @@ export const journalEventsApi = {
 // ================================================
 
 export const amazonAdsApi = {
-  getSummary: async (startDate: string, endDate: string) => {
-    const response = await apiClient.get<{ success: boolean; data: AmazonAdsSummary }>('/api/amazon-ads/summary', {
-      params: { startDate, endDate }
-    });
-    return response.data.data; // endpoint ritorna { success, dateRange, data: {...} }
+  // Legge spesa 7gg dalla cache DB (istantaneo, aggiornata dallo scheduler)
+  getSpendCache: async () => {
+    const response = await apiClient.get<{ success: boolean; data: {
+      totalSpend7d: number | null;
+      totalSales7d: number | null;
+      avgDailySpend: number | null;
+      acos: number | null;
+      updatedAt: string | null;
+    } }>('/api/amazon-ads/spend-cache');
+    return response.data.data;
   },
 };
 

@@ -83,6 +83,9 @@ export const initializeDatabase = async () => {
     // Auto-apply pending column additions (safe, idempotent)
     try {
       await AppDataSource.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS campaign_last_sync_at TIMESTAMP`);
+      await AppDataSource.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS spend_cache_7d DECIMAL(10,2)`);
+      await AppDataSource.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS sales_cache_7d DECIMAL(10,2)`);
+      await AppDataSource.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS spend_cache_updated_at TIMESTAMP`);
     } catch (e) {
       // Ignore if column already exists or table doesn't exist yet
     }

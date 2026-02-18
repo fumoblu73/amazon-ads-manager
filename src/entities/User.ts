@@ -65,6 +65,16 @@ export class User {
   @Column({ type: 'timestamp', name: 'campaign_last_sync_at', nullable: true })
   campaignLastSyncAt: Date | null;
 
+  // Spend cache (aggiornata dallo scheduler, letta dalla dashboard)
+  @Column({ type: 'decimal', precision: 10, scale: 2, name: 'spend_cache_7d', nullable: true })
+  spendCache7d: number | null; // spesa totale ultimi 7 giorni (USD)
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, name: 'sales_cache_7d', nullable: true })
+  salesCache7d: number | null; // vendite totali ultimi 7 giorni (USD)
+
+  @Column({ type: 'timestamp', name: 'spend_cache_updated_at', nullable: true })
+  spendCacheUpdatedAt: Date | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
