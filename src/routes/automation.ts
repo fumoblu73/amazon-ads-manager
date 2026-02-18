@@ -4,7 +4,7 @@ import { authMiddleware } from '../middleware/auth';
 import { requireAmazonAuth, AuthRequest } from '../middleware/requireAmazonAuth';
 import { submitReportsForAllUsers, submitReportsForUser } from '../services/reportSubmitter';
 import { processCompletedReports, processCompletedReportsForUser } from '../services/reportProcessor';
-import { syncCampaignsForUser } from './campaigns';
+import { syncAllMarketplacesForUser } from './campaigns';
 
 const router = Router();
 
@@ -132,7 +132,7 @@ router.post('/trigger-manual', async (req: Request, res: Response) => {
     };
 
     try {
-      // PRE-SYNC: Aggiorna campagne da Amazon prima di submit
+      // PRE-SYNC: Aggiorna campagne da Amazon (ALL marketplaces) prima di submit
       try {
         const { AppDataSource: ds } = await import('../config/database');
         const { User } = await import('../entities/User');
@@ -143,14 +143,13 @@ router.post('/trigger-manual', async (req: Request, res: Response) => {
         const users = await userRepo.find({
           where: { isActive: true, amazonUserId: Not(IsNull()) }
         });
-        console.log(`🔄 [Manual] Pre-sync campaigns for ${users.length} users...`);
+        console.log(`🔄 [Manual] Pre-sync ALL marketplaces for ${users.length} users...`);
         for (const user of users) {
           try {
-            const profileId = user.profileId?.toString();
-            if (!profileId) continue;
             const apiService = createUserAmazonApiService(user.id);
-            const result = await syncCampaignsForUser(user.id, apiService, { profileId });
-            console.log(`✅ [Manual] ${user.email}: ${result.created} new, ${result.updated} updated`);
+            const result = await syncAllMarketplacesForUser(user.id, apiService);
+            const mkts = result.marketplaces.map(m => `${m.marketplace}(+${m.created}/${m.updated})`).join(', ');
+            console.log(`✅ [Manual] ${user.email}: ${mkts}`);
             user.campaignLastSyncAt = new Date();
             await userRepo.save(user);
           } catch (e: any) {
@@ -417,7 +416,7 @@ router.post('/submit-reports', async (req: Request, res: Response) => {
 
   // Run in background: sync campaigns first, then submit reports
   (async () => {
-    // Pre-sync: aggiorna campagne da Amazon per tutti gli utenti attivi
+    // Pre-sync: aggiorna campagne da Amazon per TUTTI i marketplace di ogni utente
     try {
       const { AppDataSource: ds } = await import('../config/database');
       const { User } = await import('../entities/User');
@@ -429,31 +428,24 @@ router.post('/submit-reports', async (req: Request, res: Response) => {
         where: { isActive: true, amazonUserId: Not(IsNull()) }
       });
 
-      console.log(`🔄 [Pre-sync] Syncing campaigns for ${users.length} active users...`);
+      console.log(`🔄 [Pre-sync] Syncing ALL marketplaces for ${users.length} active users...`);
 
       for (const user of users) {
         try {
-          const profileId = user.profileId?.toString();
-          if (!profileId) {
-            console.log(`⚠️ [Pre-sync] User ${user.email}: no profileId, skipping`);
-            continue;
-          }
           const apiService = createUserAmazonApiService(user.id);
-          const result = await syncCampaignsForUser(user.id, apiService, { profileId });
-          console.log(`✅ [Pre-sync] User ${user.email}: ${result.created} new, ${result.updated} updated campaigns`);
+          const result = await syncAllMarketplacesForUser(user.id, apiService);
+          const mkts = result.marketplaces.map(m => `${m.marketplace}(+${m.created}/${m.updated})`).join(', ');
+          console.log(`✅ [Pre-sync] User ${user.email}: ${mkts}`);
 
-          // Aggiorna timestamp sync
           user.campaignLastSyncAt = new Date();
           await userRepo.save(user);
         } catch (syncErr: any) {
           console.error(`⚠️ [Pre-sync] User ${user.email} sync failed: ${syncErr.message}`);
-          // Non bloccare: continua con gli altri utenti
         }
       }
       console.log(`✅ [Pre-sync] Campaign sync completed`);
     } catch (preSyncErr: any) {
       console.error(`⚠️ [Pre-sync] Campaign sync failed globally: ${preSyncErr.message}`);
-      // Non bloccare: procedi comunque con i report
     }
 
     // Poi submit reports

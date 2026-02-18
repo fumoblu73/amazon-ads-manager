@@ -117,6 +117,11 @@ export const campaignsApi = {
     const response = await apiClient.get<ApiResponse<CampaignStats>>('/api/campaigns/stats/summary');
     return response.data;
   },
+
+  syncFromAmazon: async () => {
+    const response = await apiClient.post<ApiResponse<any>>('/api/campaigns/sync-from-amazon', {});
+    return response.data;
+  },
 };
 
 // ================================================

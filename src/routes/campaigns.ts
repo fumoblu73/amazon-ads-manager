@@ -366,6 +366,47 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
 // ================================================
 // Funzione riutilizzabile: sincronizza campagne per un utente
 // ================================================
+/**
+ * Sync campaigns for ALL marketplaces of a user.
+ * Fetches all profiles from Amazon API and syncs each one.
+ */
+export async function syncAllMarketplacesForUser(
+  userId: string,
+  apiService: any
+): Promise<{ total: { created: number; updated: number; errors: number }; marketplaces: Array<{ marketplace: string; profileId: string; created: number; updated: number; errors: number }> }> {
+  const totals = { created: 0, updated: 0, errors: 0 };
+  const marketplaces: Array<{ marketplace: string; profileId: string; created: number; updated: number; errors: number }> = [];
+
+  try {
+    const profiles = await apiService.getProfiles();
+    console.log(`🌍 [AllMarkets] Found ${profiles.length} profiles for user ${userId}`);
+
+    for (const profile of profiles) {
+      const profileId = profile.profileId.toString();
+      const countryCode = profile.countryCode || 'UNKNOWN';
+
+      try {
+        console.log(`🔄 [AllMarkets] Syncing ${countryCode} (profile ${profileId})...`);
+        const result = await syncCampaignsForUser(userId, apiService, { profileId, marketplace: countryCode });
+        totals.created += result.created;
+        totals.updated += result.updated;
+        totals.errors += result.errors;
+        marketplaces.push({ marketplace: countryCode, profileId, created: result.created, updated: result.updated, errors: result.errors });
+        console.log(`✅ [AllMarkets] ${countryCode}: ${result.created} new, ${result.updated} updated`);
+      } catch (err: any) {
+        console.error(`⚠️ [AllMarkets] ${countryCode} sync failed: ${err.message}`);
+        marketplaces.push({ marketplace: countryCode, profileId, created: 0, updated: 0, errors: 1 });
+        totals.errors++;
+      }
+    }
+  } catch (err: any) {
+    console.error(`❌ [AllMarkets] Failed to fetch profiles: ${err.message}`);
+    throw err;
+  }
+
+  return { total: totals, marketplaces };
+}
+
 export async function syncCampaignsForUser(
   userId: string,
   apiService: any,
@@ -457,17 +498,22 @@ router.post('/auto-sync', authMiddleware, requireAmazonAuth, async (req: AuthReq
     }
 
     const apiService = createUserAmazonApiService(req.userId!);
-    const profileId = req.user!.profileId?.toString();
-    const marketplace = req.user!.countryCode || 'US';
 
-    if (!profileId) {
-      return res.json({ success: true, skipped: true, reason: 'no_profile' });
-    }
+    console.log(`🔄 Auto-sync campagne (ALL marketplaces) per user ${req.userId}...`);
 
-    console.log(`🔄 Auto-sync campagne per user ${req.userId} (${marketplace}, profile ${profileId})...`);
+    const result = await syncAllMarketplacesForUser(req.userId!, apiService);
 
-    const result = await syncCampaignsForUser(req.userId!, apiService, { profileId, marketplace });
-    res.json({ success: true, ...result });
+    // Aggiorna timestamp
+    user!.campaignLastSyncAt = new Date();
+    await userRepository.save(user!);
+
+    res.json({
+      success: true,
+      created: result.total.created,
+      updated: result.total.updated,
+      errors: result.total.errors,
+      marketplaces: result.marketplaces
+    });
   } catch (error: any) {
     console.error('❌ Errore POST /api/campaigns/auto-sync:', error);
     if (!res.headersSent) {
@@ -481,16 +527,18 @@ router.post('/auto-sync', authMiddleware, requireAmazonAuth, async (req: AuthReq
 // ================================================
 router.post('/sync-from-amazon', authMiddleware, requireAmazonAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { profileId } = req.body;
-    console.log(`🔄 Starting manual campaign sync for user ${req.userId}...`);
+    console.log(`🔄 Starting manual campaign sync (ALL marketplaces) for user ${req.userId}...`);
 
     const apiService = createUserAmazonApiService(req.userId!);
-    const marketplace = req.user!.countryCode || 'US';
+    const result = await syncAllMarketplacesForUser(req.userId!, apiService);
 
-    const result = await syncCampaignsForUser(req.userId!, apiService, {
-      profileId,
-      marketplace
-    });
+    // Aggiorna timestamp
+    const userRepository = AppDataSource.getRepository(User);
+    const user = await userRepository.findOne({ where: { id: req.userId } });
+    if (user) {
+      user.campaignLastSyncAt = new Date();
+      await userRepository.save(user);
+    }
 
     res.json({
       success: true,

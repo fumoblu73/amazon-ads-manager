@@ -11,6 +11,8 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [triggeringAutomation, setTriggeringAutomation] = useState(false);
   const [automationMessage, setAutomationMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [syncingCampaigns, setSyncingCampaigns] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const handleTriggerAutomation = async () => {
     setTriggeringAutomation(true);
@@ -25,6 +27,33 @@ export default function Dashboard() {
       setTimeout(() => setAutomationMessage(null), 5000);
     } finally {
       setTriggeringAutomation(false);
+    }
+  };
+
+  const handleSyncCampaigns = async () => {
+    setSyncingCampaigns(true);
+    setSyncMessage(null);
+    try {
+      const response = await campaignsApi.syncFromAmazon();
+      if (response.success) {
+        const data = response.data;
+        const mkts = data?.marketplaces?.map((m: any) => `${m.marketplace}: +${m.created}/${m.updated}`).join(', ') || '';
+        setSyncMessage({ type: 'success', text: `Sync completato! ${mkts}` });
+        // Refresh campaign stats
+        const campaignsRes = await campaignsApi.getStats();
+        if (campaignsRes.success && campaignsRes.data) {
+          setCampaignStats(campaignsRes.data);
+        }
+      } else {
+        setSyncMessage({ type: 'error', text: response.error || 'Errore sync' });
+      }
+      setTimeout(() => setSyncMessage(null), 8000);
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || err.message || 'Errore sync campagne';
+      setSyncMessage({ type: 'error', text: errorMsg });
+      setTimeout(() => setSyncMessage(null), 8000);
+    } finally {
+      setSyncingCampaigns(false);
     }
   };
 
@@ -193,12 +222,46 @@ export default function Dashboard() {
 
           {/* Campaign Stats */}
           <div className="bg-black rounded-xl p-5 flex flex-col">
-            <div className="flex items-center gap-2 mb-3">
-              <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-              </svg>
-              <h2 className="text-sm font-semibold text-white">Campagne</h2>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                </svg>
+                <h2 className="text-sm font-semibold text-white">Campagne</h2>
+              </div>
+              <button
+                onClick={handleSyncCampaigns}
+                disabled={syncingCampaigns}
+                className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+              >
+                {syncingCampaigns ? (
+                  <>
+                    <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Sync...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Sync
+                  </>
+                )}
+              </button>
             </div>
+            {/* Sync message */}
+            {syncMessage && (
+              <div className={`mb-3 p-2 rounded-lg text-xs ${
+                syncMessage.type === 'success'
+                  ? 'bg-green-100 text-green-800'
+                  : 'bg-red-100 text-red-800'
+              }`}>
+                {syncMessage.text}
+              </div>
+            )}
             {campaignStats ? (
               <div className="space-y-3 flex-1">
                 <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 p-3 rounded-lg">

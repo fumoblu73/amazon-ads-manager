@@ -55,9 +55,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       setUser(response.data.user);
 
-      // Auto-sync campagne
+      // Auto-sync campagne (tutti i marketplace)
       if (response.data.user?.profileId) {
-        addNotification({ type: 'campaigns', status: 'syncing', message: 'Sincronizzazione campagne...' });
+        addNotification({ type: 'campaigns', status: 'syncing', message: 'Sincronizzazione campagne (tutti i marketplace)...' });
 
         try {
           const syncRes = await fetch(`${API_BASE_URL}/api/campaigns/auto-sync`, {
@@ -69,10 +69,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (syncData.skipped) {
             removeNotification('campaigns');
           } else if (syncData.success) {
+            const mkts = syncData.marketplaces?.map((m: any) => m.marketplace).join(', ') || '';
             addNotification({
               type: 'campaigns',
               status: 'success',
-              message: `Campagne sync: ${syncData.created} nuove, ${syncData.updated} aggiornate`
+              message: `Sync: +${syncData.created} nuove, ${syncData.updated} aggiornate${mkts ? ` (${mkts})` : ''}`
             });
             setTimeout(() => removeNotification('campaigns'), 5000);
           }
