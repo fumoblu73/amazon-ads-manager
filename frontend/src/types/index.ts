@@ -511,6 +511,20 @@ export interface MonthComparisonData {
   };
 }
 
+// Amazon Ads Summary
+export interface AmazonAdsSummary {
+  totalSpendUSD: number;
+  totalSalesUSD: number;
+  overallAcos: number | null;
+  overallRoas: number | null;
+  marketplaces: Array<{
+    marketplace: string;
+    spend: number;
+    sales: number;
+    acos: number | null;
+  }>;
+}
+
 // Filter Types
 
 export interface DateRangeFilter {

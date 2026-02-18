@@ -7,6 +7,7 @@ import type {
   CampaignStats,
   LogStats,
   AutomationStatus,
+  AmazonAdsSummary,
   KdpBook,
   JournalEvent,
   EventCategoryMeta,
@@ -509,6 +510,19 @@ export const journalEventsApi = {
   delete: async (id: string, token: string) => {
     const response = await apiClient.delete<{ message: string }>(`/api/kdp/journal-events/${id}`, {
       headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+};
+
+// ================================================
+// AMAZON ADS API
+// ================================================
+
+export const amazonAdsApi = {
+  getSummary: async (startDate: string, endDate: string) => {
+    const response = await apiClient.get<AmazonAdsSummary>('/api/amazon-ads/summary', {
+      params: { startDate, endDate }
     });
     return response.data;
   },
