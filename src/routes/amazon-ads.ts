@@ -339,63 +339,71 @@ router.get('/spend-cache', authMiddleware, async (req: AuthRequest, res: Respons
 
 // ================================================
 // POST /api/amazon-ads/refresh-spend - Aggiorna cache spesa (chiamato dallo scheduler, richiede ADMIN_TOKEN)
+// Accetta: Authorization: Bearer <token>  OPPURE  ?adminToken=<token>
+// Risponde immediatamente, esegue in background (compatibile con timeout cron-job.org)
 // ================================================
 router.post('/refresh-spend', async (req: Request, res: Response) => {
   try {
-    const authHeader = req.headers.authorization;
     const adminToken = process.env.ADMIN_TOKEN;
-    if (!authHeader || authHeader !== `Bearer ${adminToken}`) {
+    const authHeader = req.headers.authorization;
+    const queryToken = req.query.adminToken as string | undefined;
+    const isAuthorized = (authHeader && authHeader === `Bearer ${adminToken}`)
+      || (queryToken && queryToken === adminToken);
+
+    if (!isAuthorized) {
       return res.status(401).json({ success: false, error: 'Unauthorized' });
     }
 
-    const end = new Date().toISOString().split('T')[0];
-    const start = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    // Risposta immediata al cron (evita timeout cron-job.org)
+    res.json({ success: true, message: 'Refresh spend avviato in background' });
 
-    console.log(`💰 [Spend Cache] Aggiornamento cache spesa ${start} → ${end}`);
+    // Esegue in background senza bloccare la risposta
+    setImmediate(async () => {
+      try {
+        const end = new Date().toISOString().split('T')[0];
+        const start = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    // Fetch spesa per ASIN (SP ora; SD/SB estendibile in futuro) — report paralleli per marketplace
-    const asinRows: AsinSpendRow[] = await amazonAdsService.getAllAsinSpend(start, end);
+        console.log(`💰 [Spend Cache] Aggiornamento cache spesa ${start} → ${end}`);
 
-    const totalSpend = asinRows.reduce((sum, r) => sum + r.spend7d, 0);
-    const totalSales = asinRows.reduce((sum, r) => sum + r.sales7d, 0);
+        const asinRows: AsinSpendRow[] = await amazonAdsService.getAllAsinSpend(start, end);
 
-    const userRepo = AppDataSource.getRepository(User);
-    const users = await userRepo.find({ where: { isActive: true } });
+        const totalSpend = asinRows.reduce((sum, r) => sum + r.spend7d, 0);
+        const totalSales = asinRows.reduce((sum, r) => sum + r.sales7d, 0);
 
-    for (const user of users) {
-      // Upsert righe per ASIN in book_spend_cache (solo se ci sono dati)
-      for (const row of asinRows) {
-        await AppDataSource.query(`
-          INSERT INTO book_spend_cache (user_id, marketplace, asin, ad_type, spend_7d, sales_7d, impressions_7d, clicks_7d, updated_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-          ON CONFLICT (user_id, marketplace, asin, ad_type)
-          DO UPDATE SET
-            spend_7d = EXCLUDED.spend_7d,
-            sales_7d = EXCLUDED.sales_7d,
-            impressions_7d = EXCLUDED.impressions_7d,
-            clicks_7d = EXCLUDED.clicks_7d,
-            updated_at = NOW()
-        `, [user.id, row.marketplace, row.asin, row.adType, row.spend7d, row.sales7d, row.impressions7d, row.clicks7d]);
+        const userRepo = AppDataSource.getRepository(User);
+        const users = await userRepo.find({ where: { isActive: true } });
+
+        for (const user of users) {
+          for (const row of asinRows) {
+            await AppDataSource.query(`
+              INSERT INTO book_spend_cache (user_id, marketplace, asin, ad_type, spend_7d, sales_7d, impressions_7d, clicks_7d, updated_at)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+              ON CONFLICT (user_id, marketplace, asin, ad_type)
+              DO UPDATE SET
+                spend_7d = EXCLUDED.spend_7d,
+                sales_7d = EXCLUDED.sales_7d,
+                impressions_7d = EXCLUDED.impressions_7d,
+                clicks_7d = EXCLUDED.clicks_7d,
+                updated_at = NOW()
+            `, [user.id, row.marketplace, row.asin, row.adType, row.spend7d, row.sales7d, row.impressions7d, row.clicks7d]);
+          }
+
+          const [cacheTotal] = await AppDataSource.query(`
+            SELECT COALESCE(SUM(spend_7d), 0)::float AS total_spend,
+                   COALESCE(SUM(sales_7d), 0)::float AS total_sales
+            FROM book_spend_cache WHERE user_id = $1
+          `, [user.id]);
+          await userRepo.update(user.id, {
+            spendCache7d: parseFloat(cacheTotal.total_spend),
+            salesCache7d: parseFloat(cacheTotal.total_sales),
+            spendCacheUpdatedAt: new Date()
+          });
+        }
+
+        console.log(`✅ [Spend Cache] ${asinRows.length} ASIN salvati, totale: $${totalSpend.toFixed(2)} spesa / $${totalSales.toFixed(2)} vendite`);
+      } catch (bgError: any) {
+        console.error('❌ [Spend Cache] Errore background:', bgError.message);
       }
-
-      // Aggiorna totale su users table calcolandolo da book_spend_cache (fonte di verità)
-      const [cacheTotal] = await AppDataSource.query(`
-        SELECT COALESCE(SUM(spend_7d), 0)::float AS total_spend,
-               COALESCE(SUM(sales_7d), 0)::float AS total_sales
-        FROM book_spend_cache WHERE user_id = $1
-      `, [user.id]);
-      await userRepo.update(user.id, {
-        spendCache7d: parseFloat(cacheTotal.total_spend),
-        salesCache7d: parseFloat(cacheTotal.total_sales),
-        spendCacheUpdatedAt: new Date()
-      });
-    }
-
-    console.log(`✅ [Spend Cache] ${asinRows.length} ASIN salvati, totale: $${totalSpend.toFixed(2)} spesa, $${totalSales.toFixed(2)} vendite`);
-
-    res.json({
-      success: true,
-      data: { totalSpend7d: totalSpend, totalSales7d: totalSales, asinRowsCount: asinRows.length, usersUpdated: users.length }
     });
   } catch (error: any) {
     console.error('❌ [Spend Cache] Errore:', error.message);
