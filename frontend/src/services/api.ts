@@ -7,7 +7,6 @@ import type {
   CampaignStats,
   LogStats,
   AutomationStatus,
-  AmazonAdsSummary,
   KdpBook,
   JournalEvent,
   EventCategoryMeta,
