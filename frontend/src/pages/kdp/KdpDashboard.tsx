@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
-import { kdpAnalyticsApi } from '../../services/api';
+import { kdpAnalyticsApi, amazonAdsApi } from '../../services/api';
 import StatsCard from '../../components/kdp/StatsCard';
-import type { KdpDashboardSummary } from '../../types';
+import type { KdpDashboardSummary, BookStatsData } from '../../types';
 import {
   XAxis,
   YAxis,
@@ -31,6 +31,11 @@ export default function KdpDashboard() {
   const [summary, setSummary] = useState<KdpDashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Profitto per libro (7 giorni)
+  const [bookStats7d, setBookStats7d] = useState<BookStatsData | null>(null);
+  const [bookSpendData, setBookSpendData] = useState<Record<string, { totalSpend7d: number; acos: number | null }> | null>(null);
+  const [bookSpendUpdatedAt, setBookSpendUpdatedAt] = useState<string | null>(null);
 
   // Stato estensione e sync
   const [extensionStatus, setExtensionStatus] = useState<ExtensionStatus>({
@@ -165,8 +170,25 @@ export default function KdpDashboard() {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      const data = await kdpAnalyticsApi.getDashboardSummary();
-      setSummary(data);
+
+      const end7d = new Date().toISOString().split('T')[0];
+      const start7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+      const [summaryRes, bookStatsRes, bookSpendRes] = await Promise.allSettled([
+        kdpAnalyticsApi.getDashboardSummary(),
+        kdpAnalyticsApi.getBookStats({ startDate: start7d, endDate: end7d }),
+        amazonAdsApi.getBookSpendCache(),
+      ]);
+
+      if (summaryRes.status === 'fulfilled') setSummary(summaryRes.value);
+      else throw new Error((summaryRes.reason as any)?.message || 'Failed to load dashboard');
+
+      if (bookStatsRes.status === 'fulfilled') setBookStats7d(bookStatsRes.value);
+      if (bookSpendRes.status === 'fulfilled' && bookSpendRes.value.success) {
+        setBookSpendData(bookSpendRes.value.data);
+        setBookSpendUpdatedAt(bookSpendRes.value.updatedAt);
+      }
+
       setError(null);
     } catch (err: any) {
       setError(err.message || 'Failed to load dashboard data');
@@ -752,6 +774,118 @@ export default function KdpDashboard() {
           )}
         </div>
       </div>
+
+      {/* Profitto per Libro — Ultimi 7 giorni */}
+      {(() => {
+        const hasCacheData = bookSpendData && Object.keys(bookSpendData).length > 0;
+        const bookProfitData = (bookStats7d?.books ?? [])
+          .map(book => {
+            const spendEntry = bookSpendData?.[book.asin];
+            const adSpend = spendEntry?.totalSpend7d ?? 0;
+            const royalties = book.grossRoyalties ?? 0;
+            const netProfit = royalties - adSpend;
+            const acos7d = royalties > 0 ? (adSpend / royalties) * 100 : null;
+            return { ...book, adSpend7d: adSpend, netProfit, acos7d };
+          })
+          .filter(b => b.grossRoyalties > 0 || b.adSpend7d > 0)
+          .sort((a, b) => b.netProfit - a.netProfit);
+
+        const formatTimeAgo = (dateStr: string) => {
+          const diff = Date.now() - new Date(dateStr).getTime();
+          const h = Math.floor(diff / 3600000);
+          const m = Math.floor(diff / 60000);
+          if (h >= 24) return `${Math.floor(h / 24)}g fa`;
+          if (h >= 1) return `${h}h fa`;
+          return `${m}m fa`;
+        };
+
+        return (
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Profitto per Libro — Ultimi 7 giorni
+              </h2>
+              {bookSpendUpdatedAt && (
+                <span className="text-xs text-gray-500">Spesa ADS aggiornata: {formatTimeAgo(bookSpendUpdatedAt)}</span>
+              )}
+            </div>
+
+            {!hasCacheData && (
+              <div className="mb-4 p-3 bg-yellow-900/30 border border-yellow-600/40 rounded-lg text-sm text-yellow-400">
+                Spesa ADS non disponibile — esegui <code className="font-mono bg-gray-800 px-1 rounded">POST /api/amazon-ads/refresh-spend</code> con <code className="font-mono bg-gray-800 px-1 rounded">Authorization: Bearer ADMIN_TOKEN</code> per popolare la cache (3-7 min).
+              </div>
+            )}
+
+            {bookProfitData.length === 0 ? (
+              <p className="text-gray-400 text-center py-6">Nessun dato royalties negli ultimi 7 giorni</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-700 text-gray-400 text-xs">
+                      <th className="text-left pb-3 pr-4 w-6">#</th>
+                      <th className="text-left pb-3 pr-4">Libro</th>
+                      <th className="text-right pb-3 pr-4 min-w-[90px]">Royalties 7gg</th>
+                      <th className="text-right pb-3 pr-4 min-w-[90px]">Spesa ADS 7gg</th>
+                      <th className="text-right pb-3 pr-4 min-w-[90px]">Profitto Netto</th>
+                      <th className="text-right pb-3 min-w-[60px]">ACOS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bookProfitData.map((book, index) => (
+                      <tr key={book.asin} className="border-b border-gray-800 hover:bg-gray-800/50 transition-colors">
+                        <td className="py-3 pr-4">
+                          <span className={`text-sm font-bold ${index === 0 ? 'text-yellow-500' : index === 1 ? 'text-gray-400' : index === 2 ? 'text-orange-600' : 'text-gray-600'}`}>
+                            #{index + 1}
+                          </span>
+                        </td>
+                        <td className="py-3 pr-4">
+                          <div className="flex items-center gap-3">
+                            {book.cover ? (
+                              <img src={book.cover} alt={book.title} className="w-8 h-11 object-cover rounded flex-shrink-0" />
+                            ) : (
+                              <div className="w-8 h-11 bg-gray-700 rounded flex-shrink-0" />
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-white font-medium truncate max-w-[200px]">{book.title}</p>
+                              <p className="text-xs text-gray-500">{book.asin}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 pr-4 text-right text-white font-medium">
+                          {formatCurrency(book.grossRoyalties)}
+                        </td>
+                        <td className="py-3 pr-4 text-right">
+                          <span className={book.adSpend7d > 0 ? 'text-red-400' : 'text-gray-600'}>
+                            {book.adSpend7d > 0 ? formatCurrency(book.adSpend7d) : '—'}
+                          </span>
+                        </td>
+                        <td className="py-3 pr-4 text-right">
+                          <span className={`font-bold ${book.netProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {book.netProfit >= 0 ? '+' : ''}{formatCurrency(book.netProfit)}
+                          </span>
+                        </td>
+                        <td className="py-3 text-right">
+                          {book.acos7d !== null ? (
+                            <span className={`font-medium ${book.acos7d > 50 ? 'text-red-400' : book.acos7d > 30 ? 'text-yellow-400' : 'text-green-400'}`}>
+                              {book.acos7d.toFixed(1)}%
+                            </span>
+                          ) : (
+                            <span className="text-gray-600">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Snapshot Info (Debug) */}
       {summary.snapshotInfo && (
