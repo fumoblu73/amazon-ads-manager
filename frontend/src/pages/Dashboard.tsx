@@ -2,11 +2,22 @@ import { useEffect, useState } from 'react';
 import { campaignsApi, logsApi, automationApi, amazonAdsApi } from '../services/api';
 import type { CampaignStats, LogStats, AutomationStatus, AutomationLog } from '../types';
 
+interface AdTypeSpend {
+  spend7d: number;
+  sales7d: number;
+  avgDailySpend: number;
+}
+
 interface SpendCache {
   totalSpend7d: number | null;
   totalSales7d: number | null;
   avgDailySpend: number | null;
   acos: number | null;
+  byAdType?: {
+    SP: AdTypeSpend;
+    SD: AdTypeSpend;
+    SB: AdTypeSpend;
+  };
   updatedAt: string | null;
 }
 
@@ -360,31 +371,51 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* Spesa media 7gg + ACOS */}
+                {/* Spesa 7gg breakdown per tipo (SP / SD / SB) */}
                 <div className="bg-gray-800 rounded-lg p-3">
-                  <div className="text-xs text-gray-400 mb-2">Spesa media/giorno (7gg)</div>
+                  <div className="text-xs text-gray-400 mb-2">Spesa 7 giorni</div>
                   {avgDailySpend !== null ? (
-                    <div className="flex items-end justify-between">
-                      <div className="text-2xl font-bold text-indigo-300">
-                        ${avgDailySpend.toFixed(2)}
+                    <div className="space-y-1.5">
+                      {(['SP', 'SD', 'SB'] as const).map(type => {
+                        const typeData = spendCache?.byAdType?.[type];
+                        const spend = typeData?.spend7d ?? 0;
+                        const daily = typeData?.avgDailySpend ?? 0;
+                        const hasData = spend > 0;
+                        return (
+                          <div key={type} className="flex items-center justify-between">
+                            <span className={`text-xs font-mono font-bold w-6 ${hasData ? 'text-indigo-300' : 'text-gray-600'}`}>{type}</span>
+                            <span className={`text-xs flex-1 text-right mr-3 ${hasData ? 'text-white' : 'text-gray-600'}`}>
+                              {hasData ? `$${spend.toFixed(2)}` : '—'}
+                            </span>
+                            <span className={`text-xs w-14 text-right ${hasData ? 'text-gray-400' : 'text-gray-700'}`}>
+                              {hasData ? `$${daily.toFixed(2)}/g` : ''}
+                            </span>
+                          </div>
+                        );
+                      })}
+                      <div className="border-t border-gray-700 pt-1.5 flex items-center justify-between">
+                        <span className="text-xs text-gray-400 font-semibold w-6">Tot</span>
+                        <span className="text-sm font-bold text-indigo-300 flex-1 text-right mr-3">
+                          ${spendCache!.totalSpend7d!.toFixed(2)}
+                        </span>
+                        <span className="text-xs text-indigo-300 w-14 text-right">
+                          ${avgDailySpend.toFixed(2)}/g
+                        </span>
                       </div>
-                      {acos !== null && acos !== undefined && (
-                        <div className="text-right">
-                          <div className="text-xs text-gray-400">ACOS</div>
-                          <div className={`text-lg font-bold ${acos > 50 ? 'text-red-400' : acos > 30 ? 'text-yellow-400' : 'text-green-400'}`}>
-                            {acos.toFixed(1)}%
+                      {acos !== null && (
+                        <div className="flex justify-between items-center pt-0.5">
+                          <span className="text-xs text-gray-400">ACOS</span>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-sm font-bold ${acos > 50 ? 'text-red-400' : acos > 30 ? 'text-yellow-400' : 'text-green-400'}`}>
+                              {acos.toFixed(1)}%
+                            </span>
+                            {spendUpdatedAt && <span className="text-xs text-gray-600">{formatTimeAgo(spendUpdatedAt)}</span>}
                           </div>
                         </div>
                       )}
                     </div>
                   ) : (
                     <div className="text-sm text-gray-500">Cache spesa non ancora disponibile</div>
-                  )}
-                  {spendCache?.totalSpend7d != null && (
-                    <div className="mt-2 text-xs text-gray-500">
-                      Tot 7gg: ${spendCache.totalSpend7d.toFixed(2)} · Vendite: ${spendCache.totalSales7d?.toFixed(2) ?? '0.00'}
-                      {spendUpdatedAt && <span className="ml-2">· agg. {formatTimeAgo(spendUpdatedAt)}</span>}
-                    </div>
                   )}
                 </div>
               </div>

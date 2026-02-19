@@ -69,6 +69,16 @@ export interface MarketplacePerformance {
   campaigns: CampaignPerformance[];
 }
 
+export interface AsinSpendRow {
+  marketplace: string;
+  asin: string;
+  adType: string; // 'SP' | 'SD' | 'SB'
+  spend7d: number;
+  sales7d: number;
+  impressions7d: number;
+  clicks7d: number;
+}
+
 // Classe per gestire le API di un singolo region
 class RegionApiClient {
   private client: AxiosInstance;
@@ -234,6 +244,45 @@ class RegionApiClient {
       return response.data.reportId;
     } catch (error: any) {
       console.error(`❌ [${this.region}] Errore richiesta report:`, error.response?.data || error.message);
+      return null;
+    }
+  }
+
+  // Richiede un report spAdvertisedProduct (o sdAdvertisedProduct) per spesa per ASIN
+  async requestAdvertisedProductReport(
+    profileId: string,
+    startDate: string,
+    endDate: string,
+    adType: 'SP' | 'SD' = 'SP'
+  ): Promise<string | null> {
+    try {
+      const adProduct = adType === 'SP' ? 'SPONSORED_PRODUCTS' : 'SPONSORED_DISPLAY';
+      const reportTypeId = adType === 'SP' ? 'spAdvertisedProduct' : 'sdAdvertisedProduct';
+      console.log(`📊 [${this.region}] Richiesta report ${adType}/ASIN ${startDate} - ${endDate}...`);
+
+      const response = await this.client.post('/reporting/reports', {
+        name: `${adType} Advertised Product Report`,
+        startDate,
+        endDate,
+        configuration: {
+          adProduct,
+          groupBy: ['advertiser'],
+          columns: ['advertisedAsin', 'cost', 'sales14d', 'impressions', 'clicks', 'purchases14d'],
+          reportTypeId,
+          timeUnit: 'SUMMARY',
+          format: 'GZIP_JSON'
+        }
+      }, {
+        headers: {
+          'Amazon-Advertising-API-Scope': profileId,
+          'Content-Type': 'application/vnd.createasyncreportrequest.v3+json'
+        }
+      });
+
+      console.log(`✅ [${this.region}] Report ${adType} richiesto: ${response.data.reportId}`);
+      return response.data.reportId;
+    } catch (error: any) {
+      console.error(`❌ [${this.region}] Errore richiesta report ${adType}:`, error.response?.data || error.message);
       return null;
     }
   }
@@ -491,6 +540,50 @@ class AmazonAdsService {
       overallRoas: totalSpend > 0 ? totalSales / totalSpend : 0,
       byMarketplace
     };
+  }
+
+  // Recupera spesa per ASIN su tutti i marketplace configurati (SP ora, SD/SB in futuro)
+  async getAllAsinSpend(startDate: string, endDate: string): Promise<AsinSpendRow[]> {
+    const marketplaces = ['US', 'CA', 'UK', 'DE', 'FR', 'IT', 'ES', 'AU'];
+    const results: AsinSpendRow[] = [];
+
+    // Richiedi tutti i report SP in parallelo (uno per marketplace)
+    const tasks = marketplaces
+      .filter(mp => !!getProfileIdForMarketplace(mp))
+      .map(marketplace => (async () => {
+        const profileId = getProfileIdForMarketplace(marketplace);
+        const regionStr = MARKETPLACE_TO_REGION[marketplace.toUpperCase()];
+        if (!profileId || !regionStr) return;
+
+        try {
+          const client = this.getClient(regionStr as 'EU' | 'NA' | 'FE');
+
+          // Report SP per ASIN
+          const reportId = await client.requestAdvertisedProductReport(profileId, startDate, endDate, 'SP');
+          if (!reportId) return;
+
+          // Polling fino a ~7 minuti (210 tentativi × 2s)
+          const data = await client.waitAndDownloadReport(profileId, reportId, 210);
+          for (const row of data) {
+            if (!row.advertisedAsin) continue;
+            results.push({
+              marketplace,
+              asin: row.advertisedAsin,
+              adType: 'SP',
+              spend7d: parseFloat(row.cost) || 0,
+              sales7d: parseFloat(row.sales14d) || 0,
+              impressions7d: parseInt(row.impressions) || 0,
+              clicks7d: parseInt(row.clicks) || 0,
+            });
+          }
+          console.log(`✅ [getAllAsinSpend] ${marketplace} SP: ${data.length} ASIN trovati`);
+        } catch (e: any) {
+          console.error(`❌ [getAllAsinSpend] ${marketplace} SP fallito:`, e.message);
+        }
+      })());
+
+    await Promise.allSettled(tasks);
+    return results;
   }
 }
 

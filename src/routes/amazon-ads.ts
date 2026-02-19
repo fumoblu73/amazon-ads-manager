@@ -4,7 +4,7 @@
 // Endpoints per recuperare dati dalle Amazon Advertising API
 
 import { Router, Request, Response } from 'express';
-import { amazonAdsService } from '../services/amazon-ads.service';
+import { amazonAdsService, AsinSpendRow } from '../services/amazon-ads.service';
 import { adsSpendSyncService } from '../services/ads-spend-sync.service';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { AppDataSource } from '../config/database';
@@ -295,15 +295,40 @@ router.get('/spend-cache', authMiddleware, async (req: AuthRequest, res: Respons
 
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
+    // Breakdown per tipo di campagna (SP / SD / SB) da book_spend_cache
+    const byAdTypeRows = await AppDataSource.query(`
+      SELECT ad_type,
+        COALESCE(SUM(spend_7d), 0)::float AS spend,
+        COALESCE(SUM(sales_7d), 0)::float AS sales
+      FROM book_spend_cache
+      WHERE user_id = $1
+      GROUP BY ad_type
+    `, [req.userId]);
+
+    const byAdType: Record<string, { spend7d: number; sales7d: number; avgDailySpend: number }> = {
+      SP: { spend7d: 0, sales7d: 0, avgDailySpend: 0 },
+      SD: { spend7d: 0, sales7d: 0, avgDailySpend: 0 },
+      SB: { spend7d: 0, sales7d: 0, avgDailySpend: 0 }
+    };
+    for (const row of byAdTypeRows) {
+      const spend = parseFloat(row.spend) || 0;
+      const sales = parseFloat(row.sales) || 0;
+      byAdType[row.ad_type] = { spend7d: spend, sales7d: sales, avgDailySpend: spend / 7 };
+    }
+
+    const totalSpend = user.spendCache7d ? parseFloat(user.spendCache7d.toString()) : null;
+    const totalSales = user.salesCache7d ? parseFloat(user.salesCache7d.toString()) : null;
+
     res.json({
       success: true,
       data: {
-        totalSpend7d: user.spendCache7d ? parseFloat(user.spendCache7d.toString()) : null,
-        totalSales7d: user.salesCache7d ? parseFloat(user.salesCache7d.toString()) : null,
-        avgDailySpend: user.spendCache7d ? parseFloat(user.spendCache7d.toString()) / 7 : null,
-        acos: user.spendCache7d && user.salesCache7d && parseFloat(user.salesCache7d.toString()) > 0
-          ? (parseFloat(user.spendCache7d.toString()) / parseFloat(user.salesCache7d.toString())) * 100
+        totalSpend7d: totalSpend,
+        totalSales7d: totalSales,
+        avgDailySpend: totalSpend !== null ? totalSpend / 7 : null,
+        acos: totalSpend && totalSales && totalSales > 0
+          ? (totalSpend / totalSales) * 100
           : null,
+        byAdType,
         updatedAt: user.spendCacheUpdatedAt
       }
     });
@@ -328,28 +353,99 @@ router.post('/refresh-spend', async (req: Request, res: Response) => {
 
     console.log(`💰 [Spend Cache] Aggiornamento cache spesa ${start} → ${end}`);
 
-    const summary = await amazonAdsService.getTotalSpendSummary(start, end);
+    // Fetch spesa per ASIN (SP ora; SD/SB estendibile in futuro) — report paralleli per marketplace
+    const asinRows: AsinSpendRow[] = await amazonAdsService.getAllAsinSpend(start, end);
 
-    // Salva per tutti gli utenti attivi (unico tenant per ora)
+    const totalSpend = asinRows.reduce((sum, r) => sum + r.spend7d, 0);
+    const totalSales = asinRows.reduce((sum, r) => sum + r.sales7d, 0);
+
     const userRepo = AppDataSource.getRepository(User);
     const users = await userRepo.find({ where: { isActive: true } });
 
     for (const user of users) {
+      // Aggiorna totale su users table (per backward compat con spend-cache)
       await userRepo.update(user.id, {
-        spendCache7d: summary.totalSpendUSD,
-        salesCache7d: summary.totalSalesUSD,
+        spendCache7d: totalSpend,
+        salesCache7d: totalSales,
         spendCacheUpdatedAt: new Date()
       });
+
+      // Upsert righe per ASIN in book_spend_cache
+      for (const row of asinRows) {
+        await AppDataSource.query(`
+          INSERT INTO book_spend_cache (user_id, marketplace, asin, ad_type, spend_7d, sales_7d, impressions_7d, clicks_7d, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+          ON CONFLICT (user_id, marketplace, asin, ad_type)
+          DO UPDATE SET
+            spend_7d = EXCLUDED.spend_7d,
+            sales_7d = EXCLUDED.sales_7d,
+            impressions_7d = EXCLUDED.impressions_7d,
+            clicks_7d = EXCLUDED.clicks_7d,
+            updated_at = NOW()
+        `, [user.id, row.marketplace, row.asin, row.adType, row.spend7d, row.sales7d, row.impressions7d, row.clicks7d]);
+      }
     }
 
-    console.log(`✅ [Spend Cache] Aggiornata: $${summary.totalSpendUSD.toFixed(2)} spesa, $${summary.totalSalesUSD.toFixed(2)} vendite`);
+    console.log(`✅ [Spend Cache] ${asinRows.length} ASIN salvati, totale: $${totalSpend.toFixed(2)} spesa, $${totalSales.toFixed(2)} vendite`);
 
     res.json({
       success: true,
-      data: { totalSpend7d: summary.totalSpendUSD, totalSales7d: summary.totalSalesUSD, usersUpdated: users.length }
+      data: { totalSpend7d: totalSpend, totalSales7d: totalSales, asinRowsCount: asinRows.length, usersUpdated: users.length }
     });
   } catch (error: any) {
     console.error('❌ [Spend Cache] Errore:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ================================================
+// GET /api/amazon-ads/book-spend-cache - Spesa per ASIN aggregata (per KDP dashboard)
+// ================================================
+router.get('/book-spend-cache', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const rows = await AppDataSource.query(`
+      SELECT asin, ad_type, marketplace, spend_7d, sales_7d, impressions_7d, clicks_7d, updated_at
+      FROM book_spend_cache
+      WHERE user_id = $1
+      ORDER BY spend_7d DESC NULLS LAST
+    `, [req.userId]);
+
+    // Aggrega per ASIN
+    const byAsin: Record<string, {
+      totalSpend7d: number;
+      totalSales7d: number;
+      avgDailySpend: number;
+      acos: number | null;
+      byAdType: Record<string, number>;
+      byMarketplace: Record<string, number>;
+    }> = {};
+    let latestUpdate: Date | null = null;
+
+    for (const row of rows) {
+      const asin = row.asin;
+      if (!byAsin[asin]) {
+        byAsin[asin] = { totalSpend7d: 0, totalSales7d: 0, avgDailySpend: 0, acos: null, byAdType: { SP: 0, SD: 0, SB: 0 }, byMarketplace: {} };
+      }
+      const spend = parseFloat(row.spend_7d) || 0;
+      const sales = parseFloat(row.sales_7d) || 0;
+      byAsin[asin].totalSpend7d += spend;
+      byAsin[asin].totalSales7d += sales;
+      byAsin[asin].byAdType[row.ad_type] = (byAsin[asin].byAdType[row.ad_type] || 0) + spend;
+      byAsin[asin].byMarketplace[row.marketplace] = (byAsin[asin].byMarketplace[row.marketplace] || 0) + spend;
+      if (row.updated_at && (!latestUpdate || new Date(row.updated_at) > latestUpdate)) {
+        latestUpdate = new Date(row.updated_at);
+      }
+    }
+
+    for (const asin of Object.keys(byAsin)) {
+      byAsin[asin].avgDailySpend = byAsin[asin].totalSpend7d / 7;
+      byAsin[asin].acos = byAsin[asin].totalSales7d > 0
+        ? (byAsin[asin].totalSpend7d / byAsin[asin].totalSales7d) * 100
+        : null;
+    }
+
+    res.json({ success: true, updatedAt: latestUpdate, data: byAsin });
+  } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });

@@ -527,9 +527,31 @@ export const amazonAdsApi = {
       totalSales7d: number | null;
       avgDailySpend: number | null;
       acos: number | null;
+      byAdType?: {
+        SP: { spend7d: number; sales7d: number; avgDailySpend: number };
+        SD: { spend7d: number; sales7d: number; avgDailySpend: number };
+        SB: { spend7d: number; sales7d: number; avgDailySpend: number };
+      };
       updatedAt: string | null;
     } }>('/api/amazon-ads/spend-cache');
     return response.data.data;
+  },
+
+  // Legge spesa per ASIN dalla cache DB (per KDP dashboard — profitto netto per libro)
+  getBookSpendCache: async () => {
+    const response = await apiClient.get<{
+      success: boolean;
+      updatedAt: string | null;
+      data: Record<string, {
+        totalSpend7d: number;
+        totalSales7d: number;
+        avgDailySpend: number;
+        acos: number | null;
+        byAdType: { SP: number; SD: number; SB: number };
+        byMarketplace: Record<string, number>;
+      }>;
+    }>('/api/amazon-ads/book-spend-cache');
+    return response.data;
   },
 };
 
