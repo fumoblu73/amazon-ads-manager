@@ -16,6 +16,7 @@ import { KdpSalesSnapshot } from '../entities/KdpSalesSnapshot';
 import { PendingReport } from '../entities/PendingReport';
 import { KdpUserStats } from '../models/KdpDailyStats';
 import { BookSpendCache } from '../entities/BookSpendCache';
+import { KdpSyncLog as KdpSyncLogModel } from '../models/KdpSyncLog';
 
 dotenv.config();
 
@@ -37,7 +38,8 @@ const getDatabaseConfig = () => {
     KdpSalesSnapshot,
     PendingReport,
     KdpUserStats,
-    BookSpendCache
+    BookSpendCache,
+    KdpSyncLogModel
   ];
 
   if (process.env.DATABASE_URL) {
@@ -108,6 +110,29 @@ export const initializeDatabase = async () => {
       await AppDataSource.query(`
         CREATE INDEX IF NOT EXISTS idx_book_spend_cache_user_asin
         ON book_spend_cache(user_id, asin)
+      `);
+
+      // kdp_sync_logs table (used by kdp-scraper.service and kdp-reports-scraper.service)
+      await AppDataSource.query(`
+        CREATE TABLE IF NOT EXISTS kdp_sync_logs (
+          id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          "userId"        VARCHAR(255),
+          "syncType"      VARCHAR(50) NOT NULL,
+          status          VARCHAR(50) NOT NULL DEFAULT 'pending',
+          "startedAt"     TIMESTAMP,
+          "completedAt"   TIMESTAMP,
+          "recordsProcessed" INT NOT NULL DEFAULT 0,
+          "recordsCreated"   INT NOT NULL DEFAULT 0,
+          "recordsUpdated"   INT NOT NULL DEFAULT 0,
+          "recordsFailed"    INT NOT NULL DEFAULT 0,
+          "errorMessage"  TEXT,
+          metadata        TEXT,
+          "createdAt"     TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await AppDataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_kdp_sync_logs_user_type
+        ON kdp_sync_logs("userId", "syncType", "createdAt")
       `);
     } catch (e) {
       // Ignore if column already exists or table doesn't exist yet

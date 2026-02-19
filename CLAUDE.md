@@ -10,7 +10,15 @@ Prima di ogni `git commit` e `git push`, devo:
   - Se la modifica è un miglioramento non urgente → segnalare che può aspettare il prossimo deploy
 - Non eseguire commit o push automaticamente, nemmeno se l'utente ha detto "fai pure" in un contesto precedente
 
-### 2. Quota Claude — limitazione nota
+### 2. Versione — aggiornamento proposto a ogni commit/push
+Prima di ogni commit, valutare se le modifiche giustificano un bump di versione in `package.json`:
+- **patch** (es. 2.3.0 → 2.3.1): bugfix, fix di build, piccole correzioni
+- **minor** (es. 2.3.0 → 2.4.0): nuova feature, nuova sezione UI, nuovo endpoint
+- **major** (es. 2.3.0 → 3.0.0): breaking change, refactoring architetturale significativo
+
+Se un bump è opportuno, proporlo all'utente insieme all'OK per commit/push.
+
+### 3. Quota Claude — limitazione nota
 Non ho accesso ai dati di quota/consumo del piano Claude dell'utente. Non posso monitorare questo automaticamente. L'utente può verificare su claude.ai/settings.
 
 ---

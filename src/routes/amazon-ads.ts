@@ -363,14 +363,7 @@ router.post('/refresh-spend', async (req: Request, res: Response) => {
     const users = await userRepo.find({ where: { isActive: true } });
 
     for (const user of users) {
-      // Aggiorna totale su users table (per backward compat con spend-cache)
-      await userRepo.update(user.id, {
-        spendCache7d: totalSpend,
-        salesCache7d: totalSales,
-        spendCacheUpdatedAt: new Date()
-      });
-
-      // Upsert righe per ASIN in book_spend_cache
+      // Upsert righe per ASIN in book_spend_cache (solo se ci sono dati)
       for (const row of asinRows) {
         await AppDataSource.query(`
           INSERT INTO book_spend_cache (user_id, marketplace, asin, ad_type, spend_7d, sales_7d, impressions_7d, clicks_7d, updated_at)
@@ -384,6 +377,18 @@ router.post('/refresh-spend', async (req: Request, res: Response) => {
             updated_at = NOW()
         `, [user.id, row.marketplace, row.asin, row.adType, row.spend7d, row.sales7d, row.impressions7d, row.clicks7d]);
       }
+
+      // Aggiorna totale su users table calcolandolo da book_spend_cache (fonte di verità)
+      const [cacheTotal] = await AppDataSource.query(`
+        SELECT COALESCE(SUM(spend_7d), 0)::float AS total_spend,
+               COALESCE(SUM(sales_7d), 0)::float AS total_sales
+        FROM book_spend_cache WHERE user_id = $1
+      `, [user.id]);
+      await userRepo.update(user.id, {
+        spendCache7d: parseFloat(cacheTotal.total_spend),
+        salesCache7d: parseFloat(cacheTotal.total_sales),
+        spendCacheUpdatedAt: new Date()
+      });
     }
 
     console.log(`✅ [Spend Cache] ${asinRows.length} ASIN salvati, totale: $${totalSpend.toFixed(2)} spesa, $${totalSales.toFixed(2)} vendite`);
