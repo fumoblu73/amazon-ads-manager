@@ -660,19 +660,21 @@ export default function KdpDashboard() {
                 <YAxis
                   yAxisId="right"
                   orientation="right"
-                  stroke="#3B82F6"
+                  stroke="#EF4444"
                   fontSize={10}
+                  tickFormatter={(value) => `$${value}`}
                 />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
                   labelStyle={{ color: '#F3F4F6' }}
                   formatter={(value, name) => {
                     if (name === 'royalties') return [`$${Number(value).toFixed(2)}`, 'Royalties'];
-                    return [value, 'Orders'];
+                    if (name === 'spending') return [`$${Number(value).toFixed(2)}`, 'ADS Spend'];
+                    return [value, name];
                   }}
                 />
                 <Bar yAxisId="left" dataKey="royalties" fill="#F59E0B" name="royalties" radius={[4, 4, 0, 0]} />
-                <Bar yAxisId="right" dataKey="orders" fill="#3B82F6" name="orders" radius={[4, 4, 0, 0]} />
+                <Bar yAxisId="right" dataKey="spending" fill="#EF4444" name="spending" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -686,8 +688,8 @@ export default function KdpDashboard() {
               <span className="text-gray-400">Royalties ($)</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-blue-500 rounded"></div>
-              <span className="text-gray-400">Orders</span>
+              <div className="w-3 h-3 bg-red-500 rounded"></div>
+              <span className="text-gray-400">ADS Spend ($)</span>
             </div>
           </div>
         </div>
@@ -781,7 +783,7 @@ export default function KdpDashboard() {
         const bookProfitData = (bookStats7d?.books ?? [])
           .map(book => {
             const spendEntry = bookSpendData?.[book.asin];
-            const adSpend = spendEntry?.totalSpend7d ?? 0;
+            const adSpend = spendEntry?.totalSpend7d ?? book.spending ?? 0;
             const royalties = book.grossRoyalties ?? 0;
             const netProfit = royalties - adSpend;
             const acos7d = royalties > 0 ? (adSpend / royalties) * 100 : null;
@@ -806,31 +808,31 @@ export default function KdpDashboard() {
                 <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                Profitto per Libro — Ultimi 7 giorni
+                Book Profit — Last 7 Days
               </h2>
               {bookSpendUpdatedAt && (
-                <span className="text-xs text-gray-500">Spesa ADS aggiornata: {formatTimeAgo(bookSpendUpdatedAt)}</span>
+                <span className="text-xs text-gray-500">ADS data updated: {formatTimeAgo(bookSpendUpdatedAt)}</span>
               )}
             </div>
 
             {!hasCacheData && (
               <div className="mb-4 p-3 bg-yellow-900/30 border border-yellow-600/40 rounded-lg text-sm text-yellow-400">
-                Spesa ADS non disponibile — esegui <code className="font-mono bg-gray-800 px-1 rounded">POST /api/amazon-ads/refresh-spend</code> con <code className="font-mono bg-gray-800 px-1 rounded">Authorization: Bearer ADMIN_TOKEN</code> per popolare la cache (3-7 min).
+                ADS spend data unavailable — run <code className="font-mono bg-gray-800 px-1 rounded">POST /api/amazon-ads/refresh-spend</code> with <code className="font-mono bg-gray-800 px-1 rounded">Authorization: Bearer ADMIN_TOKEN</code> to populate the cache (3-7 min).
               </div>
             )}
 
             {bookProfitData.length === 0 ? (
-              <p className="text-gray-400 text-center py-6">Nessun dato royalties negli ultimi 7 giorni</p>
+              <p className="text-gray-400 text-center py-6">No royalties data in the last 7 days</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-700 text-gray-400 text-xs">
                       <th className="text-left pb-3 pr-4 w-6">#</th>
-                      <th className="text-left pb-3 pr-4">Libro</th>
-                      <th className="text-right pb-3 pr-4 min-w-[90px]">Royalties 7gg</th>
-                      <th className="text-right pb-3 pr-4 min-w-[90px]">Spesa ADS 7gg</th>
-                      <th className="text-right pb-3 pr-4 min-w-[90px]">Profitto Netto</th>
+                      <th className="text-left pb-3 pr-4">Book</th>
+                      <th className="text-right pb-3 pr-4 min-w-[90px]">Royalties 7d</th>
+                      <th className="text-right pb-3 pr-4 min-w-[90px]">ADS Spend 7d</th>
+                      <th className="text-right pb-3 pr-4 min-w-[90px]">Net Profit</th>
                       <th className="text-right pb-3 min-w-[60px]">ACOS</th>
                     </tr>
                   </thead>

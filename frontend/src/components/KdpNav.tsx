@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 
 export default function KdpNav() {
   const navItems = [
-    { path: '/kdp/dashboard', label: 'Overview', icon: 'Visual' },
+    { path: '/kdp/dashboard', label: 'Overview' },
     { path: '/kdp/bookshelf', label: 'Bookshelf & BSRs' },
     { path: '/kdp/analytics/historical', label: 'Historical Stats' },
     { path: '/kdp/analytics/book-stats', label: 'Book Stats' },

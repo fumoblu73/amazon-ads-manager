@@ -317,7 +317,7 @@ interface MonthlyChartDataPoint {
   month: string;
   label: string;
   royalties: number;
-  orders: number;
+  spending: number;
 }
 
 export interface KdpDashboardSummary {

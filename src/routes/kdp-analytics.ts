@@ -318,7 +318,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
     }
 
     // Get monthly chart data for the last 12 months (Publisher Champ style)
-    const monthlyChartData: Array<{month: string; label: string; royalties: number; orders: number}> = [];
+    const monthlyChartData: Array<{month: string; label: string; royalties: number; spending: number}> = [];
     const now = new Date();
 
     for (let i = 11; i >= 0; i--) {
@@ -329,7 +329,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       const monthStats = await statsRepository
         .createQueryBuilder('stats')
         .select('SUM(stats.grossRoyalties)', 'royalties')
-        .addSelect('SUM(stats.paidUnits)', 'orders')
+        .addSelect('SUM(stats.spending)', 'spending')
         .where('stats.userId = :userId', { userId })
         .andWhere('stats.date BETWEEN :start AND :end', {
           start: monthStart.toISOString().split('T')[0],
@@ -341,7 +341,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
         month: monthStart.toISOString().split('T')[0],
         label: monthStart.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
         royalties: parseFloat(monthStats?.royalties || 0),
-        orders: parseInt(monthStats?.orders || 0)
+        spending: parseFloat(monthStats?.spending || 0)
       });
     }
 
@@ -361,7 +361,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
           const historicalData = historicalMap.get(monthKey);
           if (historicalData && chartMonth.royalties === 0) {
             chartMonth.royalties = historicalData.totalRoyalties || 0;
-            chartMonth.orders = (historicalData.printOrders || 0) + (historicalData.digitalOrders || 0);
+            chartMonth.spending = 0; // Historical snapshot data doesn't include ADS spend
           }
         });
       }
@@ -370,7 +370,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       const lastMonthData = monthlyChartData[monthlyChartData.length - 1];
       if (lastMonthData.royalties === 0 && latestSnapshot.totalRoyalties) {
         lastMonthData.royalties = parseFloat(latestSnapshot.totalRoyalties.toString());
-        lastMonthData.orders = (latestSnapshot.printOrders || 0) + (latestSnapshot.digitalOrders || 0);
+        lastMonthData.spending = 0;
       }
     }
 
@@ -627,6 +627,7 @@ router.get('/analytics/historical', authMiddleware, async (req: AuthRequest, res
       books.push({
         asin: stat.asin,
         title: book?.title || 'Unknown',
+        cover: book?.coverUrl || undefined,
         grossRoyalties: parseFloat(stat.grossRoyalties || 0),
         spending: parseFloat(stat.spending || 0),
         netRoyalties: parseFloat(stat.netRoyalties || 0)
