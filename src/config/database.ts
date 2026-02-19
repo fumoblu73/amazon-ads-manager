@@ -15,6 +15,7 @@ import { AutomationSettings } from '../entities/AutomationSettings';
 import { KdpSalesSnapshot } from '../entities/KdpSalesSnapshot';
 import { PendingReport } from '../entities/PendingReport';
 import { KdpUserStats } from '../models/KdpDailyStats';
+import { BookSpendCache } from '../entities/BookSpendCache';
 
 dotenv.config();
 
@@ -35,7 +36,8 @@ const getDatabaseConfig = () => {
     AutomationSettings,
     KdpSalesSnapshot,
     PendingReport,
-    KdpUserStats
+    KdpUserStats,
+    BookSpendCache
   ];
 
   if (process.env.DATABASE_URL) {
@@ -86,6 +88,27 @@ export const initializeDatabase = async () => {
       await AppDataSource.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS spend_cache_7d DECIMAL(10,2)`);
       await AppDataSource.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS sales_cache_7d DECIMAL(10,2)`);
       await AppDataSource.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS spend_cache_updated_at TIMESTAMP`);
+
+      // book_spend_cache table
+      await AppDataSource.query(`
+        CREATE TABLE IF NOT EXISTS book_spend_cache (
+          id          SERIAL PRIMARY KEY,
+          user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          marketplace VARCHAR(10) NOT NULL,
+          asin        VARCHAR(20) NOT NULL,
+          ad_type     VARCHAR(10) NOT NULL,
+          spend_7d    DECIMAL(10,2),
+          sales_7d    DECIMAL(10,2),
+          impressions_7d INTEGER,
+          clicks_7d   INTEGER,
+          updated_at  TIMESTAMP DEFAULT NOW(),
+          UNIQUE(user_id, marketplace, asin, ad_type)
+        )
+      `);
+      await AppDataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_book_spend_cache_user_asin
+        ON book_spend_cache(user_id, asin)
+      `);
     } catch (e) {
       // Ignore if column already exists or table doesn't exist yet
     }
