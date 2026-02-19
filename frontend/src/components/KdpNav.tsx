@@ -25,11 +25,6 @@ export default function KdpNav() {
               }`
             }
           >
-            {item.icon && (
-              <span className="inline-block bg-purple-600 text-white text-xs px-2.5 py-1 rounded mr-2">
-                {item.icon}
-              </span>
-            )}
             {item.label}
           </NavLink>
         ))}
