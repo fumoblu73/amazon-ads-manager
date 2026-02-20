@@ -219,6 +219,10 @@ export class KdpReportsScraperService {
           if (contentType.includes('application/json')) {
             const data = await response.json();
 
+            // DIAGNOSTIC: log ALL JSON responses to discover real endpoint names
+            const dataKeys = Array.isArray(data) ? `[array:${data.length}]` : Object.keys(data).slice(0, 8).join(',');
+            console.log(`📡 KDP JSON response: ${url} → keys: ${dataKeys}`);
+
             // Store by endpoint type
             if (url.includes('orders') || url.includes('sales')) {
               this.interceptedApiData.set('sales', data);

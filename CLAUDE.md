@@ -18,7 +18,14 @@ Prima di ogni commit, valutare se le modifiche giustificano un bump di versione 
 
 Se un bump è opportuno, proporlo all'utente insieme all'OK per commit/push.
 
-### 3. Quota Claude — limitazione nota
+### 3. Decisioni strategiche — proporre alternative
+Quando si deve decidere come risolvere una criticità architetturale o implementare una nuova caratteristica:
+- Proporre **almeno 2 alternative** con pro/contro sintetici
+- **Aspettare l'approvazione** dell'utente prima di procedere
+
+Eccezione: se si tratta di **un bug o un errore** (build failure, runtime error, comportamento errato già definito), si può procedere in autonomia senza chiedere.
+
+### 4. Quota Claude — limitazione nota
 Non ho accesso ai dati di quota/consumo del piano Claude dell'utente. Non posso monitorare questo automaticamente. L'utente può verificare su claude.ai/settings.
 
 ---

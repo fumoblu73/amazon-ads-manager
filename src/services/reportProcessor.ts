@@ -8,6 +8,7 @@ import { AppDataSource } from '../config/database';
 import { PendingReport } from '../entities/PendingReport';
 import { KdpBook } from '../entities/KdpBook';
 import { Campaign } from '../models/Campaign';
+import { AutomationLog } from '../models/AutomationLog';
 import { createMarketplaceApiService } from './MarketplaceApiFactory';
 import { In, IsNull } from 'typeorm';
 import { parseKdpPrice, calculateBookFastAcos, InkType, TrimSize } from '../utils/printingCost';
@@ -80,6 +81,36 @@ async function preloadDataForReports(reports: PendingReport[]): Promise<Preloade
   console.log(`   📦 Preloaded: ${campaigns.size} campaigns, ${books.size} books, ${configs.size} user configs`);
 
   return { campaigns, books, configs };
+}
+
+/**
+ * Save a log entry to the automation_logs table.
+ */
+async function saveAutomationLog(
+  report: PendingReport,
+  status: 'success' | 'failed',
+  errorMessage?: string
+): Promise<void> {
+  try {
+    const logRepo = AppDataSource.getRepository(AutomationLog);
+    const funcNums: number[] = JSON.parse(report.functionNumbers || '[]');
+    const ruleName = funcNums.length > 0
+      ? funcNums.map(n => `F${n}`).join(', ')
+      : report.reportType;
+
+    const log = logRepo.create({
+      action: status === 'success' ? 'functions_executed' : 'report_failed',
+      targetId: report.campaignId.substring(0, 100),
+      targetName: report.campaignName?.substring(0, 255) || report.campaignId,
+      ruleName: ruleName.substring(0, 100),
+      status,
+      errorMessage: errorMessage || null,
+      reason: `Phase 2 — ${report.marketplace}`,
+    });
+    await logRepo.save(log);
+  } catch (err: any) {
+    console.error(`   ⚠️ Could not save automation log: ${err.message}`);
+  }
 }
 
 /**
@@ -200,6 +231,7 @@ export async function processCompletedReports(): Promise<{
                 report.status = 'processed';
                 await reportRepo.save(report);
                 stats.processed++;
+                await saveAutomationLog(report, 'success');
                 emailItems.push({ campaignName: report.campaignName, campaignId: report.campaignId, functions: JSON.parse(report.functionNumbers), status: 'processed', details: 'KDP books enriched' });
                 console.log(`   ✅ ${report.reportId}: kdp_books enriched successfully`);
               } else {
@@ -209,6 +241,7 @@ export async function processCompletedReports(): Promise<{
                 report.status = 'processed';
                 await reportRepo.save(report);
                 stats.processed++;
+                await saveAutomationLog(report, 'success');
                 emailItems.push({ campaignName: report.campaignName, campaignId: report.campaignId, functions: JSON.parse(report.functionNumbers), status: 'processed', details: 'Functions executed' });
                 console.log(`   ✅ ${report.reportId}: functions executed successfully`);
               }
@@ -217,6 +250,7 @@ export async function processCompletedReports(): Promise<{
               report.errorMessage = `Function execution error: ${error.message}`;
               await reportRepo.save(report);
               stats.failed++;
+              await saveAutomationLog(report, 'failed', error.message);
               emailItems.push({ campaignName: report.campaignName, campaignId: report.campaignId, functions: JSON.parse(report.functionNumbers), status: 'failed', error: error.message });
               console.error(`   ❌ ${report.reportId}: function execution failed: ${error.message}`);
             }
