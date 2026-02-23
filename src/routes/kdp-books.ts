@@ -185,18 +185,14 @@ router.post('/sync-historical', authMiddleware, async (req: AuthRequest, res: Re
   try {
     const userId = req.userId!;
 
-    console.log(`📅 Historical data import requested for user ${userId}`);
+    console.log(`📅 Historical data import requested for user ${userId} — handled via extension`);
 
-    // Trigger historical import
-    const monthsImported = await kdpSyncScheduler.importHistoricalData(userId);
-
-    console.log(`✅ Historical import completed: ${monthsImported} months`);
-
+    // Historical import ora gestito dall'estensione Chrome via POST /api/kdp-sync/sales-data
     res.json({
       success: true,
       data: {
-        monthsImported,
-        message: `Successfully imported ${monthsImported} months of historical data`
+        monthsImported: 0,
+        message: 'Historical data import is handled by the Chrome extension (12 months captured automatically on sync)'
       }
     });
   } catch (error: any) {
