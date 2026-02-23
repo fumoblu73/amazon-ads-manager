@@ -387,7 +387,10 @@ export async function syncAllMarketplacesForUser(
 
       try {
         console.log(`🔄 [AllMarkets] Syncing ${countryCode} (profile ${profileId})...`);
-        const result = await syncCampaignsForUser(userId, apiService, { profileId, marketplace: countryCode });
+        // Create a per-profile service with the correct marketplace so the interceptor
+        // routes to the right regional endpoint (NA/EU/FE) for campaign requests
+        const profileApiService = createUserAmazonApiService(userId, countryCode);
+        const result = await syncCampaignsForUser(userId, profileApiService, { profileId, marketplace: countryCode });
         totals.created += result.created;
         totals.updated += result.updated;
         totals.errors += result.errors;
