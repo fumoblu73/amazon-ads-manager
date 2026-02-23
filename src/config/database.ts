@@ -91,6 +91,10 @@ export const initializeDatabase = async () => {
       await AppDataSource.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS sales_cache_7d DECIMAL(10,2)`);
       await AppDataSource.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS spend_cache_updated_at TIMESTAMP`);
 
+      // automation_logs: book identification fields (added v2.3.8)
+      await AppDataSource.query(`ALTER TABLE automation_logs ADD COLUMN IF NOT EXISTS book_asin VARCHAR(20)`);
+      await AppDataSource.query(`ALTER TABLE automation_logs ADD COLUMN IF NOT EXISTS book_title VARCHAR(255)`);
+
       // book_spend_cache table
       await AppDataSource.query(`
         CREATE TABLE IF NOT EXISTS book_spend_cache (

@@ -32,6 +32,12 @@ export class AutomationLog {
   @Column({ type: 'text', nullable: true, name: 'error_message' })
   errorMessage: string;
 
+  @Column({ type: 'varchar', length: 20, nullable: true, name: 'book_asin' })
+  bookAsin: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true, name: 'book_title' })
+  bookTitle: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

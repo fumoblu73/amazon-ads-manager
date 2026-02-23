@@ -39,6 +39,8 @@ export interface AutomationLog {
   ruleName: string;
   status: 'success' | 'failed';
   errorMessage?: string;
+  bookAsin?: string | null;
+  bookTitle?: string | null;
   createdAt: string;
 }
 

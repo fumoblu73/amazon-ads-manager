@@ -92,7 +92,8 @@ async function preloadDataForReports(reports: PendingReport[]): Promise<Preloade
 async function saveAutomationLog(
   report: PendingReport,
   status: 'success' | 'failed',
-  errorMessage?: string
+  errorMessage?: string,
+  preloaded?: PreloadedData
 ): Promise<void> {
   try {
     const logRepo = AppDataSource.getRepository(AutomationLog);
@@ -100,6 +101,18 @@ async function saveAutomationLog(
     const ruleName = funcNums.length > 0
       ? funcNums.map(n => `F${n}`).join(', ')
       : report.reportType;
+
+    // Look up book ASIN and title from preloaded campaign data
+    let bookAsin: string | null = null;
+    let bookTitle: string | null = null;
+    if (preloaded) {
+      const campaign = preloaded.campaigns.get(`${report.campaignId}_${report.marketplace}`);
+      if (campaign?.advertisedAsin) {
+        bookAsin = campaign.advertisedAsin;
+        const book = preloaded.books.get(`${campaign.userId}_${campaign.advertisedAsin}`);
+        bookTitle = book?.title?.substring(0, 255) || null;
+      }
+    }
 
     const log = logRepo.create({
       action: status === 'success' ? 'functions_executed' : 'report_failed',
@@ -109,6 +122,8 @@ async function saveAutomationLog(
       status,
       errorMessage: errorMessage || null,
       reason: `Phase 2 — ${report.marketplace}`,
+      bookAsin,
+      bookTitle,
     });
     await logRepo.save(log);
   } catch (err: any) {
@@ -240,7 +255,7 @@ export async function processCompletedReports(): Promise<{
                 report.status = 'processed';
                 await reportRepo.save(report);
                 stats.processed++;
-                await saveAutomationLog(report, 'success');
+                await saveAutomationLog(report, 'success', undefined, preloaded);
                 emailItems.push({ campaignName: report.campaignName, campaignId: report.campaignId, functions: JSON.parse(report.functionNumbers), status: 'processed', details: 'KDP books enriched' });
                 console.log(`   ✅ ${report.reportId}: kdp_books enriched successfully`);
               } else {
@@ -250,7 +265,7 @@ export async function processCompletedReports(): Promise<{
                 report.status = 'processed';
                 await reportRepo.save(report);
                 stats.processed++;
-                await saveAutomationLog(report, 'success');
+                await saveAutomationLog(report, 'success', undefined, preloaded);
                 emailItems.push({ campaignName: report.campaignName, campaignId: report.campaignId, functions: JSON.parse(report.functionNumbers), status: 'processed', details: 'Functions executed' });
                 console.log(`   ✅ ${report.reportId}: functions executed successfully`);
               }
@@ -259,7 +274,7 @@ export async function processCompletedReports(): Promise<{
               report.errorMessage = `Function execution error: ${error.message}`;
               await reportRepo.save(report);
               stats.failed++;
-              await saveAutomationLog(report, 'failed', error.message);
+              await saveAutomationLog(report, 'failed', error.message, preloaded);
               emailItems.push({ campaignName: report.campaignName, campaignId: report.campaignId, functions: JSON.parse(report.functionNumbers), status: 'failed', error: error.message });
               console.error(`   ❌ ${report.reportId}: function execution failed: ${error.message}`);
             }
