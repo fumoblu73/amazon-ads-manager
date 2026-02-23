@@ -368,13 +368,14 @@ export default function Dashboard() {
                   {avgDailySpend !== null ? (
                     <div className="space-y-1.5">
                       {(['SP', 'SD', 'SB'] as const).map(type => {
+                        const typeLabels = { SP: 'Sponsored Products', SD: 'Sponsored Display', SB: 'Sponsored Brands' };
                         const typeData = spendCache?.byAdType?.[type];
                         const spend = typeData?.spend7d ?? 0;
                         const daily = typeData?.avgDailySpend ?? 0;
                         const hasData = spend > 0;
                         return (
                           <div key={type} className="flex items-center justify-between">
-                            <span className={`text-xs font-mono font-bold w-6 ${hasData ? 'text-indigo-300' : 'text-gray-600'}`}>{type}</span>
+                            <span className={`text-xs font-medium w-40 ${hasData ? 'text-indigo-300' : 'text-gray-600'}`}>{typeLabels[type]}</span>
                             <span className={`text-xs flex-1 text-right mr-3 ${hasData ? 'text-white' : 'text-gray-600'}`}>
                               {hasData ? `$${spend.toFixed(2)}` : '—'}
                             </span>
