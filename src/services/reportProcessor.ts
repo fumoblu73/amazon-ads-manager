@@ -13,6 +13,9 @@ import { createMarketplaceApiService } from './MarketplaceApiFactory';
 import { In, IsNull } from 'typeorm';
 import { parseKdpPrice, calculateBookFastAcos, InkType, TrimSize } from '../utils/printingCost';
 
+// Guard against concurrent executions (single Node.js process on Render)
+let isProcessing = false;
+
 import { sendAutomationSummary, ReportSummaryItem } from './emailService';
 import { executeFunc1 } from '../automation/functions/func1';
 import { executeFunc2 } from '../automation/functions/func2';
@@ -146,6 +149,12 @@ export async function processCompletedReports(): Promise<{
   failed: number;
   stillPending: number;
 }> {
+  if (isProcessing) {
+    console.log('⚠️ processCompletedReports already running — skipping concurrent call');
+    return { checked: 0, completed: 0, processed: 0, failed: 0, stillPending: 0 };
+  }
+  isProcessing = true;
+
   console.log('\n' + '='.repeat(60));
   console.log('📥 FASE 2: PROCESS COMPLETED REPORTS');
   console.log('='.repeat(60));
@@ -306,6 +315,8 @@ export async function processCompletedReports(): Promise<{
   } catch (error: any) {
     console.error('❌ Fatal error in processCompletedReports:', error.message);
     throw error;
+  } finally {
+    isProcessing = false;
   }
 }
 
