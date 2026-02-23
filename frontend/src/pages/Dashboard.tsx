@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { campaignsApi, logsApi, automationApi, amazonAdsApi } from '../services/api';
-import type { CampaignStats, LogStats, AutomationStatus, AutomationLog } from '../types';
+import type { CampaignStats, AutomationStatus, AutomationLog } from '../types';
 
 interface AdTypeSpend {
   spend7d: number;
@@ -22,13 +22,15 @@ interface SpendCache {
 }
 
 // Helper: last N days date strings
+// endDate uses tomorrow to include all logs created today (avoids midnight UTC cutoff)
 function getDateRange(daysBack: number): { startDate: string; endDate: string } {
-  const end = new Date();
   const start = new Date();
   start.setDate(start.getDate() - daysBack);
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
   return {
     startDate: start.toISOString().split('T')[0],
-    endDate: end.toISOString().split('T')[0],
+    endDate: tomorrow.toISOString().split('T')[0],
   };
 }
 
@@ -75,10 +77,8 @@ function getFuncLabel(ruleName: string): string {
 
 export default function Dashboard() {
   const [campaignStats, setCampaignStats] = useState<CampaignStats | null>(null);
-  const [logStats, setLogStats] = useState<LogStats | null>(null);
   const [, setAutomationStatus] = useState<AutomationStatus | null>(null);
   const [weeklyLogs, setWeeklyLogs] = useState<AutomationLog[]>([]);
-  const [recentLogs, setRecentLogs] = useState<AutomationLog[]>([]);
   const [spendCache, setSpendCache] = useState<SpendCache | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -131,20 +131,16 @@ export default function Dashboard() {
         setError(null);
         const { startDate, endDate } = getDateRange(7);
 
-        const [campaignsRes, logsRes, automationRes, weeklyLogsRes, recentLogsRes, adsRes] = await Promise.allSettled([
+        const [campaignsRes, automationRes, weeklyLogsRes, adsRes] = await Promise.allSettled([
           campaignsApi.getStats(),
-          logsApi.getStats({ dateFrom: startDate, dateTo: endDate }),
           automationApi.getStatus(),
           logsApi.getAll({ dateFrom: startDate, dateTo: endDate, limit: 500, sortBy: 'createdAt', sortOrder: 'DESC' }),
-          logsApi.getRecent(5),
           amazonAdsApi.getSpendCache(),
         ]);
 
         if (campaignsRes.status === 'fulfilled' && campaignsRes.value.success) setCampaignStats(campaignsRes.value.data!);
-        if (logsRes.status === 'fulfilled' && logsRes.value.success) setLogStats(logsRes.value.data!);
         if (automationRes.status === 'fulfilled') setAutomationStatus(automationRes.value);
         if (weeklyLogsRes.status === 'fulfilled' && weeklyLogsRes.value.success) setWeeklyLogs(weeklyLogsRes.value.data || []);
-        if (recentLogsRes.status === 'fulfilled' && recentLogsRes.value.success) setRecentLogs(recentLogsRes.value.data || []);
         if (adsRes.status === 'fulfilled') setSpendCache(adsRes.value);
       } catch (err: any) {
         setError(err.message || 'Errore nel caricamento dati');
@@ -204,17 +200,6 @@ export default function Dashboard() {
   const acos = spendCache?.acos ?? null;
   const spendUpdatedAt = spendCache?.updatedAt ?? null;
 
-  // Format azione log per mini-feed
-  const formatLogAction = (log: AutomationLog) => {
-    const arrow = log.newValue && log.oldValue
-      ? log.newValue > log.oldValue ? '↑' : '↓'
-      : '→';
-    const values = log.oldValue != null && log.newValue != null
-      ? ` $${log.oldValue}→$${log.newValue}`
-      : '';
-    return `${arrow} ${log.action}${values}`;
-  };
-
   const formatTimeAgo = (dateStr: string) => {
     const diff = Date.now() - new Date(dateStr).getTime();
     const h = Math.floor(diff / 3600000);
@@ -227,14 +212,16 @@ export default function Dashboard() {
   const weekTotal = weeklyLogs.length;
   const weekErrors = weeklyLogs.filter(l => l.status === 'failed').length;
 
+  const archivedCount = campaignStats?.byState?.archived || 0;
+
   return (
     <div className="h-full p-8 overflow-auto">
       <div className="flex flex-col gap-6">
         {/* Header */}
         <h1 className="text-2xl font-bold text-white uppercase">Dashboard</h1>
 
-        {/* 3 colonne */}
-        <div className="grid grid-cols-3 gap-6">
+        {/* 2 colonne */}
+        <div className="grid grid-cols-2 gap-6">
 
           {/* ============ COLONNA 1: AUTOMAZIONI ============ */}
           <div className="bg-gray-900 rounded-xl p-5 flex flex-col gap-4">
@@ -355,8 +342,8 @@ export default function Dashboard() {
 
             {campaignStats ? (
               <div className="space-y-3">
-                {/* Totale + stati */}
-                <div className="grid grid-cols-3 gap-2">
+                {/* Totale + stati: 4 card in griglia 2x2 */}
+                <div className="grid grid-cols-4 gap-2">
                   <div className="bg-gray-800 p-3 rounded-lg text-center">
                     <div className="text-xs text-gray-400 mb-1">Totale</div>
                     <div className="text-2xl font-bold text-white">{campaignStats.total || 0}</div>
@@ -368,6 +355,10 @@ export default function Dashboard() {
                   <div className="bg-gray-800 p-3 rounded-lg text-center">
                     <div className="text-xs text-gray-400 mb-1">Pause</div>
                     <div className="text-2xl font-bold text-yellow-400">{campaignStats.byState?.paused || 0}</div>
+                  </div>
+                  <div className="bg-gray-800 p-3 rounded-lg text-center">
+                    <div className="text-xs text-gray-400 mb-1">Archiviate</div>
+                    <div className="text-2xl font-bold text-gray-500">{archivedCount}</div>
                   </div>
                 </div>
 
@@ -426,64 +417,6 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* ============ COLONNA 3: LOG ============ */}
-          <div className="bg-gray-900 rounded-xl p-5 flex flex-col gap-4">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <h2 className="text-sm font-semibold text-white">Log Attività</h2>
-            </div>
-
-            {logStats ? (
-              <div className="space-y-3">
-                {/* Contatori */}
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="bg-gray-800 p-3 rounded-lg text-center">
-                    <div className="text-xs text-gray-400 mb-1">Totale</div>
-                    <div className="text-2xl font-bold text-white">{logStats.total || 0}</div>
-                  </div>
-                  <div className="bg-gray-800 p-3 rounded-lg text-center">
-                    <div className="text-xs text-gray-400 mb-1">OK</div>
-                    <div className="text-2xl font-bold text-green-400">{logStats.byStatus?.success || 0}</div>
-                  </div>
-                  <div className="bg-gray-800 p-3 rounded-lg text-center">
-                    <div className="text-xs text-gray-400 mb-1">Errori</div>
-                    <div className="text-2xl font-bold text-red-400">{logStats.byStatus?.failed || 0}</div>
-                  </div>
-                </div>
-
-                {/* Mini-feed ultime 5 azioni */}
-                <div className="bg-gray-800 rounded-lg p-3">
-                  <div className="text-xs text-gray-400 mb-2">Ultime attività</div>
-                  {recentLogs.length > 0 ? (
-                    <div className="space-y-2">
-                      {recentLogs.map(log => (
-                        <div key={log.id} className="flex items-start justify-between gap-2 text-xs">
-                          <div className="flex items-start gap-1.5 min-w-0">
-                            <span className={`mt-0.5 flex-shrink-0 ${log.status === 'success' ? 'text-green-400' : 'text-red-400'}`}>
-                              {log.status === 'success' ? '✓' : '✗'}
-                            </span>
-                            <div className="min-w-0">
-                              <div className="text-gray-200 truncate font-mono">{formatLogAction(log)}</div>
-                              <div className="text-gray-500 truncate">{log.targetName || log.targetId}</div>
-                            </div>
-                          </div>
-                          <span className="text-gray-600 flex-shrink-0">{formatTimeAgo(log.createdAt)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-gray-500">Nessuna attività recente</p>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-                Dati log non disponibili
-              </div>
-            )}
-          </div>
         </div>
       </div>
     </div>
