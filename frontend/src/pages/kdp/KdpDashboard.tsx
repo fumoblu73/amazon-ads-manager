@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { kdpAnalyticsApi, amazonAdsApi } from '../../services/api';
 import StatsCard from '../../components/kdp/StatsCard';
 import type { KdpDashboardSummary, BookStatsData } from '../../types';
@@ -49,6 +49,7 @@ export default function KdpDashboard() {
     percent: 0,
     text: ''
   });
+  const autoSyncTriggered = useRef(false);
 
   // Controlla stato estensione
   const checkExtensionStatus = useCallback(() => {
@@ -166,6 +167,23 @@ export default function KdpDashboard() {
   useEffect(() => {
     loadDashboardData();
   }, []);
+
+  // Auto-sync on-demand: se dati stale (>6h) e estensione autenticata, sincronizza silenziosamente
+  useEffect(() => {
+    if (!summary || !extensionStatus.authenticated || autoSyncTriggered.current) return;
+
+    const SIX_HOURS = 6 * 60 * 60 * 1000;
+    const snapshotAge = summary.snapshotInfo?.createdAt
+      ? Date.now() - new Date(summary.snapshotInfo.createdAt).getTime()
+      : Infinity;
+
+    if (snapshotAge > SIX_HOURS) {
+      autoSyncTriggered.current = true;
+      console.log('[Dashboard] Dati stale, avvio auto-sync via estensione...');
+      setSyncProgress({ active: true, percent: 5, text: 'Aggiornamento dati KDP...' });
+      window.postMessage({ type: 'KDP_SYNC_REQUEST', action: 'startSync' }, '*');
+    }
+  }, [summary, extensionStatus.authenticated]);
 
   const loadDashboardData = async () => {
     try {

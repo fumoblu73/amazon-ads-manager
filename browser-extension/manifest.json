@@ -7,8 +7,7 @@
     "cookies",
     "storage",
     "tabs",
-    "scripting",
-    "alarms"
+    "scripting"
   ],
   "host_permissions": [
     "*://*.amazon.com/*",
