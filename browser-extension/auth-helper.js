@@ -5,7 +5,7 @@
   console.log('[Auth Helper] Script loaded');
 
   // Notifica all'app che l'estensione è installata
-  window.postMessage({ type: 'EXTENSION_INSTALLED', version: '1.3.0' }, '*');
+  window.postMessage({ type: 'EXTENSION_INSTALLED', version: '1.4.0' }, '*');
 
   // Leggi il cookie extension_token
   function getCookie(name) {
@@ -83,11 +83,11 @@
 
       showNotification('🔄 Avvio sincronizzazione KDP...', 'info');
 
-      // Invia richiesta al background script (combined sync: bookshelf + vendite)
+      // Invia richiesta al background script (solo kdpreports: bookshelf già sincronizzato server-side ogni 6h)
       chrome.runtime.sendMessage({
-        action: 'startCombinedSync',
+        action: 'startClientScraping',
         jwtToken: storageData.jwtToken,
-        marketplace: 'IT'
+        marketplace: 'US'
       });
 
       window.postMessage({ type: 'KDP_SYNC_RESPONSE', success: true, message: 'Sync started' }, '*');

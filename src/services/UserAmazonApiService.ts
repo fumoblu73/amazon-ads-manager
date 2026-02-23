@@ -126,21 +126,35 @@ export class UserAmazonApiService {
   // ================================================
 
   async getProfiles(): Promise<any[]> {
-    try {
-      console.log(`📥 Fetching profiles for user ${this.userId}...`);
+    // Ensure we have a valid token before making direct regional calls
+    await this.ensureValidToken();
 
-      const response = await this.client.get('/v2/profiles');
+    const regions: Array<'EU' | 'NA' | 'FE'> = ['NA', 'EU', 'FE'];
+    const allProfiles: any[] = [];
 
-      console.log(`✅ Found ${response.data.length} profiles`);
-      response.data.forEach((profile: any) => {
-        console.log(`   - ${profile.accountInfo?.marketplaceStringId} (${profile.countryCode}): Profile ID ${profile.profileId} - ${profile.accountInfo?.name || 'N/A'}`);
-      });
-
-      return response.data;
-    } catch (error) {
-      console.error('❌ Error fetching profiles:', error);
-      throw error;
+    for (const region of regions) {
+      try {
+        const endpoint = API_ENDPOINTS[region];
+        const response = await axios.get(`${endpoint}/v2/profiles`, {
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`,
+            'Amazon-Advertising-API-ClientId': this.clientId,
+            'Content-Type': 'application/json'
+          }
+        });
+        const profiles: any[] = response.data || [];
+        console.log(`✅ [${region}] Found ${profiles.length} profiles`);
+        profiles.forEach((profile: any) => {
+          console.log(`   - [${region}] ${profile.accountInfo?.marketplaceStringId} (${profile.countryCode}): Profile ID ${profile.profileId} - ${profile.accountInfo?.name || 'N/A'}`);
+        });
+        allProfiles.push(...profiles);
+      } catch (error: any) {
+        console.warn(`⚠️ [${region}] No profiles or error: ${error.response?.data?.message || error.message}`);
+      }
     }
+
+    console.log(`✅ Total profiles across all regions: ${allProfiles.length}`);
+    return allProfiles;
   }
 
   // ================================================
