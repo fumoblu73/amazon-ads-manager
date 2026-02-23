@@ -587,6 +587,44 @@ async function sendBooksToServer(books, jwtToken, marketplace) {
 // Imposta badge iniziale
 updateBadge('', '#ff9900');
 
+// ========== AUTO SYNC (Chrome Alarms - ogni 6 ore) ==========
+
+function setupAutoSyncAlarm() {
+  chrome.alarms.create('kdpAutoSync', { periodInMinutes: 360 });
+  console.log('[Background] Auto-sync alarm set (every 6 hours)');
+}
+
+chrome.runtime.onInstalled.addListener(setupAutoSyncAlarm);
+chrome.runtime.onStartup.addListener(setupAutoSyncAlarm);
+
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name !== 'kdpAutoSync') return;
+  console.log('[Background] Auto-sync alarm fired');
+
+  // Non avviare se già in corso
+  if (pendingSyncJwtToken || scrapeTabId) {
+    console.log('[Background] Auto-sync: already syncing, skipping');
+    return;
+  }
+
+  // Leggi JWT da storage (salvato da auth-helper.js)
+  const { jwtToken } = await chrome.storage.local.get(['jwtToken']);
+  if (!jwtToken) {
+    console.log('[Background] Auto-sync: no JWT token in storage, skipping');
+    return;
+  }
+
+  console.log('[Background] Auto-sync: starting client-side KDP Reports scraping...');
+  pendingSyncJwtToken = jwtToken;
+  pendingSyncMarketplace = 'US';
+
+  startClientSideScraping().catch(err => {
+    console.error('[Background] Auto-sync failed:', err.message);
+    pendingSyncJwtToken = null;
+    pendingSyncMarketplace = null;
+  });
+});
+
 // ========== PAGE COUNT FETCHING ==========
 
 /**
