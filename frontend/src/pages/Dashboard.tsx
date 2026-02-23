@@ -41,6 +41,12 @@ function formatDayLabel(dateStr: string): string {
   return `${days[d.getDay()]} ${d.getDate()}`;
 }
 
+// Helper: format date as "Lun 17 Feb"
+function formatDayFull(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  return d.toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'short' });
+}
+
 // Helper: get last 7 days as YYYY-MM-DD strings
 function getLast7Days(): string[] {
   const days = [];
@@ -52,27 +58,26 @@ function getLast7Days(): string[] {
   return days;
 }
 
-// Map ruleName → function label
-const RULE_LABELS: Record<string, string> = {
-  'func1': 'F1 Bidding',
-  'func2': 'F2 Placement',
-  'func3': 'F3 Targeting',
-  'func4': 'F4 AutoAd',
-  'func5': 'F5 Feed',
-  'progressive_bidding': 'F1 Bidding',
-  'placement_optimization': 'F2 Placement',
-  'targeting_optimization': 'F3 Targeting',
-  'auto_ad': 'F4 AutoAd',
-  'campaign_feeding': 'F5 Feed',
-};
+// Helper: extract marketplace from reason field ("Phase 2 — US" → "US")
+function extractMarketplace(reason: string | undefined): string {
+  if (!reason) return 'N/A';
+  const match = reason.match(/[—\-]\s*([A-Z]{2,3})$/);
+  return match ? match[1] : 'N/A';
+}
 
-function getFuncLabel(ruleName: string): string {
-  if (!ruleName) return 'Altro';
-  const lower = ruleName.toLowerCase();
-  for (const [key, label] of Object.entries(RULE_LABELS)) {
-    if (lower.includes(key)) return label;
+// Helper: group logs for a day by marketplace → book
+function groupDayLogs(logs: AutomationLog[]) {
+  const byMp: Record<string, Record<string, { label: string; asin: string | null; success: number; failed: number }>> = {};
+  for (const log of logs) {
+    const mp = extractMarketplace(log.reason);
+    const bookKey = log.bookAsin || log.targetName || log.targetId;
+    const bookLabel = log.bookTitle || log.targetName || log.targetId;
+    if (!byMp[mp]) byMp[mp] = {};
+    if (!byMp[mp][bookKey]) byMp[mp][bookKey] = { label: bookLabel, asin: log.bookAsin || null, success: 0, failed: 0 };
+    if (log.status === 'success') byMp[mp][bookKey].success++;
+    else byMp[mp][bookKey].failed++;
   }
-  return ruleName;
+  return byMp;
 }
 
 export default function Dashboard() {
@@ -86,6 +91,7 @@ export default function Dashboard() {
   const [automationMessage, setAutomationMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [syncingCampaigns, setSyncingCampaigns] = useState(false);
   const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const handleTriggerAutomation = async () => {
     setTriggeringAutomation(true);
@@ -140,8 +146,18 @@ export default function Dashboard() {
 
         if (campaignsRes.status === 'fulfilled' && campaignsRes.value.success) setCampaignStats(campaignsRes.value.data!);
         if (automationRes.status === 'fulfilled') setAutomationStatus(automationRes.value);
-        if (weeklyLogsRes.status === 'fulfilled' && weeklyLogsRes.value.success) setWeeklyLogs(weeklyLogsRes.value.data || []);
         if (adsRes.status === 'fulfilled') setSpendCache(adsRes.value);
+
+        if (weeklyLogsRes.status === 'fulfilled' && weeklyLogsRes.value.success) {
+          const logs = weeklyLogsRes.value.data || [];
+          setWeeklyLogs(logs);
+          // Auto-select most recent day with logs
+          if (logs.length > 0) {
+            const today = new Date().toISOString().split('T')[0];
+            const daysWithLogs = [...new Set(logs.map(l => l.createdAt.split('T')[0]))].sort().reverse();
+            setSelectedDay(daysWithLogs[0] === today ? today : daysWithLogs[0]);
+          }
+        }
       } catch (err: any) {
         setError(err.message || 'Errore nel caricamento dati');
       } finally {
@@ -186,15 +202,6 @@ export default function Dashboard() {
     }
   });
 
-  // Breakdown per funzione (ultimi 7 giorni)
-  const funcBreakdown: Record<string, { success: number; failed: number }> = {};
-  weeklyLogs.forEach(log => {
-    const label = getFuncLabel(log.ruleName);
-    if (!funcBreakdown[label]) funcBreakdown[label] = { success: 0, failed: 0 };
-    if (log.status === 'success') funcBreakdown[label].success++;
-    else funcBreakdown[label].failed++;
-  });
-
   // Spesa da cache DB
   const avgDailySpend = spendCache?.avgDailySpend ?? null;
   const acos = spendCache?.acos ?? null;
@@ -211,8 +218,11 @@ export default function Dashboard() {
 
   const weekTotal = weeklyLogs.length;
   const weekErrors = weeklyLogs.filter(l => l.status === 'failed').length;
-
   const archivedCount = campaignStats?.byState?.archived || 0;
+
+  // Dati del giorno selezionato
+  const dayLogs = selectedDay ? weeklyLogs.filter(l => l.createdAt.split('T')[0] === selectedDay) : [];
+  const dayGrouped = selectedDay ? groupDayLogs(dayLogs) : {};
 
   return (
     <div className="h-full p-8 overflow-auto">
@@ -258,50 +268,88 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Mini calendario 7 giorni */}
+            {/* Calendario 7 giorni — cliccabile */}
             <div>
-              <div className="text-xs text-gray-400 mb-2">Ultimi 7 giorni</div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-400">Ultimi 7 giorni</span>
+                <span className={`text-xs font-semibold ${weekErrors > 0 ? 'text-red-400' : weekTotal > 0 ? 'text-green-400' : 'text-gray-600'}`}>
+                  {weekTotal > 0 ? `${weekTotal} log · ${weekErrors > 0 ? `${weekErrors} err` : 'ok'}` : 'nessuna esecuzione'}
+                </span>
+              </div>
               <div className="grid grid-cols-7 gap-1">
                 {last7Days.map(day => {
                   const { success, failed } = dayMap[day];
                   const total = success + failed;
                   const isToday = day === last7Days[6];
-                  let dotColor = 'bg-gray-700';
-                  if (total > 0) dotColor = failed > 0 ? 'bg-red-500' : 'bg-green-500';
+                  const isSelected = day === selectedDay;
+                  const hasLogs = total > 0;
+                  let dotColor = 'bg-gray-700 cursor-default';
+                  if (hasLogs) dotColor = failed > 0 ? 'bg-red-500 cursor-pointer hover:ring-2 hover:ring-red-300' : 'bg-green-500 cursor-pointer hover:ring-2 hover:ring-green-300';
                   return (
-                    <div key={day} className="flex flex-col items-center gap-1">
-                      <div className={`w-6 h-6 rounded-full ${dotColor} flex items-center justify-center ${isToday ? 'ring-2 ring-orange-400' : ''}`}>
+                    <div
+                      key={day}
+                      className="flex flex-col items-center gap-1"
+                      onClick={() => hasLogs && setSelectedDay(isSelected ? null : day)}
+                    >
+                      <div className={`w-7 h-7 rounded-full ${dotColor} flex items-center justify-center transition-all
+                        ${isToday && !isSelected ? 'ring-2 ring-orange-400' : ''}
+                        ${isSelected ? 'ring-3 ring-white scale-110' : ''}
+                      `}>
                         {total > 0 && <span className="text-[9px] text-white font-bold">{total}</span>}
                       </div>
-                      <span className="text-[9px] text-gray-500">{formatDayLabel(day)}</span>
+                      <span className={`text-[9px] ${isSelected ? 'text-white font-semibold' : 'text-gray-500'}`}>
+                        {formatDayLabel(day)}
+                      </span>
                     </div>
                   );
                 })}
               </div>
+              <p className="text-[10px] text-gray-600 mt-1">Clicca un giorno per vedere i dettagli</p>
             </div>
 
-            {/* Riepilogo settimana */}
-            <div className="bg-gray-800 rounded-lg p-3 text-sm">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-gray-400 text-xs">Questa settimana</span>
-                <span className={`text-xs font-semibold ${weekErrors > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                  {weekTotal} azioni {weekErrors > 0 ? `· ${weekErrors} errori` : '· ok'}
-                </span>
-              </div>
-              {Object.keys(funcBreakdown).length > 0 ? (
-                <div className="space-y-1">
-                  {Object.entries(funcBreakdown).map(([label, { success, failed }]) => (
-                    <div key={label} className="flex justify-between items-center">
-                      <span className="text-xs text-gray-300">{label}</span>
-                      <div className="flex gap-1 items-center">
-                        <span className="text-xs text-green-400">{success}</span>
-                        {failed > 0 && <span className="text-xs text-red-400">/ {failed} err</span>}
+            {/* Dettaglio giorno selezionato o messaggio vuoto */}
+            <div className="bg-gray-800 rounded-lg p-3 flex-1">
+              {selectedDay && dayLogs.length > 0 ? (
+                <>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-semibold text-white capitalize">{formatDayFull(selectedDay)}</span>
+                    <span className="text-xs text-gray-400">{dayLogs.length} log</span>
+                  </div>
+                  <div className="space-y-3">
+                    {Object.entries(dayGrouped).map(([mp, books]) => (
+                      <div key={mp}>
+                        {/* Marketplace header */}
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <span className="text-[10px] font-bold text-blue-400 bg-blue-900/40 px-1.5 py-0.5 rounded">{mp}</span>
+                          <span className="text-[10px] text-gray-500">{Object.keys(books).length} libr{Object.keys(books).length === 1 ? 'o' : 'i'}</span>
+                        </div>
+                        {/* Libri */}
+                        <div className="space-y-1 pl-2">
+                          {Object.entries(books).map(([bookKey, { label, asin, success, failed }]) => (
+                            <div key={bookKey} className="flex items-center gap-2">
+                              <div className="flex-1 min-w-0">
+                                <span className="text-xs text-gray-200 truncate block">{label}</span>
+                                {asin && <span className="text-[10px] text-gray-500 font-mono">{asin}</span>}
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {success > 0 && (
+                                  <span className="text-[10px] font-semibold text-green-400">✓ {success}</span>
+                                )}
+                                {failed > 0 && (
+                                  <span className="text-[10px] font-semibold text-red-400">✗ {failed}</span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                </>
               ) : (
-                <p className="text-xs text-gray-500">Nessuna esecuzione negli ultimi 7 giorni</p>
+                <p className="text-xs text-gray-500">
+                  {selectedDay ? 'Nessun log per questo giorno' : 'Nessuna esecuzione negli ultimi 7 giorni'}
+                </p>
               )}
             </div>
           </div>
@@ -342,7 +390,7 @@ export default function Dashboard() {
 
             {campaignStats ? (
               <div className="space-y-3">
-                {/* Totale + stati: 4 card in griglia 2x2 */}
+                {/* Totale + stati: 4 card */}
                 <div className="grid grid-cols-4 gap-2">
                   <div className="bg-gray-800 p-3 rounded-lg text-center">
                     <div className="text-xs text-gray-400 mb-1">Totale</div>
@@ -362,7 +410,7 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* Spesa 7gg breakdown per tipo (SP / SD / SB) */}
+                {/* Spesa 7gg breakdown per tipo */}
                 <div className="bg-gray-800 rounded-lg p-3">
                   <div className="text-xs text-gray-400 mb-2">Spesa 7 giorni</div>
                   {avgDailySpend !== null ? (
