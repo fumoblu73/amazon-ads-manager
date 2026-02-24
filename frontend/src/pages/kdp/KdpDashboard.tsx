@@ -10,8 +10,6 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
-  LineChart,
-  Line,
   Legend
 } from 'recharts';
 
