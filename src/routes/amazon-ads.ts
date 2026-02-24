@@ -574,8 +574,8 @@ async function runBackfill(userId: string, months: number) {
       try {
         console.log(`📊 [Backfill] ${marketplace} ${yearMonth} (${startDate} → ${endDate})`);
         const reportId = await apiService.requestReportV3(
-          startDate, endDate, 'spAdvertisedProduct',
-          ['advertisedAsin', 'cost', 'sales14d']
+          startDate, endDate, 'spTargeting',
+          ['cost', 'sales14d']
         );
         const rows = await apiService.waitAndDownloadReport(reportId, 30);
 
