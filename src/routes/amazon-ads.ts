@@ -573,7 +573,7 @@ async function runBackfill(userId: string, months: number) {
           startDate, endDate, 'spTargeting',
           ['cost', 'sales14d']
         );
-        const rows = await apiService.waitAndDownloadReport(reportId, 30);
+        const rows = await apiService.waitAndDownloadReport(reportId, 60);
 
         let totalSpend = 0;
         let totalSales = 0;
