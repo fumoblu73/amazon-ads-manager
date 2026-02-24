@@ -8,8 +8,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  BarChart,
-  Bar,
   LineChart,
   Line
 } from 'recharts';
@@ -36,7 +34,7 @@ export default function KdpDashboard() {
 
   // Profitto per libro (7 giorni)
   const [bookStats7d, setBookStats7d] = useState<BookStatsData | null>(null);
-  const [bookSpendData, setBookSpendData] = useState<Record<string, { totalSpend7d: number; acos: number | null }> | null>(null);
+  const [bookSpendData, setBookSpendData] = useState<Record<string, { totalSpend7d: number; totalSales7d: number; acos: number | null }> | null>(null);
   const [bookSpendUpdatedAt, setBookSpendUpdatedAt] = useState<string | null>(null);
 
   // Stato estensione e sync
@@ -685,10 +683,10 @@ export default function KdpDashboard() {
                 <Tooltip
                   contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
                   labelStyle={{ color: '#F3F4F6' }}
-                  formatter={(value: any, name: string) => {
+                  formatter={(value: any, name: string | undefined) => {
                     if (name === 'royalties') return [`$${Number(value).toFixed(2)}`, 'Royalties'];
                     if (name === 'spending') return [`$${Number(value).toFixed(2)}`, 'ADS Spend'];
-                    return [value, name];
+                    return [value, name ?? ''];
                   }}
                 />
                 <Line type="monotone" dataKey="royalties" stroke="#F59E0B" strokeWidth={2} dot={false} name="royalties" />
