@@ -10,8 +10,7 @@ import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { AppDataSource } from '../config/database';
 import { User } from '../entities/User';
 import { MonthlyAdsSpend } from '../entities/MonthlyAdsSpend';
-import { createUserAmazonApiService } from '../services/UserAmazonApiFactory';
-import { getProfileIdForMarketplace } from '../config/amazon';
+import { createMarketplaceApiService, isMarketplaceConfigured } from '../services/MarketplaceApiFactory';
 
 const router = Router();
 
@@ -539,8 +538,6 @@ async function runBackfill(userId: string, months: number) {
   backfillRunning = true;
   console.log(`🔄 [Backfill] Avvio backfill ${months} mesi per ${BACKFILL_MARKETPLACES.length} marketplace`);
 
-  const repo = AppDataSource.getRepository(MonthlyAdsSpend);
-
   // Calcola i mesi da recuperare (corrente incluso)
   const monthsToFetch: Array<{ yearMonth: string; startDate: string; endDate: string }> = [];
   const now = new Date();
@@ -562,13 +559,12 @@ async function runBackfill(userId: string, months: number) {
   let failed = 0;
 
   for (const marketplace of BACKFILL_MARKETPLACES) {
-    const profileId = getProfileIdForMarketplace(marketplace);
-    if (!profileId) {
-      console.log(`⚠️ [Backfill] Nessun profileId per ${marketplace}, skip`);
+    if (!isMarketplaceConfigured(marketplace)) {
+      console.log(`⚠️ [Backfill] Marketplace ${marketplace} non configurato, skip`);
       continue;
     }
 
-    const apiService = createUserAmazonApiService(userId, marketplace, profileId);
+    const apiService = createMarketplaceApiService(marketplace);
 
     for (const { yearMonth, startDate, endDate } of monthsToFetch) {
       try {
