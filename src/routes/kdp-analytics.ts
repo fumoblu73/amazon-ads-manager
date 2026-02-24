@@ -374,6 +374,30 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       }
     }
 
+    // Get daily chart data for the last 60 days
+    const daily60Start = new Date();
+    daily60Start.setDate(daily60Start.getDate() - 59);
+    const daily60StartStr = daily60Start.toISOString().split('T')[0];
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    const dailyChartRaw = await statsRepository
+      .createQueryBuilder('stats')
+      .select('stats.date', 'date')
+      .addSelect('SUM(stats.grossRoyalties)', 'royalties')
+      .addSelect('SUM(stats.spending)', 'spending')
+      .where('stats.userId = :userId', { userId })
+      .andWhere('stats.date BETWEEN :start AND :end', { start: daily60StartStr, end: todayStr })
+      .groupBy('stats.date')
+      .orderBy('stats.date', 'ASC')
+      .getRawMany();
+
+    const dailyChartData = dailyChartRaw.map((row: any) => ({
+      date: row.date,
+      label: formatDateShort(row.date),
+      royalties: parseFloat(row.royalties || 0),
+      spending: parseFloat(row.spending || 0)
+    }));
+
     // Count total live books
     const totalLiveBooks = await bookRepository.count({
       where: { userId }
@@ -507,11 +531,15 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
         currentMonth: topEarnersToday
       },
 
-      // Monthly chart data (last 12 months - Publisher Champ style)
+      // Chart data
       charts: {
         monthly: {
           label: 'Monthly Performance',
           data: monthlyChartData
+        },
+        daily: {
+          label: 'Daily Performance (60d)',
+          data: dailyChartData
         }
       },
 

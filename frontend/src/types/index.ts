@@ -322,6 +322,13 @@ interface MonthlyChartDataPoint {
   spending: number;
 }
 
+interface DailyChartDataPoint {
+  date: string;
+  label: string;
+  royalties: number;
+  spending: number;
+}
+
 export interface KdpDashboardSummary {
   period: {
     startDate: string;
@@ -365,6 +372,10 @@ export interface KdpDashboardSummary {
     monthly: {
       label: string;
       data: MonthlyChartDataPoint[];
+    };
+    daily?: {
+      label: string;
+      data: DailyChartDataPoint[];
     };
   };
   snapshotInfo?: {

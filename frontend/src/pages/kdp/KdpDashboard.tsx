@@ -9,7 +9,9 @@ import {
   Tooltip,
   ResponsiveContainer,
   BarChart,
-  Bar
+  Bar,
+  LineChart,
+  Line
 } from 'recharts';
 
 // Tipo per lo stato dell'estensione
@@ -651,149 +653,61 @@ export default function KdpDashboard() {
         />
       </div>
 
-      {/* Monthly Performance Chart */}
-      {summary.charts?.monthly && (
-        <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            Monthly Performance (Last 12 Months)
-          </h2>
-          {summary.charts.monthly.data.length > 0 ? (
+      {/* Daily Performance Chart (60 days) */}
+      {(() => {
+        const dailyData = summary.charts?.daily?.data ?? [];
+        const monthlyData = summary.charts?.monthly?.data ?? [];
+        const chartData = dailyData.length > 0 ? dailyData : monthlyData;
+        const isDaily = dailyData.length > 0;
+        return chartData.length > 0 ? (
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
+            <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
+              {isDaily ? 'Daily Performance (Last 60 Days)' : 'Monthly Performance (Last 12 Months)'}
+            </h2>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={summary.charts.monthly.data}>
+              <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis
                   dataKey="label"
                   stroke="#9CA3AF"
-                  fontSize={11}
+                  fontSize={10}
+                  interval={isDaily ? Math.floor(chartData.length / 10) : 0}
+                  tick={{ fill: '#9CA3AF' }}
                 />
                 <YAxis
-                  yAxisId="left"
-                  stroke="#F59E0B"
+                  stroke="#9CA3AF"
                   fontSize={10}
-                  tickFormatter={(value) => `$${value}`}
-                />
-                <YAxis
-                  yAxisId="right"
-                  orientation="right"
-                  stroke="#EF4444"
-                  fontSize={10}
-                  tickFormatter={(value) => `$${value}`}
+                  tickFormatter={(v) => `$${v}`}
                 />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
                   labelStyle={{ color: '#F3F4F6' }}
-                  formatter={(value, name) => {
+                  formatter={(value: any, name: string) => {
                     if (name === 'royalties') return [`$${Number(value).toFixed(2)}`, 'Royalties'];
                     if (name === 'spending') return [`$${Number(value).toFixed(2)}`, 'ADS Spend'];
                     return [value, name];
                   }}
                 />
-                <Bar yAxisId="left" dataKey="royalties" fill="#F59E0B" name="royalties" radius={[4, 4, 0, 0]} />
-                <Bar yAxisId="right" dataKey="spending" fill="#EF4444" name="spending" radius={[4, 4, 0, 0]} />
-              </BarChart>
+                <Line type="monotone" dataKey="royalties" stroke="#F59E0B" strokeWidth={2} dot={false} name="royalties" />
+                <Line type="monotone" dataKey="spending" stroke="#EF4444" strokeWidth={2} dot={false} name="spending" />
+              </LineChart>
             </ResponsiveContainer>
-          ) : (
-            <div className="h-[300px] flex items-center justify-center text-gray-500">
-              No monthly data available
-            </div>
-          )}
-          <div className="flex justify-center gap-6 mt-4 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-orange-500 rounded"></div>
-              <span className="text-gray-400">Royalties ($)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-red-500 rounded"></div>
-              <span className="text-gray-400">ADS Spend ($)</span>
+            <div className="flex justify-center gap-6 mt-4 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                <span className="text-gray-400">Royalties ($)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                <span className="text-gray-400">ADS Spend ($)</span>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Top Earners */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Previous Month Top Earners */}
-        <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-            </svg>
-            {monthlyStats.previousMonth.label} Top Earners
-          </h2>
-          {summary.topEarners.previousMonth.length === 0 ? (
-            <p className="text-gray-400 text-center py-8">No data for {monthlyStats.previousMonth.label}</p>
-          ) : (
-            <div className="space-y-3">
-              {summary.topEarners.previousMonth.slice(0, 5).map((book, index) => (
-                <div key={book.bookId} className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors">
-                  <span className={`text-lg font-bold w-6 ${index === 0 ? 'text-yellow-500' : index === 1 ? 'text-gray-400' : index === 2 ? 'text-orange-600' : 'text-gray-500'}`}>
-                    #{index + 1}
-                  </span>
-                  {book.coverUrl ? (
-                    <img src={book.coverUrl} alt={book.title} className="w-10 h-14 object-cover rounded" />
-                  ) : (
-                    <div className="w-10 h-14 bg-gray-700 rounded flex items-center justify-center">
-                      <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                      </svg>
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white font-medium truncate">{book.title}</p>
-                    <p className="text-xs text-gray-400">{book.asin}</p>
-                  </div>
-                  <span className="text-green-500 font-semibold">{formatCurrency(book.royalties)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Current Month Top Earners */}
-        <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-            </svg>
-            {monthlyStats.currentMonth.label} Top Earners
-          </h2>
-          {summary.topEarners.currentMonth.length === 0 ? (
-            <p className="text-gray-400 text-center py-8">No data for {monthlyStats.currentMonth.label}</p>
-          ) : (
-            <div className="space-y-3">
-              {summary.topEarners.currentMonth.slice(0, 5).map((book, index) => (
-                <div key={book.bookId} className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors">
-                  <span className={`text-lg font-bold w-6 ${index === 0 ? 'text-yellow-500' : index === 1 ? 'text-gray-400' : index === 2 ? 'text-orange-600' : 'text-gray-500'}`}>
-                    #{index + 1}
-                  </span>
-                  {book.coverUrl ? (
-                    <img src={book.coverUrl} alt={book.title} className="w-10 h-14 object-cover rounded" />
-                  ) : (
-                    <div className="w-10 h-14 bg-gray-700 rounded flex items-center justify-center">
-                      <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                      </svg>
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white font-medium truncate">{book.title}</p>
-                    <div className="flex items-center gap-2 text-xs text-gray-400">
-                      <span>{book.asin}</span>
-                      {book.bsrRank && (
-                        <span className="text-orange-500">BSR #{book.bsrRank.toLocaleString()}</span>
-                      )}
-                    </div>
-                  </div>
-                  <span className="text-green-500 font-semibold">{formatCurrency(book.royalties)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+        ) : null;
+      })()}
 
       {/* Profitto per Libro — Ultimi 7 giorni */}
       {(() => {
@@ -802,10 +716,12 @@ export default function KdpDashboard() {
           .map(book => {
             const spendEntry = bookSpendData?.[book.asin];
             const adSpend = spendEntry?.totalSpend7d ?? book.spending ?? 0;
+            const adSales7d = spendEntry?.totalSales7d ?? 0;
             const royalties = book.grossRoyalties ?? 0;
             const netProfit = royalties - adSpend;
             const acos7d = royalties > 0 ? (adSpend / royalties) * 100 : null;
-            return { ...book, adSpend7d: adSpend, netProfit, acos7d };
+            const cover = book.cover || `https://m.media-amazon.com/images/P/${book.asin}.jpg`;
+            return { ...book, cover, adSpend7d: adSpend, adSales7d, netProfit, acos7d };
           })
           .filter(b => b.grossRoyalties > 0 || b.adSpend7d > 0)
           .sort((a, b) => b.netProfit - a.netProfit);
@@ -849,6 +765,7 @@ export default function KdpDashboard() {
                       <th className="text-left pb-3 pr-4 w-6">#</th>
                       <th className="text-left pb-3 pr-4">Book</th>
                       <th className="text-right pb-3 pr-4 min-w-[90px]">Royalties 7d</th>
+                      <th className="text-right pb-3 pr-4 min-w-[90px]">ADS Sales 7d</th>
                       <th className="text-right pb-3 pr-4 min-w-[90px]">ADS Spend 7d</th>
                       <th className="text-right pb-3 pr-4 min-w-[90px]">Net Profit</th>
                       <th className="text-right pb-3 min-w-[60px]">ACOS</th>
@@ -879,6 +796,11 @@ export default function KdpDashboard() {
                           {formatCurrency(book.grossRoyalties)}
                         </td>
                         <td className="py-3 pr-4 text-right">
+                          <span className={book.adSales7d > 0 ? 'text-blue-400' : 'text-gray-600'}>
+                            {book.adSales7d > 0 ? formatCurrency(book.adSales7d) : '—'}
+                          </span>
+                        </td>
+                        <td className="py-3 pr-4 text-right">
                           <span className={book.adSpend7d > 0 ? 'text-red-400' : 'text-gray-600'}>
                             {book.adSpend7d > 0 ? formatCurrency(book.adSpend7d) : '—'}
                           </span>
@@ -906,6 +828,82 @@ export default function KdpDashboard() {
           </div>
         );
       })()}
+
+      {/* Top Earners */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {/* Previous Month Top Earners */}
+        <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
+          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+            </svg>
+            {monthlyStats.previousMonth.label} Top Earners
+          </h2>
+          {summary.topEarners.previousMonth.length === 0 ? (
+            <p className="text-gray-400 text-center py-8">No data for {monthlyStats.previousMonth.label}</p>
+          ) : (
+            <div className="space-y-3">
+              {summary.topEarners.previousMonth.slice(0, 5).map((book, index) => (
+                <div key={book.bookId} className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors">
+                  <span className={`text-lg font-bold w-6 ${index === 0 ? 'text-yellow-500' : index === 1 ? 'text-gray-400' : index === 2 ? 'text-orange-600' : 'text-gray-500'}`}>
+                    #{index + 1}
+                  </span>
+                  <img
+                    src={book.coverUrl || `https://m.media-amazon.com/images/P/${book.asin}.jpg`}
+                    alt={book.title}
+                    className="w-10 h-14 object-cover rounded"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-medium truncate">{book.title}</p>
+                    <p className="text-xs text-gray-400">{book.asin}</p>
+                  </div>
+                  <span className="text-green-500 font-semibold">{formatCurrency(book.royalties)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Current Month Top Earners */}
+        <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
+          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+            </svg>
+            {monthlyStats.currentMonth.label} Top Earners
+          </h2>
+          {summary.topEarners.currentMonth.length === 0 ? (
+            <p className="text-gray-400 text-center py-8">No data for {monthlyStats.currentMonth.label}</p>
+          ) : (
+            <div className="space-y-3">
+              {summary.topEarners.currentMonth.slice(0, 5).map((book, index) => (
+                <div key={book.bookId} className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors">
+                  <span className={`text-lg font-bold w-6 ${index === 0 ? 'text-yellow-500' : index === 1 ? 'text-gray-400' : index === 2 ? 'text-orange-600' : 'text-gray-500'}`}>
+                    #{index + 1}
+                  </span>
+                  <img
+                    src={book.coverUrl || `https://m.media-amazon.com/images/P/${book.asin}.jpg`}
+                    alt={book.title}
+                    className="w-10 h-14 object-cover rounded"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-medium truncate">{book.title}</p>
+                    <div className="flex items-center gap-2 text-xs text-gray-400">
+                      <span>{book.asin}</span>
+                      {book.bsrRank && (
+                        <span className="text-orange-500">BSR #{book.bsrRank.toLocaleString()}</span>
+                      )}
+                    </div>
+                  </div>
+                  <span className="text-green-500 font-semibold">{formatCurrency(book.royalties)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Snapshot Info (Debug) */}
       {summary.snapshotInfo && (
