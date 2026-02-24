@@ -8,8 +8,11 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  BarChart,
+  Bar,
   LineChart,
-  Line
+  Line,
+  Legend
 } from 'recharts';
 
 // Tipo per lo stato dell'estensione
@@ -31,6 +34,9 @@ export default function KdpDashboard() {
   const [summary, setSummary] = useState<KdpDashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Selettore marketplace per il grafico mensile
+  const [selectedMarketplace, setSelectedMarketplace] = useState<string>('US');
 
   // Profitto per libro (7 giorni)
   const [bookStats7d, setBookStats7d] = useState<BookStatsData | null>(null);
@@ -651,60 +657,83 @@ export default function KdpDashboard() {
         />
       </div>
 
-      {/* Daily Performance Chart (60 days) */}
+      {/* Monthly Performance Chart — per marketplace */}
       {(() => {
-        const dailyData = summary.charts?.daily?.data ?? [];
-        const monthlyData = summary.charts?.monthly?.data ?? [];
-        const chartData = dailyData.length > 0 ? dailyData : monthlyData;
-        const isDaily = dailyData.length > 0;
-        return chartData.length > 0 ? (
+        const byMp = summary.charts?.byMarketplace ?? {};
+        const availableMarketplaces = Object.keys(byMp).sort();
+        // Auto-select first available marketplace if current selection has no data
+        const activeMp = byMp[selectedMarketplace] ? selectedMarketplace
+          : availableMarketplaces[0] ?? selectedMarketplace;
+        const chartData = byMp[activeMp] ?? [];
+
+        const ALL_MARKETPLACES = ['US', 'CA', 'UK', 'DE', 'FR', 'IT', 'ES', 'AU'];
+
+        return (
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-              <svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-              </svg>
-              {isDaily ? 'Daily Performance (Last 60 Days)' : 'Monthly Performance (Last 12 Months)'}
-            </h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                <XAxis
-                  dataKey="label"
-                  stroke="#9CA3AF"
-                  fontSize={10}
-                  interval={isDaily ? Math.floor(chartData.length / 10) : 0}
-                  tick={{ fill: '#9CA3AF' }}
-                />
-                <YAxis
-                  stroke="#9CA3AF"
-                  fontSize={10}
-                  tickFormatter={(v) => `$${v}`}
-                />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
-                  labelStyle={{ color: '#F3F4F6' }}
-                  formatter={(value: any, name: string | undefined) => {
-                    if (name === 'royalties') return [`$${Number(value).toFixed(2)}`, 'Royalties'];
-                    if (name === 'spending') return [`$${Number(value).toFixed(2)}`, 'ADS Spend'];
-                    return [value, name ?? ''];
-                  }}
-                />
-                <Line type="monotone" dataKey="royalties" stroke="#F59E0B" strokeWidth={2} dot={false} name="royalties" />
-                <Line type="monotone" dataKey="spending" stroke="#EF4444" strokeWidth={2} dot={false} name="spending" />
-              </LineChart>
-            </ResponsiveContainer>
-            <div className="flex justify-center gap-6 mt-4 text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                <span className="text-gray-400">Royalties ($)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                <span className="text-gray-400">ADS Spend ($)</span>
+            {/* Header con selettore marketplace */}
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                Monthly Performance
+              </h2>
+              {/* Selettore marketplace */}
+              <div className="flex items-center gap-1 flex-wrap">
+                {ALL_MARKETPLACES.map(mp => {
+                  const hasData = !!byMp[mp]?.length;
+                  const isActive = mp === activeMp;
+                  return (
+                    <button
+                      key={mp}
+                      onClick={() => setSelectedMarketplace(mp)}
+                      disabled={!hasData}
+                      className={`px-2.5 py-1 text-xs font-semibold rounded transition-colors
+                        ${isActive
+                          ? 'bg-orange-500 text-white'
+                          : hasData
+                            ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                            : 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                        }`}
+                    >
+                      {mp}
+                    </button>
+                  );
+                })}
               </div>
             </div>
+
+            {chartData.length === 0 ? (
+              <div className="h-[300px] flex flex-col items-center justify-center text-gray-500 gap-2">
+                <p>Nessun dato per {activeMp}</p>
+                <p className="text-xs text-gray-600">Avvia il backfill per popolare lo storico</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={chartData} barGap={2}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis dataKey="label" stroke="#9CA3AF" fontSize={11} />
+                  <YAxis stroke="#9CA3AF" fontSize={10} tickFormatter={(v) => `$${v}`} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                    labelStyle={{ color: '#F3F4F6' }}
+                    formatter={(value: any, name: string | undefined) => {
+                      if (name === 'royalties') return [`$${Number(value).toFixed(2)}`, 'Royalties'];
+                      if (name === 'spend') return [`$${Number(value).toFixed(2)}`, 'ADS Spend'];
+                      return [value, name ?? ''];
+                    }}
+                  />
+                  <Legend
+                    formatter={(value) => value === 'royalties' ? 'Royalties' : 'ADS Spend'}
+                    wrapperStyle={{ color: '#9CA3AF', fontSize: 12 }}
+                  />
+                  <Bar dataKey="royalties" fill="#F59E0B" name="royalties" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="spend" fill="#EF4444" name="spend" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
-        ) : null;
+        );
       })()}
 
       {/* Profitto per Libro — Ultimi 7 giorni */}

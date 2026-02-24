@@ -16,6 +16,7 @@ import { KdpSalesSnapshot } from '../entities/KdpSalesSnapshot';
 import { PendingReport } from '../entities/PendingReport';
 import { KdpUserStats } from '../models/KdpDailyStats';
 import { BookSpendCache } from '../entities/BookSpendCache';
+import { MonthlyAdsSpend } from '../entities/MonthlyAdsSpend';
 import { KdpSyncLog as KdpSyncLogModel } from '../models/KdpSyncLog';
 
 dotenv.config();
@@ -39,6 +40,7 @@ const getDatabaseConfig = () => {
     PendingReport,
     KdpUserStats,
     BookSpendCache,
+    MonthlyAdsSpend,
     KdpSyncLogModel
   ];
 
@@ -140,6 +142,28 @@ export const initializeDatabase = async () => {
       `);
     } catch (e) {
       // Ignore if column already exists or table doesn't exist yet
+    }
+
+    // monthly_ads_spend table (added v2.3.9)
+    try {
+      await AppDataSource.query(`
+        CREATE TABLE IF NOT EXISTS monthly_ads_spend (
+          id SERIAL PRIMARY KEY,
+          user_id UUID NOT NULL,
+          marketplace VARCHAR(10) NOT NULL,
+          year_month VARCHAR(7) NOT NULL,
+          total_spend DECIMAL(10,2) NOT NULL DEFAULT 0,
+          total_sales DECIMAL(10,2) NOT NULL DEFAULT 0,
+          updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          UNIQUE(user_id, marketplace, year_month)
+        )
+      `);
+      await AppDataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_monthly_ads_spend_user
+        ON monthly_ads_spend(user_id, marketplace, year_month)
+      `);
+    } catch (e) {
+      // Table already exists
     }
   } catch (error) {
     console.error('❌ Errore connessione database:', error);

@@ -12,6 +12,7 @@ import {
   getMockMonthComparison
 } from '../utils/mock-kdp-data';
 import { authMiddleware } from '../middleware/auth';
+import { MonthlyAdsSpend } from '../entities/MonthlyAdsSpend';
 
 const router = Router();
 const USE_MOCK_DATA = process.env.USE_MOCK_DATA === 'true';
@@ -398,6 +399,68 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       spending: parseFloat(row.spending || 0)
     }));
 
+    // Get monthly royalties per marketplace (last 12 months) — JOIN KdpDailyStats → KdpBook
+    const royaltiesByMarketplace: Record<string, Array<{ yearMonth: string; royalties: number }>> = {};
+    try {
+      const mpRoyaltiesRaw = await statsRepository
+        .createQueryBuilder('stats')
+        .innerJoin(KdpBook, 'book', 'book.asin = stats.asin AND book."userId" = stats."userId"')
+        .select('book.marketplace', 'marketplace')
+        .addSelect(`TO_CHAR(stats.date, 'YYYY-MM')`, 'yearMonth')
+        .addSelect('SUM(stats."grossRoyalties")', 'royalties')
+        .where('stats."userId" = :userId', { userId })
+        .andWhere(`stats.date >= NOW() - INTERVAL '12 months'`)
+        .groupBy('book.marketplace')
+        .addGroupBy(`TO_CHAR(stats.date, 'YYYY-MM')`)
+        .orderBy(`TO_CHAR(stats.date, 'YYYY-MM')`, 'ASC')
+        .getRawMany();
+
+      for (const row of mpRoyaltiesRaw) {
+        const mp = (row.marketplace || 'US').toUpperCase();
+        if (!royaltiesByMarketplace[mp]) royaltiesByMarketplace[mp] = [];
+        royaltiesByMarketplace[mp].push({
+          yearMonth: row.yearMonth,
+          royalties: parseFloat(row.royalties || 0)
+        });
+      }
+    } catch (e) {
+      console.warn('[Dashboard] royaltiesByMarketplace query failed:', e);
+    }
+
+    // Get monthly ADS spend from cache table
+    const spendByMarketplace: Record<string, Array<{ yearMonth: string; spend: number }>> = {};
+    try {
+      const spendRepo = AppDataSource.getRepository(MonthlyAdsSpend);
+      const spendRows = await spendRepo.find({ where: { userId }, order: { yearMonth: 'ASC' } });
+      for (const row of spendRows) {
+        if (!spendByMarketplace[row.marketplace]) spendByMarketplace[row.marketplace] = [];
+        spendByMarketplace[row.marketplace].push({
+          yearMonth: row.yearMonth,
+          spend: parseFloat(row.totalSpend as any) || 0
+        });
+      }
+    } catch (e) {
+      console.warn('[Dashboard] spendByMarketplace query failed:', e);
+    }
+
+    // Merge royalties + spend per marketplace into a unified chart structure
+    const allMarketplaces = new Set([
+      ...Object.keys(royaltiesByMarketplace),
+      ...Object.keys(spendByMarketplace)
+    ]);
+    const chartByMarketplace: Record<string, Array<{ yearMonth: string; label: string; royalties: number; spend: number }>> = {};
+    for (const mp of allMarketplaces) {
+      const royMap = new Map((royaltiesByMarketplace[mp] || []).map(r => [r.yearMonth, r.royalties]));
+      const spMap = new Map((spendByMarketplace[mp] || []).map(s => [s.yearMonth, s.spend]));
+      const allMonths = new Set([...royMap.keys(), ...spMap.keys()]);
+      chartByMarketplace[mp] = [...allMonths].sort().map(ym => ({
+        yearMonth: ym,
+        label: new Date(ym + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+        royalties: royMap.get(ym) || 0,
+        spend: spMap.get(ym) || 0
+      }));
+    }
+
     // Count total live books
     const totalLiveBooks = await bookRepository.count({
       where: { userId }
@@ -540,7 +603,8 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
         daily: {
           label: 'Daily Performance (60d)',
           data: dailyChartData
-        }
+        },
+        byMarketplace: chartByMarketplace
       },
 
       // Snapshot info for debugging

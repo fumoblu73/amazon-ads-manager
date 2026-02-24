@@ -9,6 +9,9 @@ import { adsSpendSyncService } from '../services/ads-spend-sync.service';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { AppDataSource } from '../config/database';
 import { User } from '../entities/User';
+import { MonthlyAdsSpend } from '../entities/MonthlyAdsSpend';
+import { createUserAmazonApiService } from '../services/UserAmazonApiFactory';
+import { getProfileIdForMarketplace } from '../config/amazon';
 
 const router = Router();
 
@@ -458,6 +461,177 @@ router.get('/book-spend-cache', authMiddleware, async (req: AuthRequest, res: Re
     }
 
     res.json({ success: true, updatedAt: latestUpdate, data: byAsin });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ================================================
+// GET /api/amazon-ads/monthly-spend
+// Legge storico spesa mensile per marketplace dalla cache DB
+// ================================================
+router.get('/monthly-spend', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    const repo = AppDataSource.getRepository(MonthlyAdsSpend);
+    const rows = await repo.find({
+      where: { userId },
+      order: { yearMonth: 'ASC' }
+    });
+
+    // Raggruppa per marketplace
+    const byMarketplace: Record<string, Array<{ yearMonth: string; spend: number; sales: number }>> = {};
+    for (const row of rows) {
+      if (!byMarketplace[row.marketplace]) byMarketplace[row.marketplace] = [];
+      byMarketplace[row.marketplace].push({
+        yearMonth: row.yearMonth,
+        spend: parseFloat(row.totalSpend as any) || 0,
+        sales: parseFloat(row.totalSales as any) || 0
+      });
+    }
+
+    res.json({ success: true, data: byMarketplace });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ================================================
+// POST /api/amazon-ads/backfill-monthly-spend
+// Backfill storico spesa ADS per marketplace (ultimi N mesi)
+// Fire-and-forget: restituisce 202 subito, elabora in background
+// ================================================
+const BACKFILL_MARKETPLACES = ['US', 'CA', 'UK', 'DE', 'FR', 'IT', 'ES', 'AU'];
+let backfillRunning = false;
+
+router.post('/backfill-monthly-spend', async (req: Request, res: Response) => {
+  try {
+    const adminToken = req.query.adminToken as string;
+    if (!adminToken || adminToken !== process.env.ADMIN_TOKEN) {
+      return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const months = Math.min(parseInt(req.query.months as string) || 6, 12);
+
+    if (backfillRunning) {
+      return res.status(409).json({ success: false, error: 'Backfill già in corso' });
+    }
+
+    // Trova userId dal DB (primo utente — single-user app)
+    const userRepo = AppDataSource.getRepository(User);
+    const user = await userRepo.findOne({ where: {} });
+    if (!user) return res.status(404).json({ success: false, error: 'Nessun utente trovato' });
+
+    res.status(202).json({
+      success: true,
+      message: `Backfill avviato per ${months} mesi × ${BACKFILL_MARKETPLACES.length} marketplace. Controlla i log per il progresso.`
+    });
+
+    // Esegui in background
+    setImmediate(() => runBackfill(user.id, months));
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+async function runBackfill(userId: string, months: number) {
+  if (backfillRunning) return;
+  backfillRunning = true;
+  console.log(`🔄 [Backfill] Avvio backfill ${months} mesi per ${BACKFILL_MARKETPLACES.length} marketplace`);
+
+  const repo = AppDataSource.getRepository(MonthlyAdsSpend);
+
+  // Calcola i mesi da recuperare (corrente incluso)
+  const monthsToFetch: Array<{ yearMonth: string; startDate: string; endDate: string }> = [];
+  const now = new Date();
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const yearMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
+    const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    // Per il mese corrente, usa oggi come endDate
+    const isCurrentMonth = (i === 0);
+    const endDateObj = isCurrentMonth ? now : new Date(year, month + 1, 0);
+    const endDate = `${endDateObj.getFullYear()}-${String(endDateObj.getMonth() + 1).padStart(2, '0')}-${String(isCurrentMonth ? endDateObj.getDate() : lastDay).padStart(2, '0')}`;
+    monthsToFetch.push({ yearMonth, startDate, endDate });
+  }
+
+  let processed = 0;
+  let failed = 0;
+
+  for (const marketplace of BACKFILL_MARKETPLACES) {
+    const profileId = getProfileIdForMarketplace(marketplace);
+    if (!profileId) {
+      console.log(`⚠️ [Backfill] Nessun profileId per ${marketplace}, skip`);
+      continue;
+    }
+
+    const apiService = createUserAmazonApiService(userId, marketplace, profileId);
+
+    for (const { yearMonth, startDate, endDate } of monthsToFetch) {
+      try {
+        console.log(`📊 [Backfill] ${marketplace} ${yearMonth} (${startDate} → ${endDate})`);
+        const reportId = await apiService.requestReportV3(
+          startDate, endDate, 'spAdvertisedProduct',
+          ['advertisedAsin', 'cost', 'sales14d']
+        );
+        const rows = await apiService.waitAndDownloadReport(reportId, 30);
+
+        let totalSpend = 0;
+        let totalSales = 0;
+        for (const row of rows) {
+          totalSpend += parseFloat(row.cost || row.spend || 0);
+          totalSales += parseFloat(row.sales14d || row.sales || 0);
+        }
+
+        // Upsert
+        await AppDataSource.query(`
+          INSERT INTO monthly_ads_spend (user_id, marketplace, year_month, total_spend, total_sales, updated_at)
+          VALUES ($1, $2, $3, $4, $5, NOW())
+          ON CONFLICT (user_id, marketplace, year_month)
+          DO UPDATE SET total_spend = $4, total_sales = $5, updated_at = NOW()
+        `, [userId, marketplace, yearMonth, totalSpend.toFixed(2), totalSales.toFixed(2)]);
+
+        console.log(`✅ [Backfill] ${marketplace} ${yearMonth}: spend=$${totalSpend.toFixed(2)}, sales=$${totalSales.toFixed(2)}`);
+        processed++;
+      } catch (err: any) {
+        console.error(`❌ [Backfill] ${marketplace} ${yearMonth}: ${err.message}`);
+        failed++;
+      }
+
+      // Pausa tra report dello stesso marketplace per evitare rate limit
+      await new Promise(r => setTimeout(r, 2000));
+    }
+
+    // Pausa tra marketplace
+    await new Promise(r => setTimeout(r, 3000));
+  }
+
+  backfillRunning = false;
+  console.log(`✅ [Backfill] Completato: ${processed} ok, ${failed} failed`);
+}
+
+// ================================================
+// POST /api/amazon-ads/update-monthly-spend
+// Aggiorna il mese corrente (chiamato dal cron il 1° del mese)
+// ================================================
+router.post('/update-monthly-spend', async (req: Request, res: Response) => {
+  try {
+    const adminToken = req.query.adminToken as string;
+    if (!adminToken || adminToken !== process.env.ADMIN_TOKEN) {
+      return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const userRepo = AppDataSource.getRepository(User);
+    const user = await userRepo.findOne({ where: {} });
+    if (!user) return res.status(404).json({ success: false, error: 'Nessun utente' });
+
+    res.status(202).json({ success: true, message: 'Aggiornamento mese corrente avviato' });
+
+    // Aggiorna solo il mese corrente in background
+    setImmediate(() => runBackfill(user.id, 1));
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

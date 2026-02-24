@@ -377,6 +377,12 @@ export interface KdpDashboardSummary {
       label: string;
       data: DailyChartDataPoint[];
     };
+    byMarketplace?: Record<string, Array<{
+      yearMonth: string;
+      label: string;
+      royalties: number;
+      spend: number;
+    }>>;
   };
   snapshotInfo?: {
     id: string;
