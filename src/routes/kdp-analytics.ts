@@ -404,11 +404,11 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
     try {
       const mpRoyaltiesRaw = await statsRepository
         .createQueryBuilder('stats')
-        .innerJoin(KdpBook, 'book', 'book.asin = stats.asin AND book."user_id" = stats."user_id"')
+        .innerJoin(KdpBook, 'book', 'book.asin = stats.asin AND book."user_id" = stats."userId"')
         .select('book.marketplace', 'marketplace')
         .addSelect(`TO_CHAR(stats.date, 'YYYY-MM')`, 'yearMonth')
-        .addSelect('SUM(stats."gross_royalties")', 'royalties')
-        .where('stats."user_id" = :userId', { userId })
+        .addSelect('SUM(stats."grossroyalties")', 'royalties')
+        .where('stats."userId" = :userId', { userId })
         .andWhere(`stats.date >= NOW() - INTERVAL '12 months'`)
         .groupBy('book.marketplace')
         .addGroupBy(`TO_CHAR(stats.date, 'YYYY-MM')`)
