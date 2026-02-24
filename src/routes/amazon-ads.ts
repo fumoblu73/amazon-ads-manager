@@ -633,4 +633,45 @@ router.post('/update-monthly-spend', async (req: Request, res: Response) => {
   }
 });
 
+// ================================================
+// POST /api/amazon-ads/manual-monthly-spend
+// Inserimento manuale dati spesa mensile da CSV esportato da Amazon Ads
+// Body: { entries: [{ marketplace, yearMonth, totalSpend, totalSales? }] }
+// ================================================
+router.post('/manual-monthly-spend', async (req: Request, res: Response) => {
+  try {
+    const adminToken = req.query.adminToken as string;
+    if (!adminToken || adminToken !== process.env.ADMIN_TOKEN) {
+      return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const userRepo = AppDataSource.getRepository(User);
+    const user = await userRepo.findOne({ where: {} });
+    if (!user) return res.status(404).json({ success: false, error: 'Nessun utente' });
+
+    const entries: Array<{ marketplace: string; yearMonth: string; totalSpend: number; totalSales?: number }> = req.body.entries;
+    if (!Array.isArray(entries) || entries.length === 0) {
+      return res.status(400).json({ success: false, error: 'Body deve contenere entries: [{marketplace, yearMonth, totalSpend, totalSales?}]' });
+    }
+
+    let inserted = 0;
+    for (const entry of entries) {
+      const { marketplace, yearMonth, totalSpend, totalSales = 0 } = entry;
+      if (!marketplace || !yearMonth || totalSpend == null) continue;
+      await AppDataSource.query(`
+        INSERT INTO monthly_ads_spend (user_id, marketplace, year_month, total_spend, total_sales, updated_at)
+        VALUES ($1, $2, $3, $4, $5, NOW())
+        ON CONFLICT (user_id, marketplace, year_month)
+        DO UPDATE SET total_spend = $4, total_sales = $5, updated_at = NOW()
+      `, [user.id, marketplace.toUpperCase(), yearMonth, totalSpend.toFixed(2), totalSales.toFixed(2)]);
+      console.log(`✅ [Manual] ${marketplace} ${yearMonth}: spend=$${totalSpend.toFixed(2)}, sales=$${totalSales.toFixed(2)}`);
+      inserted++;
+    }
+
+    res.json({ success: true, inserted, message: `${inserted} record inseriti/aggiornati` });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;
