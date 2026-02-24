@@ -65,15 +65,16 @@ function extractMarketplace(reason: string | undefined): string {
   return match ? match[1] : 'N/A';
 }
 
-// Helper: group logs for a day by marketplace → book
+// Helper: group logs for a day by marketplace → book (keyed by ASIN)
 function groupDayLogs(logs: AutomationLog[]) {
-  const byMp: Record<string, Record<string, { label: string; asin: string | null; success: number; failed: number }>> = {};
+  const byMp: Record<string, Record<string, { label: string; success: number; failed: number }>> = {};
   for (const log of logs) {
     const mp = extractMarketplace(log.reason);
-    const bookKey = log.bookAsin || log.targetName || log.targetId;
-    const bookLabel = log.bookTitle || log.targetName || log.targetId;
+    // Key and label = ASIN when available, otherwise campaign name (old logs without ASIN)
+    const bookKey = log.bookAsin || log.targetName || log.targetId || '?';
+    const bookLabel = log.bookAsin || log.targetName || log.targetId || '?';
     if (!byMp[mp]) byMp[mp] = {};
-    if (!byMp[mp][bookKey]) byMp[mp][bookKey] = { label: bookLabel, asin: log.bookAsin || null, success: 0, failed: 0 };
+    if (!byMp[mp][bookKey]) byMp[mp][bookKey] = { label: bookLabel, success: 0, failed: 0 };
     if (log.status === 'success') byMp[mp][bookKey].success++;
     else byMp[mp][bookKey].failed++;
   }
@@ -323,14 +324,11 @@ export default function Dashboard() {
                           <span className="text-[10px] font-bold text-blue-400 bg-blue-900/40 px-1.5 py-0.5 rounded">{mp}</span>
                           <span className="text-[10px] text-gray-500">{Object.keys(books).length} libr{Object.keys(books).length === 1 ? 'o' : 'i'}</span>
                         </div>
-                        {/* Libri */}
+                        {/* Libri (ASIN) */}
                         <div className="space-y-1 pl-2">
-                          {Object.entries(books).map(([bookKey, { label, asin, success, failed }]) => (
-                            <div key={bookKey} className="flex items-center gap-2">
-                              <div className="flex-1 min-w-0">
-                                <span className="text-xs text-gray-200 truncate block">{label}</span>
-                                {asin && <span className="text-[10px] text-gray-500 font-mono">{asin}</span>}
-                              </div>
+                          {Object.entries(books).map(([bookKey, { label, success, failed }]) => (
+                            <div key={bookKey} className="flex items-center justify-between gap-2">
+                              <span className="text-xs text-gray-300 font-mono">{label}</span>
                               <div className="flex items-center gap-1.5 shrink-0">
                                 {success > 0 && (
                                   <span className="text-[10px] font-semibold text-green-400">✓ {success}</span>
