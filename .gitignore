@@ -19,6 +19,7 @@ logs/
 .cache
 *.tmp
 .DS_Store
+tmpclaude-*
 
 # File di configurazione IDE
 # .vscode/  # Commentato - vogliamo condividere settings.json del progetto
