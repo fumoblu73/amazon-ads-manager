@@ -34,23 +34,21 @@ function getDateRange(daysBack: number): { startDate: string; endDate: string } 
   };
 }
 
-// Helper: format date as "Lun 17"
-function formatDayLabel(dateStr: string): string {
-  const days = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
-  const d = new Date(dateStr + 'T12:00:00');
-  return `${days[d.getDay()]} ${d.getDate()}`;
-}
-
 // Helper: format date as "Lun 17 Feb"
 function formatDayFull(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00:00');
   return d.toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'short' });
 }
 
-// Helper: get last 7 days as YYYY-MM-DD strings
-function getLast7Days(): string[] {
+// Helper: return just the day number
+function getDayNumber(dateStr: string): string {
+  return String(new Date(dateStr + 'T12:00:00').getDate());
+}
+
+// Helper: get last 14 days as YYYY-MM-DD strings
+function getLast14Days(): string[] {
   const days = [];
-  for (let i = 6; i >= 0; i--) {
+  for (let i = 13; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
     days.push(d.toISOString().split('T')[0]);
@@ -58,27 +56,19 @@ function getLast7Days(): string[] {
   return days;
 }
 
-// Helper: extract marketplace from reason field ("Phase 2 — US" → "US")
-function extractMarketplace(reason: string | undefined): string {
-  if (!reason) return 'N/A';
-  const match = reason.match(/[—\-]\s*([A-Z]{2,3})$/);
-  return match ? match[1] : 'N/A';
-}
-
-// Helper: group logs for a day by marketplace → book (keyed by ASIN)
+// Helper: group logs for a day by book
 function groupDayLogs(logs: AutomationLog[]) {
-  const byMp: Record<string, Record<string, { label: string; success: number; failed: number }>> = {};
+  const byBook: Record<string, { label: string; success: number; failed: number; logs: AutomationLog[] }> = {};
   for (const log of logs) {
-    const mp = extractMarketplace(log.reason);
-    // Key and label = ASIN when available, otherwise campaign name (old logs without ASIN)
     const bookKey = log.bookAsin || log.targetName || log.targetId || '?';
-    const bookLabel = log.bookAsin || log.targetName || log.targetId || '?';
-    if (!byMp[mp]) byMp[mp] = {};
-    if (!byMp[mp][bookKey]) byMp[mp][bookKey] = { label: bookLabel, success: 0, failed: 0 };
-    if (log.status === 'success') byMp[mp][bookKey].success++;
-    else byMp[mp][bookKey].failed++;
+    const rawTitle = log.bookTitle || log.targetName || log.targetId || '?';
+    const bookLabel = rawTitle.split(':')[0].trim();
+    if (!byBook[bookKey]) byBook[bookKey] = { label: bookLabel, success: 0, failed: 0, logs: [] };
+    if (log.status === 'success') byBook[bookKey].success++;
+    else byBook[bookKey].failed++;
+    byBook[bookKey].logs.push(log);
   }
-  return byMp;
+  return byBook;
 }
 
 export default function Dashboard() {
@@ -136,12 +126,12 @@ export default function Dashboard() {
       try {
         setLoading(true);
         setError(null);
-        const { startDate, endDate } = getDateRange(7);
+        const { startDate, endDate } = getDateRange(14);
 
         const [campaignsRes, automationRes, weeklyLogsRes, adsRes] = await Promise.allSettled([
           campaignsApi.getStats(),
           automationApi.getStatus(),
-          logsApi.getAll({ dateFrom: startDate, dateTo: endDate, limit: 500, sortBy: 'createdAt', sortOrder: 'DESC' }),
+          logsApi.getAll({ dateFrom: startDate, dateTo: endDate, limit: 1000, sortBy: 'createdAt', sortOrder: 'DESC' }),
           amazonAdsApi.getSpendCache(),
         ]);
 
@@ -191,10 +181,10 @@ export default function Dashboard() {
     );
   }
 
-  // Calcola mini calendario 7 giorni
-  const last7Days = getLast7Days();
+  // Calcola mini calendario 14 giorni
+  const last14Days = getLast14Days();
   const dayMap: Record<string, { success: number; failed: number }> = {};
-  last7Days.forEach(d => { dayMap[d] = { success: 0, failed: 0 }; });
+  last14Days.forEach(d => { dayMap[d] = { success: 0, failed: 0 }; });
   weeklyLogs.forEach(log => {
     const day = log.createdAt.split('T')[0];
     if (dayMap[day]) {
@@ -217,8 +207,6 @@ export default function Dashboard() {
     return `${m}m fa`;
   };
 
-  const weekTotal = weeklyLogs.length;
-  const weekErrors = weeklyLogs.filter(l => l.status === 'failed').length;
   const archivedCount = campaignStats?.byState?.archived || 0;
 
   // Dati del giorno selezionato
@@ -269,74 +257,86 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Calendario 7 giorni — cliccabile */}
+            {/* Calendario 14 giorni — cliccabile */}
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-gray-400">Ultimi 7 giorni</span>
-                <span className={`text-xs font-semibold ${weekErrors > 0 ? 'text-red-400' : weekTotal > 0 ? 'text-green-400' : 'text-gray-600'}`}>
-                  {weekTotal > 0 ? `${weekTotal} log · ${weekErrors > 0 ? `${weekErrors} err` : 'ok'}` : 'nessuna esecuzione'}
-                </span>
+              <div className="mb-2">
+                <span className="text-xs text-gray-400">Ultimi 14 giorni</span>
               </div>
-              <div className="grid grid-cols-7 gap-1">
-                {last7Days.map(day => {
+              <div className="grid gap-0.5" style={{ gridTemplateColumns: 'repeat(14, 1fr)' }}>
+                {last14Days.map(day => {
                   const { success, failed } = dayMap[day];
                   const total = success + failed;
-                  const isToday = day === last7Days[6];
+                  const isToday = day === last14Days[13];
                   const isSelected = day === selectedDay;
                   const hasLogs = total > 0;
-                  let dotColor = 'bg-gray-700 cursor-default';
-                  if (hasLogs) dotColor = failed > 0 ? 'bg-red-500 cursor-pointer hover:ring-2 hover:ring-red-300' : 'bg-green-500 cursor-pointer hover:ring-2 hover:ring-green-300';
                   return (
                     <div
                       key={day}
-                      className="flex flex-col items-center gap-1"
+                      className="flex flex-col items-center gap-0.5"
                       onClick={() => hasLogs && setSelectedDay(isSelected ? null : day)}
                     >
-                      <div className={`w-7 h-7 rounded-full ${dotColor} flex items-center justify-center transition-all
+                      <div className={`w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center transition-all
+                        ${hasLogs ? 'cursor-pointer hover:brightness-125' : 'cursor-default opacity-40'}
                         ${isToday && !isSelected ? 'ring-2 ring-orange-400' : ''}
-                        ${isSelected ? 'ring-3 ring-white scale-110' : ''}
+                        ${isSelected ? 'ring-2 ring-white scale-110' : ''}
                       `}>
-                        {total > 0 && <span className="text-[9px] text-white font-bold">{total}</span>}
+                        {total > 0 && (
+                          <div className="flex flex-col items-center leading-none gap-px">
+                            {success > 0 && <span className="text-[7px] text-green-400 font-bold">{success}</span>}
+                            {failed > 0 && <span className="text-[7px] text-red-400 font-bold">{failed}</span>}
+                          </div>
+                        )}
                       </div>
-                      <span className={`text-[9px] ${isSelected ? 'text-white font-semibold' : 'text-gray-500'}`}>
-                        {formatDayLabel(day)}
+                      <span className={`text-[8px] ${isSelected ? 'text-white font-semibold' : 'text-gray-500'}`}>
+                        {getDayNumber(day)}
                       </span>
                     </div>
                   );
                 })}
               </div>
-              <p className="text-[10px] text-gray-600 mt-1">Clicca un giorno per vedere i dettagli</p>
+              <p className="text-[10px] text-gray-400 mt-1.5 flex items-center gap-1">
+                <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+                </svg>
+                Clicca un giorno per vedere le operazioni eseguite
+              </p>
             </div>
 
-            {/* Dettaglio giorno selezionato o messaggio vuoto */}
-            <div className="bg-gray-800 rounded-lg p-3 flex-1">
+            {/* Dettaglio giorno selezionato */}
+            <div className="bg-gray-800 rounded-lg p-3 flex-1 overflow-y-auto max-h-72">
               {selectedDay && dayLogs.length > 0 ? (
                 <>
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-semibold text-white capitalize">{formatDayFull(selectedDay)}</span>
-                    <span className="text-xs text-gray-400">{dayLogs.length} log</span>
+                    <span className="text-xs text-gray-400">{dayLogs.length} op.</span>
                   </div>
                   <div className="space-y-3">
-                    {Object.entries(dayGrouped).map(([mp, books]) => (
-                      <div key={mp}>
-                        {/* Marketplace header */}
-                        <div className="flex items-center gap-1.5 mb-1.5">
-                          <span className="text-[10px] font-bold text-blue-400 bg-blue-900/40 px-1.5 py-0.5 rounded">{mp}</span>
-                          <span className="text-[10px] text-gray-500">{Object.keys(books).length} libr{Object.keys(books).length === 1 ? 'o' : 'i'}</span>
+                    {Object.entries(dayGrouped).map(([bookKey, { label, success, failed, logs: bookLogs }]) => (
+                      <div key={bookKey}>
+                        {/* Book header */}
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="text-[10px] font-semibold text-blue-400 truncate flex-1">{label}</span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {success > 0 && <span className="text-[10px] text-green-400 font-semibold">✓{success}</span>}
+                            {failed > 0 && <span className="text-[10px] text-red-400 font-semibold">✗{failed}</span>}
+                          </div>
                         </div>
-                        {/* Libri (ASIN) */}
-                        <div className="space-y-1 pl-2">
-                          {Object.entries(books).map(([bookKey, { label, success, failed }]) => (
-                            <div key={bookKey} className="flex items-center justify-between gap-2">
-                              <span className="text-xs text-gray-300 font-mono">{label}</span>
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                {success > 0 && (
-                                  <span className="text-[10px] font-semibold text-green-400">✓ {success}</span>
-                                )}
-                                {failed > 0 && (
-                                  <span className="text-[10px] font-semibold text-red-400">✗ {failed}</span>
-                                )}
+                        {/* Per-campaign log rows */}
+                        <div className="space-y-0.5 pl-2">
+                          {bookLogs.map(log => (
+                            <div key={log.id} className={`rounded px-2 py-1 ${log.status === 'failed' ? 'bg-red-900/30' : 'bg-gray-700/50'}`}>
+                              <div className="flex items-center gap-1.5">
+                                <span className={`text-[9px] font-bold shrink-0 ${log.status === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                                  {log.status === 'success' ? '✓' : '✗'}
+                                </span>
+                                <span className="text-[9px] text-gray-400 truncate">{log.targetName}</span>
                               </div>
+                              {log.reason && (
+                                <p className="text-[9px] text-gray-300 mt-0.5 pl-3">{log.reason}</p>
+                              )}
+                              {log.status === 'failed' && log.errorMessage && (
+                                <p className="text-[9px] text-red-400 mt-0.5 pl-3">{log.errorMessage}</p>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -345,8 +345,8 @@ export default function Dashboard() {
                   </div>
                 </>
               ) : (
-                <p className="text-xs text-gray-500">
-                  {selectedDay ? 'Nessun log per questo giorno' : 'Nessuna esecuzione negli ultimi 7 giorni'}
+                <p className="text-xs text-gray-500 text-center py-4">
+                  {selectedDay ? 'Nessun log per questo giorno' : 'Nessuna esecuzione negli ultimi 14 giorni'}
                 </p>
               )}
             </div>

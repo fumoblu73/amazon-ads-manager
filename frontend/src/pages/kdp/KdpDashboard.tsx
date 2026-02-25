@@ -812,7 +812,7 @@ export default function KdpDashboard() {
                               <div className="w-8 h-11 bg-gray-700 rounded flex-shrink-0" />
                             )}
                             <div className="min-w-0">
-                              <p className="text-white font-medium truncate max-w-[200px]">{book.title}</p>
+                              <p className="text-white font-medium truncate max-w-[200px]">{book.title?.split(':')[0]?.trim()}</p>
                               <p className="text-xs text-gray-500">{book.asin}</p>
                             </div>
                           </div>
@@ -880,7 +880,7 @@ export default function KdpDashboard() {
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-white font-medium truncate">{book.title}</p>
+                    <p className="text-white font-medium truncate">{book.title?.split(':')[0]?.trim()}</p>
                     <p className="text-xs text-gray-400">{book.asin}</p>
                   </div>
                   <span className="text-green-500 font-semibold">{formatCurrency(book.royalties)}</span>
@@ -914,7 +914,7 @@ export default function KdpDashboard() {
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-white font-medium truncate">{book.title}</p>
+                    <p className="text-white font-medium truncate">{book.title?.split(':')[0]?.trim()}</p>
                     <div className="flex items-center gap-2 text-xs text-gray-400">
                       <span>{book.asin}</span>
                       {book.bsrRank && (

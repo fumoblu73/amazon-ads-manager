@@ -646,7 +646,10 @@ router.post('/manual-monthly-spend', async (req: Request, res: Response) => {
     }
 
     const userRepo = AppDataSource.getRepository(User);
-    const user = await userRepo.findOne({ where: {} });
+    const targetUserId = req.query.userId as string | undefined;
+    const user = targetUserId
+      ? await userRepo.findOne({ where: { id: targetUserId } })
+      : await userRepo.findOne({ where: {} });
     if (!user) return res.status(404).json({ success: false, error: 'Nessun utente' });
 
     const entries: Array<{ marketplace: string; yearMonth: string; totalSpend: number; totalSales?: number }> = req.body.entries;

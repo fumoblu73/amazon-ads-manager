@@ -38,7 +38,7 @@ export default function BookStats() {
     {
       key: 'title',
       header: 'Title',
-      accessor: (book) => book.title,
+      accessor: (book) => book.title?.split(':')[0]?.trim() ?? book.title,
       sortable: true,
       render: (value) => <span className="font-medium text-white">{value}</span>
     },

@@ -266,7 +266,7 @@ class RegionApiClient {
         endDate,
         configuration: {
           adProduct,
-          groupBy: ['advertiser'],
+          groupBy: ['advertiserProduct'],
           columns: ['advertisedAsin', 'cost', 'sales14d', 'impressions', 'clicks', 'purchases14d'],
           reportTypeId,
           timeUnit: 'SUMMARY',

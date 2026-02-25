@@ -93,7 +93,8 @@ async function saveAutomationLog(
   report: PendingReport,
   status: 'success' | 'failed',
   errorMessage?: string,
-  preloaded?: PreloadedData
+  preloaded?: PreloadedData,
+  operationSummary?: string
 ): Promise<void> {
   try {
     const logRepo = AppDataSource.getRepository(AutomationLog);
@@ -121,7 +122,7 @@ async function saveAutomationLog(
       ruleName: ruleName.substring(0, 100),
       status,
       errorMessage: errorMessage || null,
-      reason: `Phase 2 — ${report.marketplace}`,
+      reason: operationSummary || `Phase 2 — ${report.marketplace}`,
       bookAsin,
       bookTitle,
     });
@@ -259,14 +260,14 @@ export async function processCompletedReports(): Promise<{
                 emailItems.push({ campaignName: report.campaignName, campaignId: report.campaignId, functions: JSON.parse(report.functionNumbers), status: 'processed', details: 'KDP books enriched' });
                 console.log(`   ✅ ${report.reportId}: kdp_books enriched successfully`);
               } else {
-                await executeAutomationFunctions(
+                const opSummary = await executeAutomationFunctions(
                   report, reportData, apiService, marketplace, preloaded
                 );
                 report.status = 'processed';
                 await reportRepo.save(report);
                 stats.processed++;
-                await saveAutomationLog(report, 'success', undefined, preloaded);
-                emailItems.push({ campaignName: report.campaignName, campaignId: report.campaignId, functions: JSON.parse(report.functionNumbers), status: 'processed', details: 'Functions executed' });
+                await saveAutomationLog(report, 'success', undefined, preloaded, opSummary);
+                emailItems.push({ campaignName: report.campaignName, campaignId: report.campaignId, functions: JSON.parse(report.functionNumbers), status: 'processed', details: opSummary });
                 console.log(`   ✅ ${report.reportId}: functions executed successfully`);
               }
             } catch (error: any) {
@@ -419,6 +420,7 @@ export async function processCompletedReportsForUser(userId: string): Promise<{
                 await reportRepo.save(report);
                 stats.processed++;
               }
+
             } catch (error: any) {
               report.status = 'failed';
               report.errorMessage = `Function execution error: ${error.message}`;
@@ -465,7 +467,7 @@ async function executeAutomationFunctions(
   apiService: any,
   marketplace: string,
   preloaded?: PreloadedData
-): Promise<void> {
+): Promise<string> {
   const functionNumbers: number[] = JSON.parse(report.functionNumbers);
   const cachedApiService = createCachedApiService(apiService, reportData);
 
@@ -567,13 +569,16 @@ async function executeAutomationFunctions(
     }
   }
 
+  const parts: string[] = [];
+  const bandNames: Record<number, string> = { 1: 'Ottima', 2: 'Buona', 3: 'Accettabile', 4: 'Scarsa', 5: 'Pessima' };
+
   for (const funcNum of functionNumbers) {
     try {
       console.log(`     🔧 Executing Function ${funcNum} for campaign ${report.campaignName}...`);
 
       switch (funcNum) {
-        case 1:
-          await executeFunc1(
+        case 1: {
+          const r1 = await executeFunc1(
             report.campaignId,
             report.campaignType as 1 | 2 | 3 | 4,
             report.campaignName,
@@ -586,10 +591,12 @@ async function executeAutomationFunctions(
               maxClicks: config.func1_clicks
             }
           );
+          parts.push(`Bid modificati: ${r1.itemsIncreased}/${r1.itemsProcessed}`);
           break;
+        }
 
-        case 2:
-          await executeFunc2(
+        case 2: {
+          const r2 = await executeFunc2(
             report.campaignId,
             report.campaignName,
             marketplace,
@@ -601,10 +608,22 @@ async function executeAutomationFunctions(
               placementTimeframeWeeks: config.func2_timeframeWeeks
             }
           );
+          if (r2.band === 3) {
+            parts.push(`Performance accettabile — nessuna modifica`);
+          } else {
+            const suffix = r2.campaignAcos === 999 ? ' (no vendite)' : '';
+            parts.push(
+              `Performance ${bandNames[r2.band] || r2.band}${suffix} | ` +
+              `Top: ${r2.oldPlacements.topOfSearch}%→${r2.newPlacements.topOfSearch}% | ` +
+              `Rest: ${r2.oldPlacements.restOfSearch}%→${r2.newPlacements.restOfSearch}% | ` +
+              `PP: ${r2.oldPlacements.productPages}%→${r2.newPlacements.productPages}%`
+            );
+          }
           break;
+        }
 
-        case 3:
-          await executeFunc3(
+        case 3: {
+          const r3 = await executeFunc3(
             report.campaignId,
             report.campaignType as 1 | 2 | 3 | 4,
             report.campaignName,
@@ -621,10 +640,12 @@ async function executeAutomationFunctions(
               clicks65days: config.func3_clicks65days
             }
           );
+          parts.push(`ASIN/kw spenti: ${r3.itemsPaused}/${r3.itemsProcessed}`);
           break;
+        }
 
-        case 4:
-          await executeFunc4(
+        case 4: {
+          const r4 = await executeFunc4(
             report.campaignId,
             report.campaignName,
             marketplace,
@@ -641,10 +662,12 @@ async function executeAutomationFunctions(
               spendNegative: config.func4_spendNegative
             }
           );
+          parts.push(`Neg. aggiunti: ${r4.negativeTargetsAdded} ASIN, ${r4.negativeKeywordsAdded} kw | Bid aggiornati: ${r4.targetingGroupsBidUpdated} | Spenti: ${r4.targetingGroupsPaused}`);
           break;
+        }
 
-        case 5:
-          await executeFunc5(
+        case 5: {
+          const r5 = await executeFunc5(
             report.campaignId,
             report.campaignType as 1 | 2 | 3 | 4 | 5,
             marketplace,
@@ -659,7 +682,9 @@ async function executeAutomationFunctions(
               bidExpanded: config.func5_bidExpanded
             }
           );
+          parts.push(`Promossi: ${r5.keywordsAdded} kw, ${r5.targetsAdded} ASIN`);
           break;
+        }
       }
 
       console.log(`     ✅ Function ${funcNum} completed`);
@@ -667,6 +692,8 @@ async function executeAutomationFunctions(
       console.error(`     ❌ Function ${funcNum} error: ${error.message}`);
     }
   }
+
+  return parts.join(' | ');
 }
 
 /**

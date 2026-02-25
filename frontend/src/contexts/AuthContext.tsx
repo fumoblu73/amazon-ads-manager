@@ -43,6 +43,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const filtered = prev.filter(p => p.type !== n.type);
       return [...filtered, n];
     });
+    // Auto-dismiss dopo 8 secondi per notifiche non in corso
+    if (n.status !== 'syncing') {
+      setTimeout(() => removeNotification(n.type), 8000);
+    }
   };
 
   const removeNotification = (type: string) => {
@@ -109,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               addNotification({
                 type: 'kdp',
                 status: 'success',
-                message: `KDP aggiornato (ultimo sync <6h)`
+                message: `Bookshelf aggiornato`
               });
             }
           } else if (kdpData.success) {
