@@ -1,255 +1,156 @@
-# 🚀 Amazon Ads Manager
+# Amazon Ads Manager
 
-Sistema completo di automazione per campagne pubblicitarie Amazon Advertising, con 5 funzioni di ottimizzazione basate sul metodo **FAST ACoS**.
+Sistema di automazione per campagne Amazon Advertising, ottimizzato per editori KDP con il metodo **FAST ACoS**.
 
-## 🎯 Funzionalità Principali
+- **Backend**: Node.js + TypeScript + Express + TypeORM
+- **Frontend**: React + Vite + Tailwind CSS
+- **Database**: PostgreSQL (Supabase)
+- **Hosting**: Render.com (auto-deploy da branch `main`)
+- **Trigger automazioni**: cron-job.org
 
-### 📊 5 Funzioni di Automazione
+---
 
-**Funzione 1: Progressive Bidding Increase**
-- Aumenta progressivamente il bid di keyword/prodotti con poche impressions
-- Frequenza: Ogni 3 giorni
-- Applicabile a: Campagne 1, 2, 3, 4
+## Funzionalità principali
 
-**Funzione 2: Placement Optimization**
-- Ottimizza i placement bid (Top of Search, Rest, Product Pages) in base a FAST ACoS
-- Frequenza: Ogni 7 giorni
-- Applicabile a: Tutte le campagne (1-5)
+### 5 Funzioni di automazione
 
-**Funzione 3: Targeting Optimization**
-- Ottimizza bid e pausa keyword/prodotti con performance pessime
-- Timeframe dinamico basato su traffico
-- Frequenza: Ogni 3 giorni (dopo Funzione 1)
-- Applicabile a: Campagne 1, 2, 3, 4
+| # | Nome | Campagne | Frequenza |
+|---|------|----------|-----------|
+| F1 | Progressive Bidding | 1–4 | ogni 3gg |
+| F2 | Placement Optimization | 1–5 | ogni 7gg |
+| F3 | Targeting Optimization | 1–4 | ogni 3gg (dopo F1) |
+| F4 | Auto Ad Optimization | solo 5 | ogni 7gg |
+| F5 | Campaign Feeding | 1–5 | ogni 7gg |
 
-**Funzione 4: Auto Ad Optimization**
-- Ottimizza targeting groups e gestisce negative keywords/products
-- Specifico per campagne automatiche
-- Frequenza: Ogni 7 giorni
-- Applicabile a: Solo Campagna 5 (Auto Ads)
+La logica algoritmica completa (FAST ACoS, fasce, parametri) è documentata in [SPECIFICATIONS.md](SPECIFICATIONS.md).
 
-**Funzione 5: Campaign Feeding**
-- Alimenta automaticamente le campagne con search terms performanti
-- Auto-feeding intelligente tra campagne
-- Frequenza: Ogni 7 giorni
-- Applicabile a: Tutte le campagne (1-5)
+### Dashboard KDP
+- Bookshelf con dati sincronizzati da Amazon KDP
+- Statistiche royalties giornaliere/mensili per marketplace
+- Profitto netto per libro (royalties – spesa ADS)
+- Sincronizzazione automatica via estensione Chrome
 
-### 🎚️ Sistema FAST ACoS
+### Logs e monitoraggio
+- Log per ogni esecuzione (per libro, per campagna, per funzione)
+- Email di notifica via Resend al completamento di ogni ciclo
+- Dashboard automazioni con calendario 14 giorni
 
-- Calcolo automatico del breakeven (FAST ACoS = Royalty / Prezzo×1.22)
-- 5 fasce di performance con adjustment specifici
-- Ottimizzazione basata su profittabilità reale
+---
 
-### ⚙️ Background Worker
+## Architettura automazioni
 
-- Nessun timeout HTTP su hosting free (Render.com)
-- Esecuzione asincrona in background
-- Monitoring in tempo reale con endpoint `/status`
-- Trigger via cron-job.org
+```
+cron-job.org (Lun/Mer/Ven 9:30 CET)
+    └── POST /submit-reports?secret=...
+            ├── pre-sync campagne (tutti i marketplace)
+            └── richiede report ad Amazon → salva PendingReport in DB
 
-### 🔄 Timeframe Dinamico
+cron-job.org (Lun/Mer/Ven 11:00–13:00, ogni 12 min)
+    └── POST /process-reports?secret=...
+            ├── controlla report pronti
+            ├── esegue F1–F5 per ogni campagna
+            └── invia email riepilogo via Resend
+```
 
-- Adattamento automatico basato su volume di traffico
-- Ottimizzazione statistica dei dati
-- 4 livelli: 15, 20, 25, 30 giorni
+### Schedule cron-job.org (CET)
 
-### 🛡️ Sicurezza
+| Schedule | Endpoint | Note |
+|----------|----------|------|
+| `30 9 * * 1,3,5` | POST /submit-reports | Lun/Mer/Ven |
+| `*/12 11-13 * * 1,3,5` | POST /process-reports | Lun/Mer/Ven ogni 12 min |
+| `18 9 * * *` | POST /refresh-spend | Tutti i giorni |
 
-- Periodo di warmup (7 giorni) prima dell'attivazione
-- Token sicuri per trigger automazioni
-- Autenticazione admin per trigger manuali
+---
 
-## 📁 Struttura Progetto
+## Struttura progetto
 
 ```
 amazon-ads-manager/
 ├── src/
-│   ├── index.ts              # Punto di ingresso dell'applicazione
-│   ├── config/               # File di configurazione
-│   │   ├── database.ts       # Configurazione database PostgreSQL
-│   │   └── amazon.ts         # Configurazione API Amazon
-│   ├── services/             # Servizi per integrazioni esterne
-│   │   └── amazonApi.ts      # Client per Amazon Advertising API
-│   ├── automation/           # Sistema di automazioni
-│   │   ├── scheduler.ts      # Scheduler per esecuzioni programmate
-│   │   └── rules.ts          # Definizione regole di automazione
-│   ├── controllers/          # Controller per gestire le richieste API
-│   ├── routes/               # Definizione endpoint REST
-│   ├── models/               # Modelli database (TypeORM entities)
-│   └── utils/                # Funzioni di utilità
-├── package.json              # Dipendenze e script npm
-├── tsconfig.json             # Configurazione TypeScript
-├── .env.example              # Esempio file variabili d'ambiente
-└── README.md                 # Questo file
+│   ├── index.ts                    # Entry point + route registration
+│   ├── entities/                   # TypeORM entities (DB tables)
+│   │   ├── User.ts
+│   │   ├── Campaign.ts
+│   │   ├── AutomationLog.ts
+│   │   ├── KdpBook.ts
+│   │   ├── KdpDailyStats.ts
+│   │   ├── BookSpendCache.ts
+│   │   └── ...
+│   ├── services/
+│   │   ├── amazon-ads.service.ts   # Amazon Advertising API client
+│   │   ├── reportProcessor.ts      # Orchestrazione F1–F5
+│   │   ├── emailService.ts         # Notifiche via Resend
+│   │   └── UserAmazonApiService.ts
+│   ├── automation/
+│   │   └── functions/              # func1.ts – func5.ts
+│   ├── routes/                     # Express routes
+│   └── utils/
+│       ├── fastAcos.ts             # Calcolo FAST ACoS e fasce
+│       └── timeframe.ts
+├── frontend/
+│   └── src/
+│       ├── pages/
+│       │   ├── Dashboard.tsx       # ADS dashboard + automazioni
+│       │   ├── Logs.tsx            # Log esecuzioni
+│       │   └── kdp/                # KDP dashboard, bookshelf, statistiche
+│       └── services/api.ts
+├── migrations/                     # SQL migrations per Supabase
+│   └── README.md
+├── browser-extension/              # Estensione Chrome per KDP sync
+│   └── README.md
+└── SPECIFICATIONS.md               # Specifica algoritmica F1–F5
 ```
 
-## 🚀 Setup Iniziale
+---
 
-### 1. Installa le dipendenze
-
-```bash
-npm install
-```
-
-### 2. Configura le variabili d'ambiente
-
-Copia il file `.env.example` in `.env` e compila i valori:
-
-```bash
-cp .env.example .env
-```
-
-Modifica `.env` con le tue credenziali Amazon Advertising API:
+## Variabili d'ambiente (Render)
 
 ```env
-AMAZON_CLIENT_ID=your_client_id
-AMAZON_CLIENT_SECRET=your_client_secret
-AMAZON_REFRESH_TOKEN=your_refresh_token
-AMAZON_PROFILE_ID=your_profile_id
+# Database
+DATABASE_URL=postgresql://...
+
+# Auth
+JWT_SECRET=...
+SESSION_SECRET=...
+
+# Amazon Advertising API
+AMAZON_CLIENT_ID=...
+AMAZON_CLIENT_SECRET=...
+AMAZON_REDIRECT_URI=https://amazon-ads-manager-qsio.onrender.com/api/auth/callback
+
+# Automazioni
+AUTOMATION_SECRET=...
+ADMIN_TOKEN=...
+
+# Email (Resend)
+RESEND_API_KEY=...
+EMAIL_FROM=Amazon Ads Manager <noreply@...>
+EMAIL_TO=...
+
+# App
+FRONTEND_URL=https://amazon-ads-manager-qsio.onrender.com
+NODE_ENV=production
 ```
 
-### 3. Ottieni le credenziali Amazon Advertising API
+---
 
-1. Vai su [https://advertising.amazon.com](https://advertising.amazon.com)
-2. Accedi con il tuo account Seller/Vendor
-3. Vai su "API" → "Registra Applicazione"
-4. Ottieni Client ID e Client Secret
-5. Completa il flusso OAuth per ottenere il Refresh Token
+## Deploy
 
-📚 [Guida completa Amazon Advertising API](https://advertising.amazon.com/API/docs/en-us/get-started)
+Il deploy avviene automaticamente su Render a ogni push su `main`.
 
-## 🏃 Esecuzione
+Build command: `npm install && npm run build && cd frontend && npm install && npm run build`
+Start command: `npm start`
 
-### Modalità Sviluppo (locale)
+---
 
-```bash
-npm run dev
-```
+## Estensione Chrome (KDP Sync)
 
-Il server partirà su `http://localhost:3000`
+L'estensione è necessaria per sincronizzare royalties e vendite KDP (il backend non può accedere a `kdpreports.amazon.com` da IP diverso).
 
-### Modalità Produzione (dopo build)
+Vedere [browser-extension/README.md](browser-extension/README.md) per installazione.
 
-```bash
-npm run build
-npm start
-```
+---
 
-## 📡 API Endpoints
+## Database migrations
 
-### Public Endpoints
-
-```bash
-# Health Check
-GET /health
-
-# Info API
-GET /
-
-# Status Automazioni
-GET /api/automation/status
-```
-
-### Protected Endpoints
-
-```bash
-# Trigger Automazioni (da Cron-Job.org)
-POST /api/automation/trigger?secret=YOUR_AUTOMATION_SECRET
-
-# Trigger Manuale (Admin)
-POST /api/automation/trigger-manual
-Headers: Authorization: Bearer YOUR_ADMIN_TOKEN
-```
-
-## 🤖 Sistema di Automazione
-
-### Architettura
-
-1. **Cron-Job.org** → Chiama endpoint `/trigger` ogni giorno
-2. **Background Worker** → Esegue automazioni in modo asincrono
-3. **Scheduler** → Coordina esecuzione delle 5 funzioni
-4. **Rules Engine** → Applica logiche di ottimizzazione
-5. **Amazon API** → Modifica campagne in tempo reale
-
-### Calendario Esecuzioni (Default)
-
-| Giorno | Funzioni Eseguite |
-|--------|-------------------|
-| 0 | Campagna creata |
-| 1-6 | Periodo warmup (nessuna automazione) |
-| 7 | Funz.1→3 + Funz.2 + Funz.4 + Funz.5 |
-| 10 | Funz.1→3 |
-| 13 | Funz.1→3 |
-| 14 | Funz.2 + Funz.4 + Funz.5 |
-| 16 | Funz.1→3 |
-| ... | Continua... |
-
-### Ordine Esecuzione Critico
-
-**IMPORTANTE:** Funzione 1 e 3 devono essere eseguite in sequenza:
-1. Prima: Funzione 1 (aumenta bid per low-impressions)
-2. Poi: Funzione 3 (ottimizza/pausa in base performance)
-
-Questo perché la Funz.1 dà visibilità, e la Funz.3 ottimizza i risultati.
-
-## 🗄️ Database
-
-L'applicazione usa PostgreSQL per salvare:
-- Storico modifiche bid
-- Log delle automazioni
-- Configurazione regole personalizzate
-- Cache dati Amazon API
-
-In locale puoi usare PostgreSQL installato, in cloud userai il database fornito dal servizio di hosting.
-
-## ☁️ Deploy in Cloud
-
-### Railway (Consigliato)
-
-1. Crea account su [Railway.app](https://railway.app)
-2. Collega il repository GitHub
-3. Railway rileva automaticamente Node.js
-4. Aggiungi PostgreSQL dal marketplace
-5. Configura le variabili d'ambiente
-6. Deploy automatico!
-
-### Render
-
-1. Crea account su [Render.com](https://render.com)
-2. "New" → "Web Service"
-3. Connetti repository GitHub
-4. Configura:
-   - Build: `npm install && npm run build`
-   - Start: `npm start`
-5. Aggiungi PostgreSQL
-6. Configura variabili d'ambiente
-
-## 📝 Prossimi Sviluppi
-
-- [ ] API REST per gestire campagne
-- [ ] API REST per gestire keyword
-- [ ] Dashboard frontend (React)
-- [ ] Sistema di notifiche (email/Telegram)
-- [ ] Report personalizzati
-- [ ] Configurazione regole da interfaccia
-- [ ] Supporto per più profili Amazon
-- [ ] Integrazione con Google Sheets per report
-
-## 🛠️ Tecnologie Utilizzate
-
-- **Node.js** + **TypeScript** - Backend
-- **Express** - Web framework
-- **TypeORM** - ORM per database
-- **PostgreSQL** - Database
-- **node-cron** - Scheduler per automazioni
-- **axios** - Client HTTP per API Amazon
-
-## 📄 Licenza
-
-ISC
-
-## 🤝 Supporto
-
-Per problemi o domande sull'API Amazon:
-- [Documentazione ufficiale](https://advertising.amazon.com/API/docs)
-- [Forum sviluppatori](https://advertising.amazon.com/API/docs/en-us/community)
+Le migrations SQL sono nella cartella `migrations/`. Vedere [migrations/README.md](migrations/README.md) per applicarle su Supabase.
