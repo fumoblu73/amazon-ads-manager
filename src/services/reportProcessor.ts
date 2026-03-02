@@ -513,8 +513,27 @@ async function executeAutomationFunctions(
     console.warn(`     ⚠️ No kdp_book linked to campaign ${report.campaignName}, using fallback`);
   }
 
-  const mockPlacements = { topOfSearch: 0, restOfSearch: 10, productPages: 5 };
   const mockTotalImpressions = 50000;
+
+  // Recupera placement reali per func2
+  let realPlacements = { topOfSearch: 0, restOfSearch: 0, productPages: 0 };
+  const needsPlacements = functionNumbers.some(f => f === 2);
+  if (needsPlacements) {
+    try {
+      const campaignData = await apiService.getCampaign?.(report.campaignId);
+      if (campaignData?.dynamicBidding?.placementBidding) {
+        const pb = campaignData.dynamicBidding.placementBidding;
+        realPlacements = {
+          topOfSearch: pb.find((p: any) => p.placement === 'PLACEMENT_TOP')?.percentage ?? 0,
+          restOfSearch: pb.find((p: any) => p.placement === 'PLACEMENT_REST_OF_SEARCH')?.percentage ?? 0,
+          productPages: pb.find((p: any) => p.placement === 'PLACEMENT_PRODUCT_PAGE')?.percentage ?? 0,
+        };
+      }
+      console.log(`     📋 Placements reali: Top=${realPlacements.topOfSearch}%, Rest=${realPlacements.restOfSearch}%, PP=${realPlacements.productPages}%`);
+    } catch (e: any) {
+      console.warn(`     ⚠️ Could not fetch placements: ${e.message}`);
+    }
+  }
 
   // Recupera adGroupId reale per func4/func5 (necessario per negative targeting e keyword/target adding)
   let realAdGroupId = 'unknown';
@@ -601,7 +620,7 @@ async function executeAutomationFunctions(
             report.campaignName,
             marketplace,
             book,
-            mockPlacements,
+            realPlacements,
             cachedApiService,
             {
               frequency: config.func2_frequency,
