@@ -889,6 +889,111 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
       console.log(`📚 [TEST] Book: "${kdpBook.title}" | price=${price} | fastAcos=${fastAcosValue}%`);
     }
 
+    // Per F3: risposta immediata + esecuzione in background (report Amazon ~3-7 min)
+    if (functionNumber === 3) {
+      res.json({
+        success: true,
+        async: true,
+        message: `F3 avviato in background su ${campaigns.length} campagna/e. Controlla Render logs per i risultati.`,
+        dryRun: !!dryRun,
+        campaigns: campaigns.map((c: any) => ({ name: c.name, id: c.amazonCampaignId })),
+        book: kdpBook ? { title: kdpBook.title, fastAcos: fastAcosValue } : null
+      });
+
+      (async () => {
+        console.log(`\n🧪 [TEST-ASYNC] F3 starting in background...`);
+        const { executeFunc3 } = await import('../automation/functions/func3');
+        const { getUserAutomationSettings } = await import('../automation/rules');
+        const { calculateTimeframeFunc3, formatDateForAmazon } = await import('../utils/timeframe');
+        const userCfg = await getUserAutomationSettings(req.userId!);
+        const PRELOAD_MAX_ATTEMPTS = 60;
+        let reportData: any[] = [];
+        let reportData65: any[] = [];
+
+        try {
+          const tf = calculateTimeframeFunc3(50000, {
+            timeframeA: userCfg.func3_timeframeA,
+            timeframeB: userCfg.func3_timeframeB,
+            timeframeC: userCfg.func3_timeframeC
+          });
+          const startDate = new Date();
+          startDate.setDate(startDate.getDate() - tf.timeframeDays);
+          const start65b = new Date(); start65b.setDate(start65b.getDate() - 61);
+          const end65b = new Date(); end65b.setDate(end65b.getDate() - 31);
+
+          console.log(`📊 [TEST-ASYNC] Requesting 2 F3 reports in parallel...`);
+          const [mainId, chunk65bId] = await Promise.all([
+            apiService.requestReport(formatDateForAmazon(startDate), ['impressions', 'clicks', 'cost', 'sales', 'orders']),
+            apiService.requestReport(formatDateForAmazon(start65b), ['clicks', 'orders'], formatDateForAmazon(end65b))
+          ]);
+
+          const results2 = await Promise.allSettled([
+            apiService.waitAndDownloadReport(mainId, PRELOAD_MAX_ATTEMPTS),
+            apiService.waitAndDownloadReport(chunk65bId, PRELOAD_MAX_ATTEMPTS)
+          ]);
+
+          if (results2[0].status === 'fulfilled') {
+            reportData = results2[0].value;
+            console.log(`✅ [TEST-ASYNC] Main report: ${reportData.length} rows`);
+          }
+          if (results2[1].status === 'fulfilled') {
+            const data65b = results2[1].value;
+            const mergedMap: Record<string, { clicks: number; orders: number }> = {};
+            for (const row of [...reportData, ...data65b]) {
+              const key = row.targeting || row.keywordId || row.targetId || '';
+              if (!key) continue;
+              if (!mergedMap[key]) mergedMap[key] = { clicks: 0, orders: 0 };
+              mergedMap[key].clicks += (row.clicks || 0);
+              mergedMap[key].orders += (row.purchases14d || row.orders || 0);
+            }
+            reportData65 = Object.entries(mergedMap).map(([targeting, d]) => ({ targeting, clicks: d.clicks, purchases14d: d.orders }));
+            console.log(`✅ [TEST-ASYNC] Report 65gg: ${reportData65.length} rows`);
+          }
+        } catch (err: any) {
+          console.error(`❌ [TEST-ASYNC] Report pre-loading failed: ${err.message}`);
+        }
+
+        const preloaded = { reportData, reportData65 };
+        const detectType = (name: string): 1|2|3|4|5 => {
+          const l = name.toLowerCase();
+          if (l.includes('auto') || l.includes('automatic')) return 5;
+          if (l.includes('product')) return 2;
+          if (l.includes('super')) return 3;
+          return 1;
+        };
+
+        for (const campaign of campaigns) {
+          const cId = campaign.amazonCampaignId;
+          const cName = campaign.name;
+          const cType = detectType(cName);
+          if (cType === 5) {
+            console.log(`⏩ [TEST-ASYNC] Skip ${cName}: F3 not applicable to auto campaigns`);
+            continue;
+          }
+          try {
+            const r = await executeFunc3(cId, cType as any, cName, marketplace, book, 50000, apiService, {
+              frequency: userCfg.func3_frequency,
+              timeframeA: userCfg.func3_timeframeA,
+              timeframeB: userCfg.func3_timeframeB,
+              timeframeC: userCfg.func3_timeframeC,
+              clicksPause: userCfg.func3_clicksPause,
+              clicks65days: userCfg.func3_clicks65days,
+              dryRun: !!dryRun
+            }, preloaded);
+            console.log(`✅ [TEST-ASYNC] ${cName}: processed=${r.itemsProcessed}, paused=${r.itemsPaused}, bidUp=${r.itemsBidIncreased}, bidDown=${r.itemsBidDecreased}`);
+            r.details?.forEach((d: any) => {
+              if (d.action !== 'no_data') console.log(`   → ${d.itemName}: clicks=${d.clicks}, orders=${d.orders}, action=${d.action}${d.newBid ? `, newBid=${d.newBid}` : ''}`);
+            });
+          } catch (err: any) {
+            console.error(`❌ [TEST-ASYNC] ${cName}: ${err.message}`);
+          }
+        }
+        console.log(`\n✅ [TEST-ASYNC] F3 background execution completed.`);
+      })().catch(err => console.error('❌ [TEST-ASYNC] Fatal error:', err));
+
+      return;
+    }
+
     // 5. Pre-scarica il report una volta sola (condiviso tra campagne)
     let preloadedReportData: any[] | undefined;
     let preloadedFunc3Reports: { reportData: any[]; reportData65: any[] } | undefined;
