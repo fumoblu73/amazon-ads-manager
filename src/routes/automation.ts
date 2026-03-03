@@ -997,6 +997,212 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
       return;
     }
 
+    // Per F1: risposta immediata + esecuzione in background (report Amazon ~3-7 min)
+    if (functionNumber === 1) {
+      res.json({
+        success: true,
+        async: true,
+        message: `F1 avviato in background su ${campaigns.length} campagna/e. Controlla Render logs per i risultati.`,
+        asin,
+        marketplace,
+        campaignsFound: campaigns.length,
+        dryRun: !!dryRun,
+        campaigns: campaigns.map((c: any) => ({ name: c.name, id: c.amazonCampaignId })),
+        book: kdpBook ? { title: kdpBook.title, fastAcos: fastAcosValue } : null
+      });
+
+      (async () => {
+        console.log(`\n🧪 [TEST-ASYNC] F1 starting in background...`);
+        const { executeFunc1 } = await import('../automation/functions/func1');
+        const { formatDateForAmazon } = await import('../utils/timeframe');
+
+        let preloadedReportData: any[] | undefined;
+        try {
+          const reportStartDate = new Date();
+          reportStartDate.setDate(reportStartDate.getDate() - (userConfig.func1_frequency || 3));
+          const startStr = formatDateForAmazon(reportStartDate);
+          console.log(`📊 [TEST-ASYNC] Pre-loading F1 report (${startStr} → oggi)...`);
+          const reportId = await apiService.requestReport(startStr, ['impressions', 'clicks', 'cost', 'sales14d']);
+          preloadedReportData = await apiService.waitAndDownloadReport(reportId);
+          console.log(`✅ [TEST-ASYNC] Report pre-scaricato: ${preloadedReportData.length} righe`);
+        } catch (err: any) {
+          console.error(`❌ [TEST-ASYNC] Errore pre-loading report: ${err.message}`);
+        }
+
+        const detectType = (name: string): 1|2|3|4|5 => {
+          const l = name.toLowerCase();
+          if (l.includes('auto') || l.includes('automatic')) return 5;
+          if (l.includes('product')) return 2;
+          if (l.includes('super')) return 3;
+          return 1;
+        };
+
+        for (const campaign of campaigns) {
+          const cId = campaign.amazonCampaignId;
+          const cName = campaign.name;
+          const cType = detectType(cName);
+          if (cType === 5) {
+            console.log(`⏩ [TEST-ASYNC] Skip ${cName}: F1 not applicable to auto campaigns`);
+            continue;
+          }
+          try {
+            const r = await executeFunc1(cId, cType as any, cName, marketplace, apiService, {
+              bidIncrease: userConfig.func1_bidIncrease,
+              frequency: userConfig.func1_frequency,
+              maxImpressions: userConfig.func1_impressions,
+              maxClicks: userConfig.func1_clicks,
+              dryRun: !!dryRun
+            }, preloadedReportData);
+            console.log(`✅ [TEST-ASYNC] ${cName}: processed=${r.itemsProcessed}, bidUp=${r.itemsIncreased}`);
+            r.details?.forEach((d: any) => {
+              if (d.action !== 'no_bid' && d.action !== 'no_data') console.log(`   → ${d.itemName || d.itemId}: imp=${d.impressions}, clicks=${d.clicks}, action=${d.action}${d.newBid ? `, newBid=${d.newBid}` : ''}`);
+            });
+          } catch (err: any) {
+            console.error(`❌ [TEST-ASYNC] ${cName}: ${err.message}`);
+          }
+        }
+        console.log(`\n✅ [TEST-ASYNC] F1 background execution completed.`);
+      })().catch(err => console.error('❌ [TEST-ASYNC] Fatal error:', err));
+
+      return;
+    }
+
+    // Per F4: risposta immediata + esecuzione in background (report Amazon ~3-7 min)
+    if (functionNumber === 4) {
+      res.json({
+        success: true,
+        async: true,
+        message: `F4 avviato in background su ${campaigns.length} campagna/e. Controlla Render logs per i risultati.`,
+        asin,
+        marketplace,
+        campaignsFound: campaigns.length,
+        dryRun: !!dryRun,
+        campaigns: campaigns.map((c: any) => ({ name: c.name, id: c.amazonCampaignId })),
+        book: kdpBook ? { title: kdpBook.title, fastAcos: fastAcosValue } : null
+      });
+
+      (async () => {
+        console.log(`\n🧪 [TEST-ASYNC] F4 starting in background...`);
+        const { executeFunc4 } = await import('../automation/functions/func4');
+
+        const adGroupIdMap: Record<string, string> = {};
+        for (const c of campaigns) {
+          try {
+            const adGroups = await apiService.getAdGroups?.(c.amazonCampaignId);
+            if (adGroups && adGroups.length > 0) {
+              adGroupIdMap[c.amazonCampaignId] = adGroups[0].adGroupId;
+            } else {
+              const targets = await apiService.getTargets(c.amazonCampaignId);
+              if (targets.length > 0 && targets[0].adGroupId) {
+                adGroupIdMap[c.amazonCampaignId] = targets[0].adGroupId;
+              }
+            }
+          } catch {}
+        }
+
+        for (const campaign of campaigns) {
+          const cId = campaign.amazonCampaignId;
+          const cName = campaign.name;
+          const l = cName.toLowerCase();
+          if (!l.includes('auto') && !l.includes('automatic')) {
+            console.log(`⏩ [TEST-ASYNC] Skip ${cName}: F4 only applies to auto campaigns`);
+            continue;
+          }
+          const adGroupId = adGroupIdMap[cId] || 'unknown';
+          try {
+            const r = await executeFunc4(cId, cName, marketplace, adGroupId, book, 50000, apiService, {
+              frequency: configOverrides?.frequency ?? userConfig.func4_frequency,
+              timeframeA: configOverrides?.timeframeA ?? userConfig.func4_timeframeA,
+              timeframeB: configOverrides?.timeframeB ?? userConfig.func4_timeframeB,
+              timeframeC: configOverrides?.timeframeC ?? userConfig.func4_timeframeC,
+              clicksNegative: configOverrides?.clicksNegative ?? userConfig.func4_clicksNegative,
+              spendNegative: configOverrides?.spendNegative ?? userConfig.func4_spendNegative,
+              dryRun: !!dryRun,
+              skipPart1: !!configOverrides?.skipPart1
+            });
+            console.log(`✅ [TEST-ASYNC] ${cName}: negKw=${r.negativeKeywordsAdded}, negTarget=${r.negativeTargetsAdded}, bidUpdated=${r.targetingGroupsBidUpdated}`);
+          } catch (err: any) {
+            console.error(`❌ [TEST-ASYNC] ${cName}: ${err.message}`);
+          }
+        }
+        console.log(`\n✅ [TEST-ASYNC] F4 background execution completed.`);
+      })().catch(err => console.error('❌ [TEST-ASYNC] Fatal error:', err));
+
+      return;
+    }
+
+    // Per F5: risposta immediata + esecuzione in background (report search terms ~3-7 min)
+    if (functionNumber === 5) {
+      res.json({
+        success: true,
+        async: true,
+        message: `F5 avviato in background su ${campaigns.length} campagna/e. Controlla Render logs per i risultati.`,
+        asin,
+        marketplace,
+        campaignsFound: campaigns.length,
+        dryRun: !!dryRun,
+        campaigns: campaigns.map((c: any) => ({ name: c.name, id: c.amazonCampaignId })),
+        book: kdpBook ? { title: kdpBook.title, fastAcos: fastAcosValue } : null
+      });
+
+      (async () => {
+        console.log(`\n🧪 [TEST-ASYNC] F5 starting in background...`);
+        const { executeFunc5 } = await import('../automation/functions/func5');
+
+        const detectType = (name: string): 1|2|3|4|5 => {
+          const l = name.toLowerCase();
+          if (l.includes('auto') || l.includes('automatic')) return 5;
+          if (l.includes('product')) return 2;
+          if (l.includes('super')) return 3;
+          return 1;
+        };
+
+        const adGroupIdMap: Record<string, string> = {};
+        for (const c of campaigns) {
+          try {
+            const adGroups = await apiService.getAdGroups?.(c.amazonCampaignId);
+            if (adGroups && adGroups.length > 0) {
+              adGroupIdMap[c.amazonCampaignId] = adGroups[0].adGroupId;
+            } else {
+              const targets = await apiService.getTargets(c.amazonCampaignId);
+              if (targets.length > 0 && targets[0].adGroupId) {
+                adGroupIdMap[c.amazonCampaignId] = targets[0].adGroupId;
+              }
+            }
+          } catch {}
+        }
+
+        const campaignMapping: any = {};
+        for (const c of campaigns) {
+          const cType = detectType(c.name);
+          campaignMapping[`campaign${cType}Id`] = c.amazonCampaignId;
+          campaignMapping[`campaign${cType}AdGroupId`] = adGroupIdMap[c.amazonCampaignId] || null;
+        }
+
+        for (const campaign of campaigns) {
+          const cId = campaign.amazonCampaignId;
+          const cName = campaign.name;
+          try {
+            const r = await executeFunc5(cId, detectType(cName) as any, marketplace, campaignMapping, apiService, {
+              frequency: userConfig.func5_frequency,
+              minOrders: userConfig.func5_minOrders,
+              bidBroad: userConfig.func5_bidBroad,
+              bidExact: userConfig.func5_bidExact,
+              bidPhrase: userConfig.func5_bidPhrase,
+              bidExpanded: userConfig.func5_bidExpanded,
+              dryRun: !!dryRun
+            });
+            console.log(`✅ [TEST-ASYNC] ${cName}: searchTerms=${r.searchTermsProcessed}, kwAdded=${r.keywordsAdded}, targetsAdded=${r.targetsAdded}`);
+          } catch (err: any) {
+            console.error(`❌ [TEST-ASYNC] ${cName}: ${err.message}`);
+          }
+        }
+        console.log(`\n✅ [TEST-ASYNC] F5 background execution completed.`);
+      })().catch(err => console.error('❌ [TEST-ASYNC] Fatal error:', err));
+
+      return;
+    }
+
     // 5. Pre-scarica il report una volta sola (condiviso tra campagne)
     let preloadedReportData: any[] | undefined;
     let preloadedFunc3Reports: { reportData: any[]; reportData65: any[] } | undefined;
