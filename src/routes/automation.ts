@@ -895,6 +895,9 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
         success: true,
         async: true,
         message: `F3 avviato in background su ${campaigns.length} campagna/e. Controlla Render logs per i risultati.`,
+        asin,
+        marketplace,
+        campaignsFound: campaigns.length,
         dryRun: !!dryRun,
         campaigns: campaigns.map((c: any) => ({ name: c.name, id: c.amazonCampaignId })),
         book: kdpBook ? { title: kdpBook.title, fastAcos: fastAcosValue } : null
