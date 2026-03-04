@@ -8,7 +8,6 @@ import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import SyncCampaigns from './pages/SyncCampaigns';
 // Temporarily disabled - import Campaigns from './pages/Campaigns';
-import Logs from './pages/Logs';
 import Help from './pages/Help';
 import TestFunctions from './pages/TestFunctions';
 import KdpDashboard from './pages/kdp/KdpDashboard';
@@ -33,7 +32,6 @@ function App() {
             <Route path="/sync-campaigns" element={<SyncCampaigns />} />
             <Route path="/settings" element={<Settings />} />
             {/* Temporarily disabled - <Route path="/campaigns" element={<Campaigns />} /> */}
-            <Route path="/logs" element={<Logs />} />
             <Route path="/test-functions" element={<TestFunctions />} />
             <Route path="/help" element={<Help />} />
 

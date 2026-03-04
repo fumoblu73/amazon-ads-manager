@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { campaignsApi, logsApi, automationApi, amazonAdsApi } from '../services/api';
 import type { CampaignStats, AutomationStatus, AutomationLog } from '../types';
 
+// ─── Interfacce ──────────────────────────────────────────────────────────────
+
 interface AdTypeSpend {
   spend7d: number;
   sales7d: number;
@@ -21,8 +23,24 @@ interface SpendCache {
   updatedAt: string | null;
 }
 
-// Helper: last N days date strings
-// endDate uses tomorrow to include all logs created today (avoids midnight UTC cutoff)
+interface BookGroup {
+  bookKey: string;
+  bookLabel: string;
+  bookAsin: string | null;
+  logs: AutomationLog[];
+}
+
+interface DateGroup {
+  dateKey: string;
+  dateLabel: string;
+  books: BookGroup[];
+  totalLogs: number;
+  successCount: number;
+  failedCount: number;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 function getDateRange(daysBack: number): { startDate: string; endDate: string } {
   const start = new Date();
   start.setDate(start.getDate() - daysBack);
@@ -34,18 +52,14 @@ function getDateRange(daysBack: number): { startDate: string; endDate: string } 
   };
 }
 
-// Helper: format date as "Lun 17 Feb"
-function formatDayFull(dateStr: string): string {
+function getDayLabel(dateStr: string): { weekday: string; ddmm: string } {
   const d = new Date(dateStr + 'T12:00:00');
-  return d.toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'short' });
+  const weekday = d.toLocaleDateString('it-IT', { weekday: 'short' });
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return { weekday, ddmm: `${dd}/${mm}` };
 }
 
-// Helper: return just the day number
-function getDayNumber(dateStr: string): string {
-  return String(new Date(dateStr + 'T12:00:00').getDate());
-}
-
-// Helper: get last 14 days as YYYY-MM-DD strings
 function getLast14Days(): string[] {
   const days = [];
   for (let i = 13; i >= 0; i--) {
@@ -56,20 +70,188 @@ function getLast14Days(): string[] {
   return days;
 }
 
-// Helper: group logs for a day by book
-function groupDayLogs(logs: AutomationLog[]) {
-  const byBook: Record<string, { label: string; success: number; failed: number; logs: AutomationLog[] }> = {};
+function buildGroups(logs: AutomationLog[]): DateGroup[] {
+  const byDate = new Map<string, AutomationLog[]>();
   for (const log of logs) {
-    const bookKey = log.bookAsin || log.targetName || log.targetId || '?';
-    const rawTitle = log.bookTitle || log.targetName || log.targetId || '?';
-    const bookLabel = rawTitle.split(':')[0].trim();
-    if (!byBook[bookKey]) byBook[bookKey] = { label: bookLabel, success: 0, failed: 0, logs: [] };
-    if (log.status === 'success') byBook[bookKey].success++;
-    else byBook[bookKey].failed++;
-    byBook[bookKey].logs.push(log);
+    const dateKey = log.createdAt.slice(0, 10);
+    if (!byDate.has(dateKey)) byDate.set(dateKey, []);
+    byDate.get(dateKey)!.push(log);
   }
-  return byBook;
+
+  const dateGroups: DateGroup[] = [];
+
+  for (const [dateKey, dateLogs] of byDate) {
+    const byBook = new Map<string, { label: string; asin: string | null; logs: AutomationLog[] }>();
+    for (const log of dateLogs) {
+      const bookKey = log.bookAsin || log.targetName || log.targetId;
+      const bookLabel = log.bookTitle || log.targetName || log.targetId;
+      if (!byBook.has(bookKey)) {
+        byBook.set(bookKey, { label: bookLabel, asin: log.bookAsin ?? null, logs: [] });
+      }
+      byBook.get(bookKey)!.logs.push(log);
+    }
+
+    const books: BookGroup[] = Array.from(byBook.entries()).map(([bookKey, v]) => ({
+      bookKey,
+      bookLabel: v.label,
+      bookAsin: v.asin,
+      logs: v.logs,
+    }));
+
+    books.sort((a, b) => {
+      const aFailed = a.logs.some(l => l.status === 'failed') ? 0 : 1;
+      const bFailed = b.logs.some(l => l.status === 'failed') ? 0 : 1;
+      if (aFailed !== bFailed) return aFailed - bFailed;
+      return a.bookLabel.localeCompare(b.bookLabel);
+    });
+
+    const successCount = dateLogs.filter(l => l.status === 'success').length;
+    const failedCount = dateLogs.filter(l => l.status === 'failed').length;
+
+    const date = new Date(dateKey + 'T12:00:00');
+    const dateLabel = date.toLocaleDateString('it-IT', {
+      weekday: 'short', day: '2-digit', month: 'short', year: 'numeric',
+    });
+
+    dateGroups.push({ dateKey, dateLabel, books, totalLogs: dateLogs.length, successCount, failedCount });
+  }
+
+  dateGroups.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+  return dateGroups;
 }
+
+function formatTime(dateString: string) {
+  return new Date(dateString).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+}
+
+// ─── Componente riga singolo log ──────────────────────────────────────────────
+
+function LogRow({ log }: { log: AutomationLog }) {
+  const hasBidChange = log.oldValue != null && log.newValue != null;
+  return (
+    <div className={`flex flex-col gap-1 px-4 py-2.5 border-b border-gray-700/50 last:border-0 hover:bg-gray-800/50 transition-colors ${log.status === 'failed' ? 'bg-red-900/20' : ''}`}>
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="text-xs text-gray-400 w-10 shrink-0">{formatTime(log.createdAt)}</span>
+        <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold bg-indigo-900/50 text-indigo-300 rounded shrink-0">
+          {log.ruleName}
+        </span>
+        <span className="text-xs text-gray-400 truncate max-w-[280px]" title={log.targetName}>
+          {log.targetName}
+        </span>
+        {hasBidChange && (
+          <span className="flex items-center gap-1 text-xs font-medium text-gray-300 shrink-0">
+            <span className="text-gray-400">${Number(log.oldValue).toFixed(2)}</span>
+            <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+            <span className="text-white">${Number(log.newValue).toFixed(2)}</span>
+          </span>
+        )}
+        <span className={`ml-auto shrink-0 inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded ${
+          log.status === 'success' ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'
+        }`}>
+          {log.status === 'success' ? 'OK' : 'ERR'}
+        </span>
+      </div>
+      {log.reason && (
+        <div className="pl-[52px] text-xs text-gray-400">{log.reason}</div>
+      )}
+      {log.status === 'failed' && log.errorMessage && (
+        <div className="pl-[52px] text-xs text-red-400 bg-red-900/30 rounded px-2 py-1 mt-0.5">
+          {log.errorMessage}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Componente gruppo libro (collassabile) ───────────────────────────────────
+
+function BookGroupRow({ group }: { group: BookGroup }) {
+  const [open, setOpen] = useState(true);
+  const hasFailures = group.logs.some(l => l.status === 'failed');
+  const successCount = group.logs.filter(l => l.status === 'success').length;
+  const failedCount = group.logs.filter(l => l.status === 'failed').length;
+
+  return (
+    <div className="border border-gray-700 rounded-lg overflow-hidden mb-2">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+          hasFailures ? 'bg-red-900/20 hover:bg-red-900/30' : 'bg-gray-800 hover:bg-gray-700'
+        }`}
+      >
+        <svg className={`w-4 h-4 shrink-0 ${hasFailures ? 'text-red-400' : 'text-blue-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+        </svg>
+        <span className="text-sm font-medium text-gray-100 flex-1 truncate">{group.bookLabel}</span>
+        {group.bookAsin && (
+          <span className="text-xs text-gray-400 font-mono shrink-0">{group.bookAsin}</span>
+        )}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {successCount > 0 && (
+            <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-semibold bg-green-900/50 text-green-300 rounded">
+              {successCount} OK
+            </span>
+          )}
+          {failedCount > 0 && (
+            <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-semibold bg-red-900/50 text-red-300 rounded">
+              {failedCount} ERR
+            </span>
+          )}
+        </div>
+        <svg className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="bg-gray-900">
+          {group.logs.map(log => <LogRow key={log.id} log={log} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Componente gruppo data (sempre espanso) ──────────────────────────────────
+
+function DateGroupRow({ group }: { group: DateGroup }) {
+  const hasFailures = group.failedCount > 0;
+  return (
+    <div className="rounded-xl border border-gray-700 overflow-hidden mb-4">
+      <div className={`flex items-center gap-4 px-5 py-3.5 ${hasFailures ? 'bg-red-900/20' : 'bg-gray-800'}`}>
+        <svg className={`w-5 h-5 shrink-0 ${hasFailures ? 'text-red-400' : 'text-blue-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+        <span className="text-sm font-bold text-white capitalize flex-1">{group.dateLabel}</span>
+        <div className="flex items-center gap-2 text-xs text-gray-500 shrink-0">
+          <span>{group.books.length} libr{group.books.length === 1 ? 'o' : 'i'}</span>
+          <span>·</span>
+          <span>{group.totalLogs} log</span>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {group.successCount > 0 && (
+            <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold bg-green-900/50 text-green-300 rounded-full">
+              {group.successCount} OK
+            </span>
+          )}
+          {group.failedCount > 0 && (
+            <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold bg-red-900/50 text-red-300 rounded-full">
+              {group.failedCount} ERR
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="px-4 pb-4 pt-3 bg-gray-900/30">
+        {group.books.map(book => (
+          <BookGroupRow key={book.bookKey} group={book} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Pagina Dashboard ─────────────────────────────────────────────────────────
 
 export default function Dashboard() {
   const [campaignStats, setCampaignStats] = useState<CampaignStats | null>(null);
@@ -82,7 +264,7 @@ export default function Dashboard() {
   const [automationMessage, setAutomationMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [syncingCampaigns, setSyncingCampaigns] = useState(false);
   const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [logFilter, setLogFilter] = useState<string>('all');
 
   const handleTriggerAutomation = async () => {
     setTriggeringAutomation(true);
@@ -138,16 +320,8 @@ export default function Dashboard() {
         if (campaignsRes.status === 'fulfilled' && campaignsRes.value.success) setCampaignStats(campaignsRes.value.data!);
         if (automationRes.status === 'fulfilled') setAutomationStatus(automationRes.value);
         if (adsRes.status === 'fulfilled') setSpendCache(adsRes.value);
-
         if (weeklyLogsRes.status === 'fulfilled' && weeklyLogsRes.value.success) {
-          const logs = weeklyLogsRes.value.data || [];
-          setWeeklyLogs(logs);
-          // Auto-select most recent day with logs
-          if (logs.length > 0) {
-            const today = new Date().toISOString().split('T')[0];
-            const daysWithLogs = [...new Set(logs.map(l => l.createdAt.split('T')[0]))].sort().reverse();
-            setSelectedDay(daysWithLogs[0] === today ? today : daysWithLogs[0]);
-          }
+          setWeeklyLogs(weeklyLogsRes.value.data || []);
         }
       } catch (err: any) {
         setError(err.message || 'Errore nel caricamento dati');
@@ -181,7 +355,7 @@ export default function Dashboard() {
     );
   }
 
-  // Calcola mini calendario 14 giorni
+  // Calendario 14 giorni
   const last14Days = getLast14Days();
   const dayMap: Record<string, { success: number; failed: number }> = {};
   last14Days.forEach(d => { dayMap[d] = { success: 0, failed: 0 }; });
@@ -193,10 +367,11 @@ export default function Dashboard() {
     }
   });
 
-  // Spesa da cache DB
+  // Spesa
   const avgDailySpend = spendCache?.avgDailySpend ?? null;
   const acos = spendCache?.acos ?? null;
   const spendUpdatedAt = spendCache?.updatedAt ?? null;
+  const archivedCount = campaignStats?.byState?.archived || 0;
 
   const formatTimeAgo = (dateStr: string) => {
     const diff = Date.now() - new Date(dateStr).getTime();
@@ -207,22 +382,19 @@ export default function Dashboard() {
     return `${m}m fa`;
   };
 
-  const archivedCount = campaignStats?.byState?.archived || 0;
-
-  // Dati del giorno selezionato
-  const dayLogs = selectedDay ? weeklyLogs.filter(l => l.createdAt.split('T')[0] === selectedDay) : [];
-  const dayGrouped = selectedDay ? groupDayLogs(dayLogs) : {};
+  // Log filtrati e raggruppati
+  const filteredLogs = logFilter === 'all' ? weeklyLogs : weeklyLogs.filter(l => l.status === logFilter);
+  const logGroups = buildGroups(filteredLogs);
 
   return (
     <div className="h-full p-8 overflow-auto">
       <div className="flex flex-col gap-6">
-        {/* Header */}
         <h1 className="text-2xl font-bold text-white uppercase">Dashboard</h1>
 
-        {/* 2 colonne */}
-        <div className="grid grid-cols-2 gap-6">
+        {/* ── Griglia 2 colonne: Automazioni | Campagne ── */}
+        <div className="grid grid-cols-2 gap-6 items-start">
 
-          {/* ============ COLONNA 1: AUTOMAZIONI ============ */}
+          {/* COLONNA 1: AUTOMAZIONI */}
           <div className="bg-gray-900 rounded-xl p-5 flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -257,7 +429,7 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Calendario 14 giorni — cliccabile */}
+            {/* Calendario 14 giorni */}
             <div>
               <div className="mb-2">
                 <span className="text-xs text-gray-400">Ultimi 14 giorni</span>
@@ -267,92 +439,30 @@ export default function Dashboard() {
                   const { success, failed } = dayMap[day];
                   const total = success + failed;
                   const isToday = day === last14Days[13];
-                  const isSelected = day === selectedDay;
-                  const hasLogs = total > 0;
+                  const { weekday, ddmm } = getDayLabel(day);
                   return (
-                    <div
-                      key={day}
-                      className="flex flex-col items-center gap-0.5"
-                      onClick={() => hasLogs && setSelectedDay(isSelected ? null : day)}
-                    >
-                      <div className={`w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center transition-all
-                        ${hasLogs ? 'cursor-pointer hover:brightness-125' : 'cursor-default opacity-40'}
-                        ${isToday && !isSelected ? 'ring-2 ring-orange-400' : ''}
-                        ${isSelected ? 'ring-2 ring-white scale-110' : ''}
+                    <div key={day} className="flex flex-col items-center gap-0.5">
+                      <div className={`w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center
+                        ${total === 0 ? 'opacity-40' : ''}
+                        ${isToday ? 'ring-2 ring-orange-400' : ''}
                       `}>
                         {total > 0 && (
                           <div className="flex flex-col items-center leading-none gap-px">
                             {success > 0 && <span className="text-[7px] text-green-400 font-bold">{success}</span>}
-                            {failed > 0 && <span className="text-[7px] text-red-400 font-bold">{failed}</span>}
+                            <span className="text-[7px] text-red-400 font-bold">{failed}</span>
                           </div>
                         )}
                       </div>
-                      <span className={`text-[8px] ${isSelected ? 'text-white font-semibold' : 'text-gray-500'}`}>
-                        {getDayNumber(day)}
-                      </span>
+                      <span className="text-[8px] text-gray-400 capitalize">{weekday}</span>
+                      <span className="text-[8px] text-gray-500">{ddmm}</span>
                     </div>
                   );
                 })}
               </div>
-              <p className="text-[10px] text-gray-400 mt-1.5 flex items-center gap-1">
-                <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
-                </svg>
-                Clicca un giorno per vedere le operazioni eseguite
-              </p>
-            </div>
-
-            {/* Dettaglio giorno selezionato */}
-            <div className="bg-gray-800 rounded-lg p-3 flex-1 overflow-y-auto max-h-72">
-              {selectedDay && dayLogs.length > 0 ? (
-                <>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold text-white capitalize">{formatDayFull(selectedDay)}</span>
-                    <span className="text-xs text-gray-400">{dayLogs.length} op.</span>
-                  </div>
-                  <div className="space-y-3">
-                    {Object.entries(dayGrouped).map(([bookKey, { label, success, failed, logs: bookLogs }]) => (
-                      <div key={bookKey}>
-                        {/* Book header */}
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <span className="text-[10px] font-semibold text-blue-400 truncate flex-1">{label}</span>
-                          <div className="flex items-center gap-1 shrink-0">
-                            {success > 0 && <span className="text-[10px] text-green-400 font-semibold">✓{success}</span>}
-                            {failed > 0 && <span className="text-[10px] text-red-400 font-semibold">✗{failed}</span>}
-                          </div>
-                        </div>
-                        {/* Per-campaign log rows */}
-                        <div className="space-y-0.5 pl-2">
-                          {bookLogs.map(log => (
-                            <div key={log.id} className={`rounded px-2 py-1 ${log.status === 'failed' ? 'bg-red-900/30' : 'bg-gray-700/50'}`}>
-                              <div className="flex items-center gap-1.5">
-                                <span className={`text-[9px] font-bold shrink-0 ${log.status === 'success' ? 'text-green-400' : 'text-red-400'}`}>
-                                  {log.status === 'success' ? '✓' : '✗'}
-                                </span>
-                                <span className="text-[9px] text-gray-400 truncate">{log.targetName}</span>
-                              </div>
-                              {log.reason && (
-                                <p className="text-[9px] text-gray-300 mt-0.5 pl-3">{log.reason}</p>
-                              )}
-                              {log.status === 'failed' && log.errorMessage && (
-                                <p className="text-[9px] text-red-400 mt-0.5 pl-3">{log.errorMessage}</p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <p className="text-xs text-gray-500 text-center py-4">
-                  {selectedDay ? 'Nessun log per questo giorno' : 'Nessuna esecuzione negli ultimi 14 giorni'}
-                </p>
-              )}
             </div>
           </div>
 
-          {/* ============ COLONNA 2: CAMPAGNE ============ */}
+          {/* COLONNA 2: CAMPAGNE */}
           <div className="bg-gray-900 rounded-xl p-5 flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -388,7 +498,6 @@ export default function Dashboard() {
 
             {campaignStats ? (
               <div className="space-y-3">
-                {/* Totale + stati: 4 card */}
                 <div className="grid grid-cols-4 gap-2">
                   <div className="bg-gray-800 p-3 rounded-lg text-center">
                     <div className="text-xs text-gray-400 mb-1">Totale</div>
@@ -408,7 +517,6 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* Spesa 7gg breakdown per tipo */}
                 <div className="bg-gray-800 rounded-lg p-3">
                   <div className="text-xs text-gray-400 mb-2">Spesa 7 giorni</div>
                   {avgDailySpend !== null ? (
@@ -465,6 +573,60 @@ export default function Dashboard() {
           </div>
 
         </div>
+
+        {/* ── Sezione Log Attività ── */}
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <h2 className="text-sm font-semibold text-white">Log Attività — Ultimi 14 giorni</h2>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setLogFilter('all')}
+                className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
+                  logFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                Tutti ({weeklyLogs.length})
+              </button>
+              <button
+                onClick={() => setLogFilter('success')}
+                className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
+                  logFilter === 'success' ? 'bg-green-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                Successi ({weeklyLogs.filter(l => l.status === 'success').length})
+              </button>
+              <button
+                onClick={() => setLogFilter('failed')}
+                className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
+                  logFilter === 'failed' ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                Falliti ({weeklyLogs.filter(l => l.status === 'failed').length})
+              </button>
+            </div>
+          </div>
+
+          {logGroups.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <svg className="w-12 h-12 mx-auto mb-3 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <p>Nessuna esecuzione negli ultimi 14 giorni</p>
+            </div>
+          ) : (
+            <div>
+              {logGroups.map(group => (
+                <DateGroupRow key={group.dateKey} group={group} />
+              ))}
+            </div>
+          )}
+        </div>
+
       </div>
     </div>
   );
