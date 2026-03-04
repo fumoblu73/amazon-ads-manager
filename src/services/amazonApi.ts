@@ -247,7 +247,7 @@ class AmazonApiService {
       console.log(`🔧 Imposto keyword ${keywordId} a ${state}...`);
 
       const response = await this.client.put('/sp/keywords', {
-        keywords: [{ keywordId, state }]
+        keywords: [{ keywordId, state: state.toUpperCase() }]
       }, {
         headers: {
           'Content-Type': 'application/vnd.spKeyword.v3+json',
@@ -432,33 +432,39 @@ class AmazonApiService {
     try {
       console.log(`🔧 Aggiorno placements campagna ${campaignId}...`);
 
-      const bidding = {
-        placementBidding: []
-      } as any;
+      const placementBidding: any[] = [];
 
       if (placements.topOfSearch !== undefined) {
-        bidding.placementBidding.push({
+        placementBidding.push({
           placement: 'PLACEMENT_TOP',
           percentage: placements.topOfSearch
         });
       }
 
-      if (placements.restOfSearch !== undefined) {
-        bidding.placementBidding.push({
-          placement: 'PLACEMENT_PRODUCT_PAGE',
-          percentage: placements.restOfSearch
-        });
-      }
-
       if (placements.productPages !== undefined) {
-        bidding.placementBidding.push({
-          placement: 'PLACEMENT_REST_OF_SEARCH',
+        placementBidding.push({
+          placement: 'PLACEMENT_PRODUCT_PAGE',
           percentage: placements.productPages
         });
       }
 
-      const response = await this.client.put(`/v2/sp/campaigns/${campaignId}`, {
-        bidding
+      if (placements.restOfSearch !== undefined) {
+        placementBidding.push({
+          placement: 'PLACEMENT_REST_OF_SEARCH',
+          percentage: placements.restOfSearch
+        });
+      }
+
+      const response = await this.client.put('/sp/campaigns', {
+        campaigns: [{
+          campaignId,
+          dynamicBidding: { placementBidding }
+        }]
+      }, {
+        headers: {
+          'Content-Type': 'application/vnd.spcampaign.v3+json',
+          'Accept': 'application/vnd.spcampaign.v3+json'
+        }
       });
 
       console.log(`✅ Placements aggiornati`);
@@ -565,7 +571,7 @@ class AmazonApiService {
       console.log(`🔧 Imposto target ${targetId} a ${state}...`);
 
       const response = await this.client.put('/sp/targets', {
-        targetingClauses: [{ targetId, state }]
+        targetingClauses: [{ targetId, state: state.toUpperCase() }]
       }, {
         headers: {
           'Content-Type': 'application/vnd.spTargetingClause.v3+json',

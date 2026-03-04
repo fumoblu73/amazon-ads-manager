@@ -8,9 +8,17 @@
 ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS user_id UUID;
 
 -- Add foreign key constraint
-ALTER TABLE campaigns
-  ADD CONSTRAINT IF NOT EXISTS fk_campaigns_user
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'fk_campaigns_user' AND table_name = 'campaigns'
+  ) THEN
+    ALTER TABLE campaigns
+      ADD CONSTRAINT fk_campaigns_user
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+  END IF;
+END $$;
 
 -- Add index for efficient user-based queries
 CREATE INDEX IF NOT EXISTS idx_campaigns_user_id ON campaigns(user_id);
