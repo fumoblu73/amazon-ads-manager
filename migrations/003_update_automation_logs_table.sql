@@ -51,4 +51,4 @@ END $$;
 -- Index per query filtrate
 CREATE INDEX IF NOT EXISTS idx_logs_target_id ON automation_logs("targetId");
 CREATE INDEX IF NOT EXISTS idx_logs_rule_name ON automation_logs("ruleName");
-CREATE INDEX IF NOT EXISTS idx_logs_created_at ON automation_logs("createdAt");
+CREATE INDEX IF NOT EXISTS idx_logs_created_at ON automation_logs(created_at);
