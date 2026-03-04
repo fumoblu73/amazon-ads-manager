@@ -51,9 +51,18 @@ CREATE TABLE IF NOT EXISTS automation_settings (
   UNIQUE(user_id, campaign_id)
 );
 
--- Add indexes
-CREATE INDEX IF NOT EXISTS idx_automation_settings_user ON automation_settings(user_id);
-CREATE INDEX IF NOT EXISTS idx_automation_settings_campaign ON automation_settings(campaign_id);
+-- Add indexes (conditional: columns may not exist if table was created by a different migration)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_name='automation_settings' AND column_name='user_id') THEN
+    CREATE INDEX IF NOT EXISTS idx_automation_settings_user ON automation_settings(user_id);
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_name='automation_settings' AND column_name='campaign_id') THEN
+    CREATE INDEX IF NOT EXISTS idx_automation_settings_campaign ON automation_settings(campaign_id);
+  END IF;
+END $$;
 
 -- Verify table created
 SELECT table_name, column_name, data_type
