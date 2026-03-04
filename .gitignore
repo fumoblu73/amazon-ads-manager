@@ -29,3 +29,4 @@ tmpclaude-*
 # File di database locale (se mai lo usi)
 *.sqlite
 *.db
+tmpclaude-*-cwd
