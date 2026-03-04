@@ -351,15 +351,52 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="h-full p-8 overflow-auto">
+    <div className="flex h-full overflow-hidden">
+
+      {/* ── Log Panel — stessa larghezza della sidebar (w-32) ── */}
+      {selectedDay && (
+        <div className="w-32 flex-shrink-0 bg-gray-900 border-r border-gray-800 overflow-y-auto flex flex-col">
+          <div className="p-2 border-b border-gray-800">
+            <span className="text-[9px] font-semibold text-orange-400 uppercase block">
+              {new Date(selectedDay + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'short' })}
+            </span>
+            {selectedDayBooks.length > 0 && (
+              <span className="text-[8px] text-gray-500">{selectedDayBooks.length} libr{selectedDayBooks.length === 1 ? 'o' : 'i'}</span>
+            )}
+          </div>
+          {selectedDayBooks.length === 0 ? (
+            <p className="text-[9px] text-gray-500 p-2">Nessuna attività</p>
+          ) : (
+            selectedDayBooks.map(book => {
+              const hasFail = book.logs.some(l => l.status === 'failed');
+              const ok = book.logs.filter(l => l.status === 'success').length;
+              const err = book.logs.filter(l => l.status === 'failed').length;
+              return (
+                <div key={book.bookKey} className={`border-b border-gray-700/30 px-2 py-1.5 ${hasFail ? 'bg-red-900/20' : ''}`}>
+                  <div className="flex items-center gap-1 mb-0.5">
+                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${hasFail ? 'bg-red-400' : 'bg-green-400'}`} />
+                    <span className="text-[8px] text-gray-200 truncate leading-tight">{book.bookLabel}</span>
+                  </div>
+                  <div className="flex gap-1 pl-2.5">
+                    {ok > 0 && <span className="text-[7px] text-green-400">{ok}✓</span>}
+                    {err > 0 && <span className="text-[7px] text-red-400">{err}✗</span>}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* ── Contenuto principale ── */}
+      <div className="flex-1 overflow-auto p-8">
       <div className="flex flex-col gap-6">
         <h1 className="text-2xl font-bold text-white uppercase">Dashboard</h1>
 
         {/* ── Griglia 2 colonne: Automazioni | Campagne ── */}
         <div className="grid grid-cols-2 gap-6 items-start">
 
-          {/* COLONNA 1: AUTOMAZIONI + LOG */}
-          <div className="flex flex-col gap-3">
+          {/* COLONNA 1: AUTOMAZIONI */}
           <div className="bg-gray-900 rounded-xl p-5 flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -458,32 +495,6 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
-
-          {/* ── Log giorno selezionato (stessa larghezza del calendario) ── */}
-          {selectedDay && (
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3">
-                <svg className="w-4 h-4 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <span className="text-sm font-semibold text-white capitalize">
-                  {new Date(selectedDay + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long' })}
-                </span>
-                {selectedDayBooks.length > 0 && (
-                  <span className="text-xs text-gray-400">
-                    {selectedDayBooks.length} libr{selectedDayBooks.length === 1 ? 'o' : 'i'} · {weeklyLogs.filter(l => l.createdAt.slice(0, 10) === selectedDay).length} log
-                  </span>
-                )}
-              </div>
-              {selectedDayBooks.length === 0 ? (
-                <div className="text-sm text-gray-500 py-2">Nessuna attività in questo giorno</div>
-              ) : (
-                selectedDayBooks.map(book => (
-                  <BookGroupRow key={book.bookKey} group={book} />
-                ))
-              )}
-            </div>
-          )}
 
           </div>{/* fine colonna 1 */}
 
@@ -600,6 +611,7 @@ export default function Dashboard() {
         </div>
 
       </div>
+      </div>{/* fine contenuto principale */}
     </div>
   );
 }

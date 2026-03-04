@@ -14,7 +14,7 @@ router.use(authMiddleware);
  */
 router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { marketplace } = req.query;
+    const { marketplace, search, limit } = req.query;
 
     const bookRepo = AppDataSource.getRepository(KdpBook);
 
@@ -29,11 +29,26 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
       queryBuilder.andWhere('book.marketplace = :marketplace', { marketplace });
     }
 
+    // Ricerca case-insensitive (ILIKE) su titolo e ASIN
+    if (search && typeof search === 'string' && search.trim()) {
+      queryBuilder.andWhere(
+        '(book.title ILIKE :search OR book.asin ILIKE :search)',
+        { search: `%${search.trim()}%` }
+      );
+    }
+
+    // Limite opzionale
+    if (limit) {
+      queryBuilder.take(Number(limit));
+    }
+
     const books = await queryBuilder.getMany();
 
     res.json({
+      success: true,
+      data: books,    // campo atteso dal frontend (Bookshelf + KdpDashboard)
       count: books.length,
-      books
+      books            // backward compat per estensione Chrome
     });
   } catch (error) {
     console.error('Errore nel recupero dei libri:', error);

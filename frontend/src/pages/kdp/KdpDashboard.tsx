@@ -713,7 +713,7 @@ export default function KdpDashboard() {
             {chartData.length === 0 ? (
               <div className="h-[300px] flex flex-col items-center justify-center text-gray-500 gap-2">
                 <p>Nessun dato per {activeMp}</p>
-                <p className="text-xs text-gray-600">Avvia il backfill per popolare lo storico</p>
+                <p className="text-xs text-gray-600">Sincronizza i dati KDP tramite l'estensione Chrome per popolare il grafico</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={300}>
