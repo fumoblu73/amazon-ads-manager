@@ -83,7 +83,8 @@ function buildGroups(logs: AutomationLog[]): DateGroup[] {
     const byBook = new Map<string, { label: string; asin: string | null; logs: AutomationLog[] }>();
     for (const log of dateLogs) {
       const bookKey = log.bookAsin || log.targetName || log.targetId;
-      const bookLabel = log.bookTitle || log.targetName || log.targetId;
+      const rawLabel = log.bookTitle || log.targetName || log.targetId;
+      const bookLabel = rawLabel?.includes(':') ? rawLabel.split(':')[0].trim() : rawLabel;
       if (!byBook.has(bookKey)) {
         byBook.set(bookKey, { label: bookLabel, asin: log.bookAsin ?? null, logs: [] });
       }
@@ -357,7 +358,8 @@ export default function Dashboard() {
         {/* ── Griglia 2 colonne: Automazioni | Campagne ── */}
         <div className="grid grid-cols-2 gap-6 items-start">
 
-          {/* COLONNA 1: AUTOMAZIONI */}
+          {/* COLONNA 1: AUTOMAZIONI + LOG */}
+          <div className="flex flex-col gap-3">
           <div className="bg-gray-900 rounded-xl p-5 flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -456,6 +458,34 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+
+          {/* ── Log giorno selezionato (stessa larghezza del calendario) ── */}
+          {selectedDay && (
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3">
+                <svg className="w-4 h-4 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span className="text-sm font-semibold text-white capitalize">
+                  {new Date(selectedDay + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long' })}
+                </span>
+                {selectedDayBooks.length > 0 && (
+                  <span className="text-xs text-gray-400">
+                    {selectedDayBooks.length} libr{selectedDayBooks.length === 1 ? 'o' : 'i'} · {weeklyLogs.filter(l => l.createdAt.slice(0, 10) === selectedDay).length} log
+                  </span>
+                )}
+              </div>
+              {selectedDayBooks.length === 0 ? (
+                <div className="text-sm text-gray-500 py-2">Nessuna attività in questo giorno</div>
+              ) : (
+                selectedDayBooks.map(book => (
+                  <BookGroupRow key={book.bookKey} group={book} />
+                ))
+              )}
+            </div>
+          )}
+
+          </div>{/* fine colonna 1 */}
 
           {/* COLONNA 2: CAMPAGNE */}
           <div className="bg-gray-900 rounded-xl p-5 flex flex-col gap-4">
@@ -568,32 +598,6 @@ export default function Dashboard() {
           </div>
 
         </div>
-
-        {/* ── Log giorno selezionato ── */}
-        {selectedDay && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-3">
-              <svg className="w-4 h-4 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              <span className="text-sm font-semibold text-white capitalize">
-                {new Date(selectedDay + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long' })}
-              </span>
-              {selectedDayBooks.length > 0 && (
-                <span className="text-xs text-gray-400">
-                  {selectedDayBooks.length} libr{selectedDayBooks.length === 1 ? 'o' : 'i'} · {weeklyLogs.filter(l => l.createdAt.slice(0, 10) === selectedDay).length} log
-                </span>
-              )}
-            </div>
-            {selectedDayBooks.length === 0 ? (
-              <div className="text-sm text-gray-500 py-2">Nessuna attività in questo giorno</div>
-            ) : (
-              selectedDayBooks.map(book => (
-                <BookGroupRow key={book.bookKey} group={book} />
-              ))
-            )}
-          </div>
-        )}
 
       </div>
     </div>

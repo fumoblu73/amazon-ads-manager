@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { kdpAnalyticsApi, amazonAdsApi } from '../../services/api';
+import { kdpAnalyticsApi, amazonAdsApi, kdpBooksApi } from '../../services/api';
 import StatsCard from '../../components/kdp/StatsCard';
 import type { KdpDashboardSummary, BookStatsData } from '../../types';
 import {
@@ -40,6 +40,7 @@ export default function KdpDashboard() {
   const [bookStats7d, setBookStats7d] = useState<BookStatsData | null>(null);
   const [bookSpendData, setBookSpendData] = useState<Record<string, { totalSpend7d: number; totalSales7d: number; acos: number | null }> | null>(null);
   const [bookSpendUpdatedAt, setBookSpendUpdatedAt] = useState<string | null>(null);
+  const [bookMeta, setBookMeta] = useState<Map<string, { pageCount?: number; bsrRank?: number; bsrCategory?: string }>>(new Map());
 
   // Stato estensione e sync
   const [extensionStatus, setExtensionStatus] = useState<ExtensionStatus>({
@@ -196,10 +197,11 @@ export default function KdpDashboard() {
       const end7d = new Date().toISOString().split('T')[0];
       const start7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-      const [summaryRes, bookStatsRes, bookSpendRes] = await Promise.allSettled([
+      const [summaryRes, bookStatsRes, bookSpendRes, booksRes] = await Promise.allSettled([
         kdpAnalyticsApi.getDashboardSummary(),
         kdpAnalyticsApi.getBookStats({ startDate: start7d, endDate: end7d }),
         amazonAdsApi.getBookSpendCache(),
+        kdpBooksApi.getAll({ limit: 500 }),
       ]);
 
       if (summaryRes.status === 'fulfilled') setSummary(summaryRes.value);
@@ -209,6 +211,13 @@ export default function KdpDashboard() {
       if (bookSpendRes.status === 'fulfilled' && bookSpendRes.value.success) {
         setBookSpendData(bookSpendRes.value.data);
         setBookSpendUpdatedAt(bookSpendRes.value.updatedAt);
+      }
+      if (booksRes.status === 'fulfilled' && booksRes.value.data) {
+        const meta = new Map<string, { pageCount?: number; bsrRank?: number; bsrCategory?: string }>();
+        for (const b of booksRes.value.data) {
+          if (b.asin) meta.set(b.asin, { pageCount: b.pageCount, bsrRank: b.bsrRank, bsrCategory: b.bsrCategory });
+        }
+        setBookMeta(meta);
       }
 
       setError(null);
@@ -746,7 +755,9 @@ export default function KdpDashboard() {
             const netProfit = royalties - adSpend;
             const acos7d = royalties > 0 ? (adSpend / royalties) * 100 : null;
             const cover = book.cover || `https://m.media-amazon.com/images/P/${book.asin}.jpg`;
-            return { ...book, cover, adSpend7d: adSpend, adSales7d, netProfit, acos7d };
+            const meta = bookMeta.get(book.asin);
+            return { ...book, cover, adSpend7d: adSpend, adSales7d, netProfit, acos7d,
+              pageCount: meta?.pageCount, bsrRank: meta?.bsrRank, bsrCategory: meta?.bsrCategory };
           })
           .filter(b => b.grossRoyalties > 0 || b.adSpend7d > 0)
           .sort((a, b) => b.netProfit - a.netProfit);
@@ -789,6 +800,8 @@ export default function KdpDashboard() {
                     <tr className="border-b border-gray-700 text-gray-400 text-xs">
                       <th className="text-left pb-3 pr-4 w-6">#</th>
                       <th className="text-left pb-3 pr-4">Book</th>
+                      <th className="text-right pb-3 pr-4 min-w-[50px]">Pages</th>
+                      <th className="text-right pb-3 pr-4 min-w-[90px]">BSR</th>
                       <th className="text-right pb-3 pr-4 min-w-[90px]">Royalties 7d</th>
                       <th className="text-right pb-3 pr-4 min-w-[90px]">ADS Sales 7d</th>
                       <th className="text-right pb-3 pr-4 min-w-[90px]">ADS Spend 7d</th>
@@ -816,6 +829,19 @@ export default function KdpDashboard() {
                               <p className="text-xs text-gray-500">{book.asin}</p>
                             </div>
                           </div>
+                        </td>
+                        <td className="py-3 pr-4 text-right text-gray-300 text-xs">
+                          {book.pageCount ?? '—'}
+                        </td>
+                        <td className="py-3 pr-4 text-right text-xs">
+                          {book.bsrRank ? (
+                            <div>
+                              <span className="text-green-400 font-medium">#{book.bsrRank.toLocaleString()}</span>
+                              {book.bsrCategory && (
+                                <div className="text-gray-500 truncate max-w-[120px]">{book.bsrCategory}</div>
+                              )}
+                            </div>
+                          ) : <span className="text-gray-600">—</span>}
                         </td>
                         <td className="py-3 pr-4 text-right text-white font-medium">
                           {formatCurrency(book.grossRoyalties)}

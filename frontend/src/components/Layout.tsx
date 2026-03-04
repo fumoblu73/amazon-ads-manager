@@ -54,28 +54,22 @@ export default function Layout() {
               key={item.path}
               to={item.path}
               className={({ isActive }) =>
-                `relative group p-3 rounded-lg transition-all ${
+                `group flex flex-col items-center p-3 rounded-lg transition-all ${
                   isActive ? 'bg-orange-500' : 'hover:bg-gray-800'
                 }`
               }
             >
               {({ isActive }) => (
                 <>
-                  {/* Icon — dimmed when rollout appears */}
-                  <div className={`transition-all duration-200 group-hover:opacity-20 ${isActive ? 'text-white' : 'text-orange-500'}`}>
+                  <div className={`${isActive ? 'text-white' : 'text-orange-500'}`}>
                     {item.icon}
                   </div>
-                  {/* Rollout overlay — slides over the icon */}
                   <span className={`
-                    absolute inset-y-0 left-0
-                    flex items-center px-3
-                    rounded-lg whitespace-nowrap
-                    text-white text-xs font-semibold
-                    shadow-lg z-50 pointer-events-none
-                    opacity-0 -translate-x-2
-                    group-hover:opacity-100 group-hover:translate-x-0
+                    text-xs font-semibold whitespace-nowrap
+                    max-h-0 overflow-hidden opacity-0 mt-0
+                    group-hover:max-h-6 group-hover:opacity-100 group-hover:mt-1
                     transition-all duration-200
-                    ${isActive ? 'bg-orange-600' : 'bg-gray-700 border border-gray-600'}
+                    ${isActive ? 'text-white' : 'text-gray-300'}
                   `}>
                     {item.label}
                   </span>

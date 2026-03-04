@@ -456,6 +456,9 @@ export interface BookStatsData {
     reads: number;
     grossRoyalties: number;
     spending: number;
+    pageCount?: number;
+    bsrRank?: number;
+    bsrCategory?: string;
   }>;
 }
 
