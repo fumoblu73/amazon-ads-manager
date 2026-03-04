@@ -72,6 +72,9 @@ export class KdpBook {
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 60, name: 'royalty_percentage' })
   royaltyPercentage: number;
 
+  @Column({ type: 'decimal', precision: 10, scale: 4, nullable: true, name: 'royalty_per_unit' })
+  royaltyPerUnit: number;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

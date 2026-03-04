@@ -16,6 +16,20 @@ let pendingSyncMarketplace = null;
 let bookshelfTabId = null;
 let bookshelfJwtToken = null;
 let bookshelfMarketplace = null;
+let bookshelfForceRefresh = false;
+
+// Book metadata cache: { 'asin:marketplace': { pageCount, bsrRank, bsrCategory, bsrUpdatedAt } }
+// BSR TTL: 6 hours — updates frequently. pageCount: kept indefinitely (rarely changes).
+let _bookMetaCache = {};
+const BSR_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+
+// Load cache from storage on startup
+chrome.storage.local.get(['bookMetaCache'], (result) => {
+  if (result.bookMetaCache) {
+    _bookMetaCache = result.bookMetaCache;
+    console.log('[Background] Book meta cache loaded:', Object.keys(_bookMetaCache).length, 'entries');
+  }
+});
 
 // Combined sync state (bookshelf + sales in sequence)
 let combinedSyncActive = false;
@@ -276,6 +290,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   // ========== BOOKSHELF SCRAPING ==========
 
+  // Manual bookshelf-only sync triggered from web app UI (no sales phase after)
+  if (request.action === 'startBookshelfSyncOnly') {
+    bookshelfJwtToken = request.jwtToken;
+    bookshelfMarketplace = request.marketplace || 'IT';
+    bookshelfForceRefresh = request.forceRefresh || false;
+    combinedSyncActive = false;
+
+    sendToPopup({ action: 'syncProgress', percent: 5, text: 'Apertura KDP Bookshelf...' });
+
+    startBookshelfScraping(bookshelfMarketplace)
+      .catch(error => {
+        console.error('[Background] Bookshelf-only sync failed:', error.message);
+        bookshelfJwtToken = null;
+        sendToPopup({ action: 'bookshelfSyncError', error: error.message });
+      });
+    return false;
+  }
+
   // Popup richiede scraping bookshelf
   if (request.action === 'startBookshelfScraping') {
     bookshelfJwtToken = request.jwtToken;
@@ -300,7 +332,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (bookshelfTabId && sender.tab?.id === bookshelfTabId) {
       sendToPopup({ action: 'syncProgress', percent: 15, text: 'Bookshelf caricato, avvio scraping...' });
       setTimeout(() => {
-        chrome.tabs.sendMessage(bookshelfTabId, { action: 'startBookshelfScraping' });
+        chrome.tabs.sendMessage(bookshelfTabId, { action: 'startBookshelfScraping', forceRefresh: bookshelfForceRefresh });
       }, 3000);
     }
   }
@@ -426,11 +458,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
   }
 
-  // ========== PAGE COUNT FETCH (for content script) ==========
+  // ========== PAGE COUNT + BSR FETCH (for content script) ==========
   // Content scripts cannot make cross-origin requests, so we handle it here
   if (request.action === 'fetchPageCount') {
     fetchPageCountFromAmazon(request.asin, request.marketplace)
-      .then(pageCount => sendResponse({ success: true, pageCount }))
+      .then(result => sendResponse({ success: true, pageCount: result.pageCount, bsrRank: result.bsrRank, bsrCategory: result.bsrCategory }))
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true; // Keep channel open for async response
   }
@@ -608,14 +640,27 @@ function getAmazonDomain(marketplace) {
 }
 
 /**
- * Fetches pageCount from Amazon product page for a single ASIN.
- * This runs in background script which has host_permissions for Amazon domains.
+ * Fetches pageCount and BSR from Amazon product page for a single ASIN.
+ * BSR and pageCount are cached for BSR_CACHE_TTL_MS (6h): neither is used in
+ * calculations (display only), so a 6h refresh cycle is sufficient and keeps sync fast.
+ * Cache is also used as fallback when the HTTP request fails.
+ * Returns { pageCount, bsrRank, bsrCategory }.
  */
 async function fetchPageCountFromAmazon(asin, marketplace) {
+  const cacheKey = `${asin}:${marketplace}`;
+  const cached = _bookMetaCache[cacheKey];
+
+  // Return cached data if still fresh (both BSR and pageCount are display-only)
+  if (cached && cached.bsrUpdatedAt && (Date.now() - cached.bsrUpdatedAt) < BSR_CACHE_TTL_MS) {
+    const ageMin = Math.round((Date.now() - cached.bsrUpdatedAt) / 60000);
+    console.log(`[Background] ${asin}: using cache (age: ${ageMin}min)`);
+    return { pageCount: cached.pageCount, bsrRank: cached.bsrRank, bsrCategory: cached.bsrCategory };
+  }
+
   const domain = getAmazonDomain(marketplace);
   const url = `https://${domain}/dp/${asin}`;
 
-  console.log(`[Background] Fetching pageCount for ${asin} from ${url}`);
+  console.log(`[Background] Fetching book meta for ${asin} from ${url}`);
 
   const response = await fetch(url, {
     headers: {
@@ -627,14 +672,67 @@ async function fetchPageCountFromAmazon(asin, marketplace) {
 
   if (!response.ok) {
     console.warn(`[Background] Failed to fetch ${asin}: ${response.status}`);
-    return null;
+    // Return cached data (even stale) as fallback
+    return {
+      pageCount: cached?.pageCount || null,
+      bsrRank: cached?.bsrRank || null,
+      bsrCategory: cached?.bsrCategory || null
+    };
   }
 
   const html = await response.text();
   const pageCount = extractPageCountFromHtml(html);
+  const bsr = extractBsrFromHtml(html);
 
-  console.log(`[Background] ${asin}: pageCount = ${pageCount}`);
-  return pageCount;
+  // Update cache — preserve stored pageCount if Amazon didn't return one
+  _bookMetaCache[cacheKey] = {
+    pageCount: pageCount || cached?.pageCount || null,
+    bsrRank: bsr?.rank || null,
+    bsrCategory: bsr?.category || null,
+    bsrUpdatedAt: Date.now()
+  };
+  chrome.storage.local.set({ bookMetaCache: _bookMetaCache });
+
+  console.log(`[Background] ${asin}: pageCount=${_bookMetaCache[cacheKey].pageCount}, bsrRank=${_bookMetaCache[cacheKey].bsrRank}`);
+  return {
+    pageCount: _bookMetaCache[cacheKey].pageCount,
+    bsrRank: _bookMetaCache[cacheKey].bsrRank,
+    bsrCategory: _bookMetaCache[cacheKey].bsrCategory
+  };
+}
+
+/**
+ * Extracts BSR (Best Sellers Rank) from Amazon product page HTML.
+ * Returns { rank: number, category: string } or null if not found.
+ */
+function extractBsrFromHtml(html) {
+  const bsrHeaders = [
+    'Best Sellers Rank',
+    'Best Seller Rank',
+    'Classifica Bestseller',
+    'Rang unter Amazon',
+    'Classement des meilleures ventes',
+    'Posición en los más vendidos',
+    'ベストセラー'
+  ];
+
+  let snippetStart = -1;
+  for (const header of bsrHeaders) {
+    const idx = html.indexOf(header);
+    if (idx !== -1) { snippetStart = idx; break; }
+  }
+
+  if (snippetStart === -1) return null;
+
+  const snippet = html.slice(snippetStart, snippetStart + 600);
+  const match = snippet.match(/#([\d,\.]+)\s+in\s+([^<\n(]{3,60})/);
+  if (!match) return null;
+
+  const rank = parseInt(match[1].replace(/[,.]/g, ''));
+  const category = match[2].trim().replace(/\s+/g, ' ');
+
+  if (rank > 0 && rank < 10000000) return { rank, category };
+  return null;
 }
 
 /**

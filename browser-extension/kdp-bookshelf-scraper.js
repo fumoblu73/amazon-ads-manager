@@ -7,6 +7,9 @@
 
   console.log('[KDP Bookshelf Scraper] Content script loaded on:', window.location.href);
 
+  // forceRefresh: set by background when triggered by manual sync (bypasses BSR cache)
+  let _forceRefresh = false;
+
   // Notify background that scraper is ready
   setTimeout(() => {
     chrome.runtime.sendMessage({ action: 'kdpBookshelfScraperReady', url: window.location.href });
@@ -15,7 +18,8 @@
   // Listen for commands from background
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'startBookshelfScraping') {
-      console.log('[KDP Bookshelf Scraper] Starting bookshelf scraping...');
+      _forceRefresh = request.forceRefresh || false;
+      console.log('[KDP Bookshelf Scraper] Starting bookshelf scraping, forceRefresh:', _forceRefresh);
       scrapeBookshelf();
     }
   });
@@ -209,6 +213,7 @@
         const coverUrl = coverElement ? coverElement.src : '';
 
         books.push({
+          titleId: rowId || null,
           title: title.substring(0, 500),
           asin: asin.substring(0, 15),
           author: author ? author.substring(0, 200) : null,
@@ -274,15 +279,19 @@
   async function fetchPageCountFromAmazon(asin, marketplace) {
     return new Promise((resolve) => {
       chrome.runtime.sendMessage(
-        { action: 'fetchPageCount', asin, marketplace },
+        { action: 'fetchPageCount', asin, marketplace, forceRefresh: _forceRefresh },
         (response) => {
           if (chrome.runtime.lastError) {
             console.warn(`[KDP Bookshelf Scraper] Error fetching ${asin}:`, chrome.runtime.lastError.message);
             resolve(null);
             return;
           }
-          if (response && response.success && response.pageCount) {
-            resolve(response.pageCount);
+          if (response && response.success) {
+            resolve({
+              pageCount: response.pageCount || null,
+              bsrRank: response.bsrRank || null,
+              bsrCategory: response.bsrCategory || null
+            });
           } else {
             resolve(null);
           }
@@ -292,15 +301,15 @@
   }
 
   /**
-   * Enriches books array with pageCount by fetching Amazon product pages.
+   * Enriches books array with pageCount and BSR by fetching Amazon product pages.
    * Processes books in batches to avoid overwhelming the server.
    */
   async function enrichBooksWithPageCount(books) {
-    console.log(`[KDP Bookshelf Scraper] Enriching ${books.length} books with pageCount...`);
+    console.log(`[KDP Bookshelf Scraper] Enriching ${books.length} books with pageCount + BSR...`);
 
-    const booksNeedingPageCount = books.filter(b => !b.pageCount && b.asin);
-    if (booksNeedingPageCount.length === 0) {
-      console.log('[KDP Bookshelf Scraper] All books already have pageCount or no ASINs');
+    const booksNeedingMeta = books.filter(b => (!b.pageCount || !b.bsrRank) && b.asin);
+    if (booksNeedingMeta.length === 0) {
+      console.log('[KDP Bookshelf Scraper] All books already have meta or no ASINs');
       return;
     }
 
@@ -309,25 +318,26 @@
 
     // Process in small batches with delays to avoid rate limiting
     const batchSize = 3;
-    for (let i = 0; i < booksNeedingPageCount.length; i += batchSize) {
-      const batch = booksNeedingPageCount.slice(i, i + batchSize);
+    for (let i = 0; i < booksNeedingMeta.length; i += batchSize) {
+      const batch = booksNeedingMeta.slice(i, i + batchSize);
 
       // Update progress
-      const progress = Math.round(85 + (i / booksNeedingPageCount.length) * 10);
+      const progress = Math.round(85 + (i / booksNeedingMeta.length) * 10);
       chrome.runtime.sendMessage({
         action: 'kdpBookshelfProgress',
         percent: progress,
-        text: `Pagine: ${enriched}/${booksNeedingPageCount.length}...`
+        text: `Pagine/BSR: ${enriched}/${booksNeedingMeta.length}...`
       });
 
       // Process batch in parallel
       const promises = batch.map(async (book) => {
         try {
-          const pageCount = await fetchPageCountFromAmazon(book.asin, book.marketplace);
-          if (pageCount) {
-            book.pageCount = pageCount;
+          const meta = await fetchPageCountFromAmazon(book.asin, book.marketplace);
+          if (meta) {
+            if (meta.pageCount) book.pageCount = meta.pageCount;
+            if (meta.bsrRank) { book.bsrRank = meta.bsrRank; book.bsrCategory = meta.bsrCategory; }
             enriched++;
-            console.log(`[KDP Bookshelf Scraper] ${book.asin}: ${pageCount} pages`);
+            console.log(`[KDP Bookshelf Scraper] ${book.asin}: pages=${meta.pageCount}, bsr=#${meta.bsrRank}`);
           } else {
             failed++;
           }
@@ -339,12 +349,12 @@
       await Promise.all(promises);
 
       // Small delay between batches to be respectful
-      if (i + batchSize < booksNeedingPageCount.length) {
+      if (i + batchSize < booksNeedingMeta.length) {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
 
-    console.log(`[KDP Bookshelf Scraper] PageCount enrichment complete: ${enriched} found, ${failed} failed`);
+    console.log(`[KDP Bookshelf Scraper] Meta enrichment complete: ${enriched} found, ${failed} failed`);
   }
 
 })();

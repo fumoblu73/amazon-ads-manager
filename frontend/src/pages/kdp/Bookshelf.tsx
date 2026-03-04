@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { kdpBooksApi } from '../../services/api';
 import DataTable from '../../components/kdp/DataTable';
 import type { Column } from '../../components/kdp/DataTable';
-import type { KdpBook, BookshelfFilters, InkType, TrimSize } from '../../types';
+import type { KdpBook, BookshelfFilters } from '../../types';
 
 interface CookieStatus {
   syncEnabled: boolean;
@@ -16,9 +16,10 @@ export default function Bookshelf() {
   const [books, setBooks] = useState<KdpBook[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [cookieStatus, setCookieStatus] = useState<CookieStatus | null>(null);
-  const [savingField, setSavingField] = useState<string | null>(null); // bookId:fieldName
+  const [extensionInstalled, setExtensionInstalled] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'done' | 'error'>('idle');
+  const [syncProgress, setSyncProgress] = useState<{ percent: number; text: string } | null>(null);
   const [filters, setFilters] = useState<BookshelfFilters>({
     status: 'all',
     page: 1,
@@ -29,6 +30,41 @@ export default function Bookshelf() {
     loadBooks();
     checkCookieStatus();
   }, [filters]);
+
+  // Listen for extension messages (sync progress/completion)
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const { type } = event.data || {};
+
+      if (type === 'EXTENSION_INSTALLED') setExtensionInstalled(true);
+      if (type === 'KDP_BOOKSHELF_SYNC_RESPONSE') {
+        if (event.data.success) setSyncStatus('syncing');
+        else { setSyncStatus('error'); setError(event.data.error || 'Sync failed'); }
+      }
+      if (type === 'KDP_SYNC_PROGRESS') {
+        setSyncProgress({ percent: event.data.percent, text: event.data.text });
+      }
+      if (type === 'KDP_BOOKSHELF_SYNC_COMPLETE') {
+        setSyncStatus(event.data.success ? 'done' : 'error');
+        setSyncProgress(null);
+        if (event.data.success) {
+          setTimeout(() => { setSyncStatus('idle'); loadBooks(); }, 1500);
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    // Check if extension is installed
+    window.postMessage({ type: 'KDP_EXTENSION_CHECK' }, '*');
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  const triggerBookshelfSync = () => {
+    setSyncStatus('syncing');
+    setSyncProgress({ percent: 0, text: 'Avvio sync...' });
+    window.postMessage({ type: 'KDP_BOOKSHELF_SYNC_REQUEST', marketplace: 'IT', forceRefresh: true }, '*');
+  };
 
   const loadBooks = async () => {
     try {
@@ -53,23 +89,6 @@ export default function Bookshelf() {
       setCookieStatus(response.data || null);
     } catch (err) {
       console.error('Failed to check cookie status:', err);
-    }
-  };
-
-  const saveBookField = async (bookId: string, field: string, value: any) => {
-    try {
-      setSavingField(`${bookId}:${field}`);
-      setError(null);
-      // Auth handled by cookies (withCredentials: true in apiClient)
-      await kdpBooksApi.update(bookId, { [field]: value } as any);
-      setBooks(prev => prev.map(b => b.id === bookId ? { ...b, [field]: value } : b));
-      setSuccessMsg(`${field} updated!`);
-      setTimeout(() => setSuccessMsg(null), 2000);
-    } catch (err: any) {
-      console.error(`Failed to save ${field}:`, err);
-      setError(`Failed to save ${field}: ${err.response?.data?.error || err.message}`);
-    } finally {
-      setSavingField(null);
     }
   };
 
@@ -180,84 +199,8 @@ export default function Bookshelf() {
       header: 'Pages',
       accessor: (book) => book.pageCount || null,
       sortable: true,
-      render: (value, book) => (
-        <div className="flex items-center gap-1">
-          <input
-            type="number"
-            min="1"
-            max="9999"
-            defaultValue={value || ''}
-            placeholder="—"
-            className="w-16 px-1.5 py-1 bg-gray-800 border border-gray-700 rounded text-white text-sm text-center focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none"
-            onBlur={(e) => {
-              const val = parseInt(e.target.value);
-              if (val > 0 && val !== book.pageCount) {
-                saveBookField(book.id, 'pageCount', val);
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                (e.target as HTMLInputElement).blur();
-              }
-            }}
-            disabled={savingField === `${book.id}:pageCount`}
-          />
-          {savingField === `${book.id}:pageCount` && (
-            <div className="w-3 h-3 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-          )}
-        </div>
-      )
-    },
-    {
-      key: 'inkType',
-      header: 'Ink',
-      accessor: (book) => book.inkType || 'black_white',
-      sortable: true,
-      render: (value, book) => (
-        <div className="flex items-center gap-1">
-          <select
-            value={value || 'black_white'}
-            onChange={(e) => saveBookField(book.id, 'inkType', e.target.value as InkType)}
-            disabled={savingField === `${book.id}:inkType`}
-            className="px-1.5 py-1 bg-gray-800 border border-gray-700 rounded text-white text-xs focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none"
-          >
-            <option value="black_white">Black</option>
-            <option value="standard_color">Std Color</option>
-            <option value="premium_color">Prm Color</option>
-          </select>
-          {savingField === `${book.id}:inkType` && (
-            <div className="w-3 h-3 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-          )}
-        </div>
-      )
-    },
-    {
-      key: 'trimSize',
-      header: 'Dimensions',
-      accessor: (book) => book.trimSize || '6x9',
-      sortable: true,
-      render: (value, book) => (
-        <div className="flex items-center gap-1">
-          <select
-            value={value || '6x9'}
-            onChange={(e) => saveBookField(book.id, 'trimSize', e.target.value as TrimSize)}
-            disabled={savingField === `${book.id}:trimSize`}
-            className="px-1.5 py-1 bg-gray-800 border border-gray-700 rounded text-white text-xs focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none"
-          >
-            <optgroup label="Regular">
-              <option value="5x8">5" x 8"</option>
-              <option value="6x9">6" x 9"</option>
-            </optgroup>
-            <optgroup label="Large">
-              <option value="8x10">8" x 10"</option>
-              <option value="8.5x8.5">8.5" x 8.5"</option>
-              <option value="8.5x11">8.5" x 11"</option>
-            </optgroup>
-          </select>
-          {savingField === `${book.id}:trimSize` && (
-            <div className="w-3 h-3 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-          )}
-        </div>
+      render: (value) => (
+        <span className="text-sm text-gray-300">{value ?? '—'}</span>
       )
     },
     {
@@ -299,17 +242,57 @@ export default function Bookshelf() {
           <h1 className="text-2xl font-bold text-white mb-2">Bookshelf & BSRs</h1>
           <p className="text-gray-400">{books.length} books in library</p>
         </div>
-        <button
-          onClick={loadBooks}
-          disabled={loading}
-          className="px-4 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors font-medium disabled:opacity-50 flex items-center gap-2"
-        >
-          <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Sync KDP button — visible only if extension is installed */}
+          {extensionInstalled && (
+            <button
+              onClick={triggerBookshelfSync}
+              disabled={syncStatus === 'syncing'}
+              className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors ${
+                syncStatus === 'syncing' ? 'bg-orange-600/30 text-orange-400 cursor-not-allowed' :
+                syncStatus === 'done' ? 'bg-green-600/30 text-green-400' :
+                syncStatus === 'error' ? 'bg-red-600/30 text-red-400' :
+                'bg-orange-600 text-white hover:bg-orange-500'
+              }`}
+            >
+              {syncStatus === 'syncing' ? (
+                <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              )}
+              {syncStatus === 'syncing' ? 'Sync in corso...' : syncStatus === 'done' ? 'Sync completato' : 'Sync KDP'}
+            </button>
+          )}
+          <button
+            onClick={loadBooks}
+            disabled={loading}
+            className="px-4 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors font-medium disabled:opacity-50 flex items-center gap-2"
+          >
+            <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Refresh
+          </button>
+        </div>
       </div>
+
+      {/* Sync progress bar */}
+      {syncStatus === 'syncing' && syncProgress && (
+        <div className="bg-gray-900 border border-gray-700 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-gray-300">{syncProgress.text}</span>
+            <span className="text-sm text-orange-400 font-mono">{syncProgress.percent}%</span>
+          </div>
+          <div className="w-full bg-gray-700 rounded-full h-2">
+            <div
+              className="bg-orange-500 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${syncProgress.percent}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Cookie Status Banner */}
       {cookieStatus && cookieStatus.cookiesExpired && (
@@ -381,13 +364,6 @@ export default function Bookshelf() {
           </div>
         </div>
       </div>
-
-      {/* Success Message */}
-      {successMsg && (
-        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
-          <p className="text-green-500">✓ {successMsg}</p>
-        </div>
-      )}
 
       {/* Error Message */}
       {error && (

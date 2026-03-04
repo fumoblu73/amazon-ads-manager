@@ -5,7 +5,7 @@
   console.log('[Auth Helper] Script loaded');
 
   // Notifica all'app che l'estensione è installata
-  window.postMessage({ type: 'EXTENSION_INSTALLED', version: '1.4.0' }, '*');
+  window.postMessage({ type: 'EXTENSION_INSTALLED', version: '1.5.0' }, '*');
 
   // Leggi il cookie extension_token
   function getCookie(name) {
@@ -68,6 +68,29 @@
     if (event.origin !== window.location.origin) return;
 
     const { type, action } = event.data || {};
+
+    // L'app chiede sync manuale della bookshelf (da Bookshelf page)
+    if (type === 'KDP_BOOKSHELF_SYNC_REQUEST') {
+      console.log('[Auth Helper] Received bookshelf sync request from app');
+
+      const storageData = await chrome.storage.local.get(['jwtToken']);
+      if (!storageData.jwtToken) {
+        showNotification('❌ Estensione non autenticata. Ricarica la pagina.', 'error');
+        window.postMessage({ type: 'KDP_BOOKSHELF_SYNC_RESPONSE', success: false, error: 'Not authenticated' }, '*');
+        return;
+      }
+
+      showNotification('🔄 Avvio sincronizzazione Bookshelf KDP...', 'info');
+
+      chrome.runtime.sendMessage({
+        action: 'startBookshelfSyncOnly',
+        jwtToken: storageData.jwtToken,
+        marketplace: event.data.marketplace || 'IT',
+        forceRefresh: event.data.forceRefresh || false
+      });
+
+      window.postMessage({ type: 'KDP_BOOKSHELF_SYNC_RESPONSE', success: true }, '*');
+    }
 
     // L'app chiede di fare sync
     if (type === 'KDP_SYNC_REQUEST' && action === 'startSync') {
@@ -145,8 +168,14 @@
     if (request.action === 'bookshelfSyncComplete') {
       if (request.success) {
         console.log(`[Auth Helper] Bookshelf sync: ${request.booksCount} books`);
+        showNotification(`✅ Bookshelf sincronizzata: ${request.booksCount} libri aggiornati.`, 'success');
       }
-      // Progress is already forwarded via syncProgress messages
+      window.postMessage({
+        type: 'KDP_BOOKSHELF_SYNC_COMPLETE',
+        success: request.success,
+        booksCount: request.booksCount,
+        error: request.error
+      }, '*');
     }
 
     if (request.action === 'bookshelfSyncError') {

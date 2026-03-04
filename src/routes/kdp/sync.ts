@@ -22,6 +22,10 @@ interface BookData {
   price?: string;
   format?: string;
   pageCount?: number;
+  bsrRank?: number;
+  bsrCategory?: string;
+  royaltyPerUnit?: number;
+  titleId?: string;
 }
 
 interface DailyStatsData {
@@ -112,6 +116,15 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
             console.log(`[KDP Sync] Updating pageCount for ${bookData.asin}: ${bookData.pageCount}`);
             book.pageCount = bookData.pageCount;
           }
+          // Update BSR if provided
+          if (bookData.bsrRank) {
+            book.bsrRank = bookData.bsrRank;
+            book.bsrCategory = bookData.bsrCategory || book.bsrCategory;
+          }
+          // Update royaltyPerUnit if provided
+          if (bookData.royaltyPerUnit) {
+            book.royaltyPerUnit = bookData.royaltyPerUnit;
+          }
         } else {
           // Crea un nuovo libro
           if (bookData.pageCount) {
@@ -129,7 +142,10 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
             coverUrl: bookData.coverUrl,
             price: bookData.price,
             format: bookData.format,
-            pageCount: bookData.pageCount
+            pageCount: bookData.pageCount,
+            bsrRank: bookData.bsrRank,
+            bsrCategory: bookData.bsrCategory,
+            royaltyPerUnit: bookData.royaltyPerUnit
           });
         }
 
