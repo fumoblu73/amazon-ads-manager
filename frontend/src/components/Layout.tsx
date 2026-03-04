@@ -61,20 +61,23 @@ export default function Layout() {
             >
               {({ isActive }) => (
                 <>
-                  <div className={`transition-colors ${isActive ? 'text-white' : 'text-orange-500 hover:text-white'}`}>
+                  {/* Icon — dimmed when rollout appears */}
+                  <div className={`transition-all duration-200 group-hover:opacity-20 ${isActive ? 'text-white' : 'text-orange-500'}`}>
                     {item.icon}
                   </div>
-                  {/* Rollout label */}
-                  <span className="
-                    absolute left-full top-1/2 -translate-y-1/2 ml-3
-                    px-3 py-1.5 bg-gray-800 border border-gray-700
-                    text-white text-xs font-medium rounded-lg whitespace-nowrap
-                    shadow-lg pointer-events-none z-50
-                    opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0
+                  {/* Rollout overlay — slides over the icon */}
+                  <span className={`
+                    absolute inset-y-0 left-0
+                    flex items-center px-3
+                    rounded-lg whitespace-nowrap
+                    text-white text-xs font-semibold
+                    shadow-lg z-50 pointer-events-none
+                    opacity-0 -translate-x-2
+                    group-hover:opacity-100 group-hover:translate-x-0
                     transition-all duration-200
-                  ">
+                    ${isActive ? 'bg-orange-600' : 'bg-gray-700 border border-gray-600'}
+                  `}>
                     {item.label}
-                    <span className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-700" />
                   </span>
                 </>
               )}

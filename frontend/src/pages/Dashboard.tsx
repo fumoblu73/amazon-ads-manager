@@ -60,14 +60,13 @@ function getDayLabel(dateStr: string): { weekday: string; ddmm: string } {
   return { weekday, ddmm: `${dd}/${mm}` };
 }
 
-function getLast14Days(): string[] {
-  const days = [];
-  for (let i = 13; i >= 0; i--) {
+// Returns 7 day strings for the given week offset (0 = current, 1 = last week, 2 = two weeks ago)
+function getWeekDays(weekOffset: number): string[] {
+  return Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
-    d.setDate(d.getDate() - i);
-    days.push(d.toISOString().split('T')[0]);
-  }
-  return days;
+    d.setDate(d.getDate() - (6 - i) - weekOffset * 7);
+    return d.toISOString().split('T')[0];
+  });
 }
 
 function buildGroups(logs: AutomationLog[]): DateGroup[] {
@@ -120,10 +119,6 @@ function buildGroups(logs: AutomationLog[]): DateGroup[] {
   return dateGroups;
 }
 
-function formatTime(dateString: string) {
-  return new Date(dateString).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-}
-
 // ─── Componente riga singolo log ──────────────────────────────────────────────
 
 function LogRow({ log }: { log: AutomationLog }) {
@@ -131,7 +126,6 @@ function LogRow({ log }: { log: AutomationLog }) {
   return (
     <div className={`flex flex-col gap-1 px-4 py-2.5 border-b border-gray-700/50 last:border-0 hover:bg-gray-800/50 transition-colors ${log.status === 'failed' ? 'bg-red-900/20' : ''}`}>
       <div className="flex items-center gap-3 flex-wrap">
-        <span className="text-xs text-gray-400 w-10 shrink-0">{formatTime(log.createdAt)}</span>
         <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold bg-indigo-900/50 text-indigo-300 rounded shrink-0">
           {log.ruleName}
         </span>
@@ -154,10 +148,10 @@ function LogRow({ log }: { log: AutomationLog }) {
         </span>
       </div>
       {log.reason && (
-        <div className="pl-[52px] text-xs text-gray-400">{log.reason}</div>
+        <div className="text-xs text-gray-400">{log.reason}</div>
       )}
       {log.status === 'failed' && log.errorMessage && (
-        <div className="pl-[52px] text-xs text-red-400 bg-red-900/30 rounded px-2 py-1 mt-0.5">
+        <div className="text-xs text-red-400 bg-red-900/30 rounded px-2 py-1 mt-0.5">
           {log.errorMessage}
         </div>
       )}
@@ -165,10 +159,10 @@ function LogRow({ log }: { log: AutomationLog }) {
   );
 }
 
-// ─── Componente gruppo libro (collassabile) ───────────────────────────────────
+// ─── Componente gruppo libro (collassabile, titolo only) ──────────────────────
 
 function BookGroupRow({ group }: { group: BookGroup }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const hasFailures = group.logs.some(l => l.status === 'failed');
   const successCount = group.logs.filter(l => l.status === 'success').length;
   const failedCount = group.logs.filter(l => l.status === 'failed').length;
@@ -185,9 +179,6 @@ function BookGroupRow({ group }: { group: BookGroup }) {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
         </svg>
         <span className="text-sm font-medium text-gray-100 flex-1 truncate">{group.bookLabel}</span>
-        {group.bookAsin && (
-          <span className="text-xs text-gray-400 font-mono shrink-0">{group.bookAsin}</span>
-        )}
         <div className="flex items-center gap-1.5 shrink-0">
           {successCount > 0 && (
             <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-semibold bg-green-900/50 text-green-300 rounded">
@@ -213,44 +204,6 @@ function BookGroupRow({ group }: { group: BookGroup }) {
   );
 }
 
-// ─── Componente gruppo data (sempre espanso) ──────────────────────────────────
-
-function DateGroupRow({ group }: { group: DateGroup }) {
-  const hasFailures = group.failedCount > 0;
-  return (
-    <div className="rounded-xl border border-gray-700 overflow-hidden mb-4">
-      <div className={`flex items-center gap-4 px-5 py-3.5 ${hasFailures ? 'bg-red-900/20' : 'bg-gray-800'}`}>
-        <svg className={`w-5 h-5 shrink-0 ${hasFailures ? 'text-red-400' : 'text-blue-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-        <span className="text-sm font-bold text-white capitalize flex-1">{group.dateLabel}</span>
-        <div className="flex items-center gap-2 text-xs text-gray-500 shrink-0">
-          <span>{group.books.length} libr{group.books.length === 1 ? 'o' : 'i'}</span>
-          <span>·</span>
-          <span>{group.totalLogs} log</span>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {group.successCount > 0 && (
-            <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold bg-green-900/50 text-green-300 rounded-full">
-              {group.successCount} OK
-            </span>
-          )}
-          {group.failedCount > 0 && (
-            <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold bg-red-900/50 text-red-300 rounded-full">
-              {group.failedCount} ERR
-            </span>
-          )}
-        </div>
-      </div>
-      <div className="px-4 pb-4 pt-3 bg-gray-900/30">
-        {group.books.map(book => (
-          <BookGroupRow key={book.bookKey} group={book} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ─── Pagina Dashboard ─────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -264,7 +217,8 @@ export default function Dashboard() {
   const [automationMessage, setAutomationMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [syncingCampaigns, setSyncingCampaigns] = useState(false);
   const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [logFilter, setLogFilter] = useState<string>('all');
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const handleTriggerAutomation = async () => {
     setTriggeringAutomation(true);
@@ -308,12 +262,12 @@ export default function Dashboard() {
       try {
         setLoading(true);
         setError(null);
-        const { startDate, endDate } = getDateRange(14);
+        const { startDate, endDate } = getDateRange(21);
 
         const [campaignsRes, automationRes, weeklyLogsRes, adsRes] = await Promise.allSettled([
           campaignsApi.getStats(),
           automationApi.getStatus(),
-          logsApi.getAll({ dateFrom: startDate, dateTo: endDate, limit: 1000, sortBy: 'createdAt', sortOrder: 'DESC' }),
+          logsApi.getAll({ dateFrom: startDate, dateTo: endDate, limit: 2000, sortBy: 'createdAt', sortOrder: 'DESC' }),
           amazonAdsApi.getSpendCache(),
         ]);
 
@@ -355,10 +309,14 @@ export default function Dashboard() {
     );
   }
 
-  // Calendario 14 giorni
-  const last14Days = getLast14Days();
+  // Calendario — dayMap su 21 giorni
+  const todayStr = new Date().toISOString().split('T')[0];
+  const allDays = Array.from({ length: 21 }, (_, i) => {
+    const d = new Date(); d.setDate(d.getDate() - (20 - i));
+    return d.toISOString().split('T')[0];
+  });
   const dayMap: Record<string, { success: number; failed: number }> = {};
-  last14Days.forEach(d => { dayMap[d] = { success: 0, failed: 0 }; });
+  allDays.forEach(d => { dayMap[d] = { success: 0, failed: 0 }; });
   weeklyLogs.forEach(log => {
     const day = log.createdAt.split('T')[0];
     if (dayMap[day]) {
@@ -366,6 +324,15 @@ export default function Dashboard() {
       else dayMap[day].failed++;
     }
   });
+
+  const currentWeekDays = getWeekDays(weekOffset);
+
+  // Libri del giorno selezionato
+  const selectedDayBooks: BookGroup[] = (() => {
+    if (!selectedDay) return [];
+    const groups = buildGroups(weeklyLogs.filter(l => l.createdAt.slice(0, 10) === selectedDay));
+    return groups[0]?.books ?? [];
+  })();
 
   // Spesa
   const avgDailySpend = spendCache?.avgDailySpend ?? null;
@@ -381,10 +348,6 @@ export default function Dashboard() {
     if (h >= 1) return `${h}h fa`;
     return `${m}m fa`;
   };
-
-  // Log filtrati e raggruppati
-  const filteredLogs = logFilter === 'all' ? weeklyLogs : weeklyLogs.filter(l => l.status === logFilter);
-  const logGroups = buildGroups(filteredLogs);
 
   return (
     <div className="h-full p-8 overflow-auto">
@@ -429,33 +392,65 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Calendario 14 giorni */}
+            {/* Calendario 7 giorni con navigazione */}
             <div>
-              <div className="mb-2">
-                <span className="text-xs text-gray-400">Ultimi 14 giorni</span>
+              <div className="flex items-center justify-between mb-3">
+                <button
+                  onClick={() => { setWeekOffset(o => Math.min(o + 1, 2)); setSelectedDay(null); }}
+                  disabled={weekOffset >= 2}
+                  className="p-1 rounded hover:bg-gray-700 transition-colors disabled:opacity-30 text-gray-400"
+                  title="Settimana precedente"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <span className="text-xs text-gray-400">
+                  {getDayLabel(currentWeekDays[0]).ddmm} — {getDayLabel(currentWeekDays[6]).ddmm}
+                </span>
+                <button
+                  onClick={() => { setWeekOffset(o => Math.max(o - 1, 0)); setSelectedDay(null); }}
+                  disabled={weekOffset === 0}
+                  className="p-1 rounded hover:bg-gray-700 transition-colors disabled:opacity-30 text-gray-400"
+                  title="Settimana successiva"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
               </div>
-              <div className="grid gap-0.5" style={{ gridTemplateColumns: 'repeat(14, 1fr)' }}>
-                {last14Days.map(day => {
-                  const { success, failed } = dayMap[day];
+              <div className="grid grid-cols-7 gap-1">
+                {currentWeekDays.map(day => {
+                  const { success, failed } = dayMap[day] || { success: 0, failed: 0 };
                   const total = success + failed;
-                  const isToday = day === last14Days[13];
+                  const isToday = day === todayStr;
+                  const isSelected = day === selectedDay;
+                  const hasLogs = total > 0;
                   const { weekday, ddmm } = getDayLabel(day);
                   return (
-                    <div key={day} className="flex flex-col items-center gap-0.5">
-                      <div className={`w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center
-                        ${total === 0 ? 'opacity-40' : ''}
-                        ${isToday ? 'ring-2 ring-orange-400' : ''}
+                    <button
+                      key={day}
+                      onClick={() => setSelectedDay(d => d === day ? null : day)}
+                      className="flex flex-col items-center gap-1"
+                    >
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all
+                        ${isSelected
+                          ? 'bg-blue-600 ring-2 ring-blue-400'
+                          : hasLogs
+                            ? 'bg-gray-700 hover:bg-gray-600'
+                            : 'bg-gray-800 opacity-30'}
+                        ${isToday && !isSelected ? 'ring-2 ring-orange-400' : ''}
                       `}>
                         {total > 0 && (
                           <div className="flex flex-col items-center leading-none gap-px">
-                            {success > 0 && <span className="text-[7px] text-green-400 font-bold">{success}</span>}
-                            <span className="text-[7px] text-red-400 font-bold">{failed}</span>
+                            {success > 0 && <span className="text-[9px] text-green-400 font-bold">{success}</span>}
+                            {failed > 0 && <span className="text-[9px] text-red-400 font-bold">{failed}</span>}
                           </div>
                         )}
                       </div>
-                      <span className="text-[8px] text-gray-400 capitalize">{weekday}</span>
-                      <span className="text-[8px] text-gray-500">{ddmm}</span>
-                    </div>
+                      <span className="text-[9px] text-gray-400 capitalize">{weekday}</span>
+                      <span className="text-[9px] text-gray-500">{ddmm}</span>
+                    </button>
                   );
                 })}
               </div>
@@ -574,58 +569,31 @@ export default function Dashboard() {
 
         </div>
 
-        {/* ── Sezione Log Attività ── */}
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        {/* ── Log giorno selezionato ── */}
+        {selectedDay && (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <svg className="w-4 h-4 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
-              <h2 className="text-sm font-semibold text-white">Log Attività — Ultimi 14 giorni</h2>
+              <span className="text-sm font-semibold text-white capitalize">
+                {new Date(selectedDay + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long' })}
+              </span>
+              {selectedDayBooks.length > 0 && (
+                <span className="text-xs text-gray-400">
+                  {selectedDayBooks.length} libr{selectedDayBooks.length === 1 ? 'o' : 'i'} · {weeklyLogs.filter(l => l.createdAt.slice(0, 10) === selectedDay).length} log
+                </span>
+              )}
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setLogFilter('all')}
-                className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
-                  logFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                }`}
-              >
-                Tutti ({weeklyLogs.length})
-              </button>
-              <button
-                onClick={() => setLogFilter('success')}
-                className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
-                  logFilter === 'success' ? 'bg-green-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                }`}
-              >
-                Successi ({weeklyLogs.filter(l => l.status === 'success').length})
-              </button>
-              <button
-                onClick={() => setLogFilter('failed')}
-                className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
-                  logFilter === 'failed' ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                }`}
-              >
-                Falliti ({weeklyLogs.filter(l => l.status === 'failed').length})
-              </button>
-            </div>
+            {selectedDayBooks.length === 0 ? (
+              <div className="text-sm text-gray-500 py-2">Nessuna attività in questo giorno</div>
+            ) : (
+              selectedDayBooks.map(book => (
+                <BookGroupRow key={book.bookKey} group={book} />
+              ))
+            )}
           </div>
-
-          {logGroups.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <svg className="w-12 h-12 mx-auto mb-3 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <p>Nessuna esecuzione negli ultimi 14 giorni</p>
-            </div>
-          ) : (
-            <div>
-              {logGroups.map(group => (
-                <DateGroupRow key={group.dateKey} group={group} />
-              ))}
-            </div>
-          )}
-        </div>
+        )}
 
       </div>
     </div>
