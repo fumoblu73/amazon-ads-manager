@@ -64,12 +64,6 @@ export default function Bookshelf() {
     setSyncStatus('syncing');
     setSyncProgress({ percent: 0, text: 'Avvio sync...' });
     window.postMessage({ type: 'KDP_BOOKSHELF_SYNC_REQUEST', marketplace: 'IT', forceRefresh: true }, '*');
-    // Timeout di sicurezza: dopo 3 minuti resetta la UI e ricarica i dati
-    setTimeout(() => {
-      setSyncStatus(s => s === 'syncing' ? 'idle' : s);
-      setSyncProgress(p => p !== null ? null : p);
-      loadBooks();
-    }, 3 * 60 * 1000);
   };
 
   const loadBooks = async () => {

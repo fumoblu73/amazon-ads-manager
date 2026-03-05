@@ -41,6 +41,15 @@ async function sendToPopup(message) {
     // Popup potrebbe essere chiuso, ignora l'errore
   });
 
+  // Mappa action → messaggio window.postMessage (fallback se content script non caricato)
+  const PAGE_MESSAGE_MAP = {
+    'syncProgress':          (m) => ({ type: 'KDP_SYNC_PROGRESS', percent: m.percent, text: m.text }),
+    'syncComplete':          (m) => ({ type: 'KDP_SYNC_COMPLETE', success: m.success, monthsCount: m.monthsCount, totalRoyalties: m.totalRoyalties, error: m.error }),
+    'syncError':             (m) => ({ type: 'KDP_SYNC_ERROR', error: m.error }),
+    'bookshelfSyncComplete': (m) => ({ type: 'KDP_BOOKSHELF_SYNC_COMPLETE', success: m.success, booksCount: m.booksCount, error: m.error }),
+    'bookshelfSyncError':    (m) => ({ type: 'KDP_BOOKSHELF_SYNC_ERROR', error: m.error }),
+  };
+
   // Invia anche ai tab dell'app (dove gira auth-helper.js)
   try {
     const appTabs = await chrome.tabs.query({
@@ -50,9 +59,17 @@ async function sendToPopup(message) {
       ]
     });
     for (const tab of appTabs) {
-      chrome.tabs.sendMessage(tab.id, message).catch(() => {
-        // Tab potrebbe non avere il content script, ignora
-      });
+      const sent = await chrome.tabs.sendMessage(tab.id, message).then(() => true).catch(() => false);
+      // Fallback: se il content script non è caricato, inietta window.postMessage direttamente
+      if (!sent && PAGE_MESSAGE_MAP[message.action]) {
+        const pageMsg = PAGE_MESSAGE_MAP[message.action](message);
+        chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          world: 'MAIN',
+          func: (msg) => window.postMessage(msg, '*'),
+          args: [pageMsg]
+        }).catch(() => {});
+      }
     }
   } catch (e) {
     // Ignora errori

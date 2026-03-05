@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Amazon Ads Manager - KDP Sync",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "Sincronizza i tuoi dati Amazon KDP con Amazon Ads Manager",
   "permissions": [
     "cookies",
