@@ -404,7 +404,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
     try {
       const mpRoyaltiesRaw = await statsRepository
         .createQueryBuilder('stats')
-        .innerJoin(KdpBook, 'book', 'book.asin = stats.asin AND book."user_id" = stats."userId"')
+        .innerJoin(KdpBook, 'book', 'book.asin = stats.asin AND book."user_id"::text = stats."userId"')
         .select('book.marketplace', 'marketplace')
         .addSelect(`TO_CHAR(stats.date, 'YYYY-MM')`, 'yearMonth')
         .addSelect('SUM(stats."grossroyalties")', 'royalties')
