@@ -496,8 +496,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          </div>{/* fine colonna 1 */}
-
           {/* COLONNA 2: CAMPAGNE */}
           <div className="bg-gray-900 rounded-xl p-5 flex flex-col gap-4">
             <div className="flex items-center justify-between">
