@@ -184,5 +184,44 @@
     }
   });
 
+  // Fallback: ascolta storage changes per completamento sync
+  // (funziona anche quando chrome.tabs.sendMessage non raggiunge il content script,
+  //  es. dopo reinstallazione estensione senza ricaricare il tab)
+  let _lastBookshelfSyncSeen = null;
+  let _lastSalesSyncSeen = null;
+
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local') return;
+
+    // Bookshelf sync completato
+    if (changes.lastBookshelfSync) {
+      const ts = changes.lastBookshelfSync.newValue;
+      if (ts && ts !== _lastBookshelfSyncSeen) {
+        _lastBookshelfSyncSeen = ts;
+        const success = changes.lastBookshelfSyncSuccess?.newValue ?? true;
+        const booksCount = changes.lastBookshelfBooksCount?.newValue ?? 0;
+        window.postMessage({
+          type: 'KDP_BOOKSHELF_SYNC_COMPLETE',
+          success,
+          booksCount
+        }, '*');
+      }
+    }
+
+    // Sales sync completato
+    if (changes.lastSalesSync) {
+      const ts = changes.lastSalesSync.newValue;
+      if (ts && ts !== _lastSalesSyncSeen) {
+        _lastSalesSyncSeen = ts;
+        const success = changes.lastSalesSyncSuccess?.newValue ?? true;
+        window.postMessage({
+          type: 'KDP_SYNC_COMPLETE',
+          success,
+          error: changes.lastSalesSyncError?.newValue
+        }, '*');
+      }
+    }
+  });
+
   console.log('[Auth Helper] Listeners registered');
 })();
