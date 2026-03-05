@@ -120,46 +120,6 @@ function buildGroups(logs: AutomationLog[]): DateGroup[] {
   return dateGroups;
 }
 
-// ─── Componente riga singolo log ──────────────────────────────────────────────
-
-function LogRow({ log }: { log: AutomationLog }) {
-  const hasBidChange = log.oldValue != null && log.newValue != null;
-  return (
-    <div className={`flex flex-col gap-1 px-4 py-2.5 border-b border-gray-700/50 last:border-0 hover:bg-gray-800/50 transition-colors ${log.status === 'failed' ? 'bg-red-900/20' : ''}`}>
-      <div className="flex items-center gap-3 flex-wrap">
-        <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold bg-indigo-900/50 text-indigo-300 rounded shrink-0">
-          {log.ruleName}
-        </span>
-        <span className="text-xs text-gray-400 truncate max-w-[280px]" title={log.targetName}>
-          {log.targetName}
-        </span>
-        {hasBidChange && (
-          <span className="flex items-center gap-1 text-xs font-medium text-gray-300 shrink-0">
-            <span className="text-gray-400">${Number(log.oldValue).toFixed(2)}</span>
-            <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-            <span className="text-white">${Number(log.newValue).toFixed(2)}</span>
-          </span>
-        )}
-        <span className={`ml-auto shrink-0 inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded ${
-          log.status === 'success' ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'
-        }`}>
-          {log.status === 'success' ? 'OK' : 'ERR'}
-        </span>
-      </div>
-      {log.reason && (
-        <div className="text-xs text-gray-400">{log.reason}</div>
-      )}
-      {log.status === 'failed' && log.errorMessage && (
-        <div className="text-xs text-red-400 bg-red-900/30 rounded px-2 py-1 mt-0.5">
-          {log.errorMessage}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Pagina Dashboard ─────────────────────────────────────────────────────────
 
 export default function Dashboard() {
