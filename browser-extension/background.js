@@ -117,12 +117,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendToPopup({ action: 'syncProgress', percent: 85, text: 'Invio dati al server...' });
 
       sendDataToServer(scrapedData, pendingSyncJwtToken, pendingSyncMarketplace || 'US')
-        .then(result => {
+        .then(async result => {
           console.log('[Background] ✅ Data sent to server successfully:', result);
           updateBadge('✓', '#00aa00');
 
           // Notifica il popup del completamento
-          sendToPopup({
+          await sendToPopup({
             action: 'syncComplete',
             success: true,
             monthsCount: scrapedData.historicalMonths?.length || 12,
@@ -140,11 +140,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           // Reset badge dopo 5 secondi
           setTimeout(() => updateBadge('', '#ff9900'), 5000);
         })
-        .catch(error => {
+        .catch(async error => {
           console.error('[Background] ❌ Failed to send data to server:', error);
           updateBadge('!', '#ff0000');
 
-          sendToPopup({
+          await sendToPopup({
             action: 'syncComplete',
             success: false,
             error: error.message
@@ -359,10 +359,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendToPopup({ action: 'syncProgress', percent: progressPercent, text: progressText });
 
       sendBooksToServer(request.data.books, bookshelfJwtToken, request.data.marketplace)
-        .then(result => {
+        .then(async result => {
           console.log('[Background] Books sent to server:', result);
 
-          sendToPopup({
+          await sendToPopup({
             action: 'bookshelfSyncComplete',
             success: true,
             booksCount: request.data.books.length,
@@ -380,10 +380,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             setTimeout(() => updateBadge('', '#ff9900'), 5000);
           }
         })
-        .catch(error => {
+        .catch(async error => {
           console.error('[Background] Failed to send books:', error);
 
-          sendToPopup({
+          await sendToPopup({
             action: 'bookshelfSyncComplete',
             success: false,
             error: error.message
