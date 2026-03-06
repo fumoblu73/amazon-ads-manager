@@ -508,7 +508,8 @@ async function executeAutomationFunctions(
       console.warn(`     ⚠️ Could not parse price "${kdpBook.price}" for campaign ${report.campaignName}, using fallback`);
     }
   } else if (kdpBook) {
-    console.warn(`     ⚠️ Book found but missing price or pageCount for campaign ${report.campaignName}, using fallback`);
+    const missing = [!kdpBook.price && 'price', !kdpBook.pageCount && 'pageCount'].filter(Boolean).join(', ');
+    console.warn(`     ⚠️ Book found but missing ${missing} for campaign ${report.campaignName} (ASIN: ${kdpBook.asin}), using fallback`);
   } else {
     console.warn(`     ⚠️ No kdp_book linked to campaign ${report.campaignName}, using fallback`);
   }

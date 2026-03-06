@@ -189,6 +189,26 @@ class AmazonApiService {
     }
   }
 
+  // Recupera gli ad group di una campagna
+  async getAdGroups(campaignId?: string): Promise<any[]> {
+    try {
+      const body: any = { maxResults: 100 };
+      if (campaignId) {
+        body.campaignIdFilter = { include: [campaignId] };
+      }
+      const response = await this.client.post('/sp/adGroups/list', body, {
+        headers: {
+          'Content-Type': 'application/vnd.spAdGroup.v3+json',
+          'Accept': 'application/vnd.spAdGroup.v3+json'
+        }
+      });
+      return response.data.adGroups || [];
+    } catch (error) {
+      console.error(`❌ Errore recupero ad groups per campagna ${campaignId}:`, error);
+      throw error;
+    }
+  }
+
   // ================================================
   // METODI PER KEYWORD
   // ================================================
