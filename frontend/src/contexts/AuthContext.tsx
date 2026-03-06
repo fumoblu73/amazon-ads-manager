@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
 import axios from 'axios';
 
 // In production, use relative paths (same domain). In development, use localhost backend
@@ -15,7 +15,7 @@ interface User {
 }
 
 export interface SyncNotification {
-  type: 'campaigns' | 'kdp';
+  type: 'campaigns' | 'kdp' | 'kdp_bsr';
   status: 'syncing' | 'success' | 'skipped' | 'error';
   message: string;
 }
@@ -32,10 +32,13 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const BSR_SYNC_TTL_MS = 6 * 60 * 60 * 1000; // 6 ore
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncNotifications, setSyncNotifications] = useState<SyncNotification[]>([]);
+  const bsrSyncTriggeredRef = useRef(false);
 
   const addNotification = (n: SyncNotification) => {
     setSyncNotifications(prev => {
@@ -149,6 +152,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Logout error:', error);
     }
   };
+
+  // Auto-trigger bookshelf sync via extension all'apertura dell'app (per BSR + pagine)
+  useEffect(() => {
+    if (!user || bsrSyncTriggeredRef.current) return;
+    bsrSyncTriggeredRef.current = true;
+
+    const lastSync = localStorage.getItem('lastBookshelfSyncTs');
+    const isStale = !lastSync || (Date.now() - parseInt(lastSync)) > BSR_SYNC_TTL_MS;
+    if (!isStale) return;
+
+    let cancelled = false;
+    let syncCompleteHandler: ((e: MessageEvent) => void) | null = null;
+
+    const run = async () => {
+      // Controlla se l'estensione è attiva (attendi max 2s)
+      let extensionAvailable = false;
+      await new Promise<void>(resolve => {
+        const handler = (e: MessageEvent) => {
+          if (e.data?.type === 'EXTENSION_INSTALLED') {
+            extensionAvailable = true;
+            window.removeEventListener('message', handler);
+            resolve();
+          }
+        };
+        window.addEventListener('message', handler);
+        window.postMessage({ type: 'KDP_EXTENSION_CHECK' }, '*');
+        setTimeout(() => { window.removeEventListener('message', handler); resolve(); }, 2000);
+      });
+
+      if (cancelled || !extensionAvailable) return;
+
+      addNotification({ type: 'kdp_bsr', status: 'syncing', message: 'Aggiornamento BSR libri...' });
+
+      syncCompleteHandler = (e: MessageEvent) => {
+        if (e.data?.type !== 'KDP_BOOKSHELF_SYNC_COMPLETE' || cancelled) return;
+        window.removeEventListener('message', syncCompleteHandler!);
+        localStorage.setItem('lastBookshelfSyncTs', Date.now().toString());
+        if (e.data.success) {
+          addNotification({ type: 'kdp_bsr', status: 'success', message: `BSR aggiornato: ${e.data.booksCount} libri` });
+        } else {
+          removeNotification('kdp_bsr');
+        }
+      };
+      window.addEventListener('message', syncCompleteHandler);
+
+      window.postMessage({ type: 'KDP_BOOKSHELF_SYNC_REQUEST', marketplace: 'IT', forceRefresh: false }, '*');
+
+      // Cleanup di sicurezza dopo 10 minuti
+      setTimeout(() => {
+        if (syncCompleteHandler) window.removeEventListener('message', syncCompleteHandler);
+      }, 10 * 60 * 1000);
+    };
+
+    run();
+
+    return () => {
+      cancelled = true;
+      if (syncCompleteHandler) window.removeEventListener('message', syncCompleteHandler);
+    };
+  }, [user]);
 
   useEffect(() => {
     checkAuth();
