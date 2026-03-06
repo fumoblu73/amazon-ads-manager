@@ -399,18 +399,18 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       spending: parseFloat(row.spending || 0)
     }));
 
-    // Get monthly royalties per marketplace (last 12 months) — JOIN KdpDailyStats → KdpBook
+    // Get monthly royalties per marketplace (last 12 months) — use stats.marketplace directly
     const royaltiesByMarketplace: Record<string, Array<{ yearMonth: string; royalties: number }>> = {};
     try {
       const mpRoyaltiesRaw = await statsRepository
         .createQueryBuilder('stats')
-        .innerJoin(KdpBook, 'book', 'book.asin = stats.asin AND book."user_id"::text = stats."userId"')
-        .select('book.marketplace', 'marketplace')
+        .select('stats.marketplace', 'marketplace')
         .addSelect(`TO_CHAR(stats.date, 'YYYY-MM')`, 'yearMonth')
         .addSelect('SUM(stats."grossroyalties")', 'royalties')
         .where('stats."userId" = :userId', { userId })
         .andWhere(`stats.date >= NOW() - INTERVAL '12 months'`)
-        .groupBy('book.marketplace')
+        .andWhere('stats.marketplace IS NOT NULL')
+        .groupBy('stats.marketplace')
         .addGroupBy(`TO_CHAR(stats.date, 'YYYY-MM')`)
         .orderBy(`TO_CHAR(stats.date, 'YYYY-MM')`, 'ASC')
         .getRawMany();

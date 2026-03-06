@@ -170,7 +170,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let extensionAvailable = false;
       await new Promise<void>(resolve => {
         const handler = (e: MessageEvent) => {
-          if (e.data?.type === 'EXTENSION_INSTALLED') {
+          // Accept either EXTENSION_INSTALLED (fires at extension load) or
+          // KDP_EXTENSION_STATUS with installed:true (response to KDP_EXTENSION_CHECK)
+          if (
+            e.data?.type === 'EXTENSION_INSTALLED' ||
+            (e.data?.type === 'KDP_EXTENSION_STATUS' && e.data.installed)
+          ) {
             extensionAvailable = true;
             window.removeEventListener('message', handler);
             resolve();

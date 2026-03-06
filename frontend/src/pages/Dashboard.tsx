@@ -135,6 +135,7 @@ export default function Dashboard() {
   const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [expandedBooks, setExpandedBooks] = useState<Set<string>>(new Set());
 
   const handleTriggerAutomation = async () => {
     setTriggeringAutomation(true);
@@ -349,7 +350,7 @@ export default function Dashboard() {
                   return (
                     <button
                       key={day}
-                      onClick={() => setSelectedDay(d => d === day ? null : day)}
+                      onClick={() => { setSelectedDay(d => d === day ? null : day); setExpandedBooks(new Set()); }}
                       className="flex flex-col items-center gap-1"
                     >
                       <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all
@@ -357,7 +358,7 @@ export default function Dashboard() {
                           ? 'bg-blue-600 ring-2 ring-blue-400'
                           : hasLogs
                             ? 'bg-gray-700 hover:bg-gray-600'
-                            : 'bg-gray-800 opacity-30'}
+                            : 'bg-gray-800'}
                         ${isToday && !isSelected ? 'ring-2 ring-orange-400' : ''}
                       `}>
                         {total > 0 && (
@@ -389,19 +390,48 @@ export default function Dashboard() {
                 {selectedDayBooks.length === 0 ? (
                   <p className="text-xs text-gray-500">Nessuna attività</p>
                 ) : (
-                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                  <div className="space-y-1 max-h-64 overflow-y-auto">
                     {selectedDayBooks.map(book => {
                       const hasFail = book.logs.some(l => l.status === 'failed');
                       const ok = book.logs.filter(l => l.status === 'success').length;
                       const err = book.logs.filter(l => l.status === 'failed').length;
+                      const isExpanded = expandedBooks.has(book.bookKey);
                       return (
-                        <div key={book.bookKey} className={`flex items-center gap-2 px-2 py-1 rounded ${hasFail ? 'bg-red-900/20' : 'bg-gray-800/50'}`}>
-                          <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${hasFail ? 'bg-red-400' : 'bg-green-400'}`} />
-                          <span className="text-xs text-gray-200 truncate flex-1">{book.bookLabel}</span>
-                          <div className="flex gap-1.5 shrink-0">
-                            {ok > 0 && <span className="text-xs text-green-400">{ok}✓</span>}
-                            {err > 0 && <span className="text-xs text-red-400">{err}✗</span>}
-                          </div>
+                        <div key={book.bookKey}>
+                          <button
+                            onClick={() => setExpandedBooks(prev => {
+                              const next = new Set(prev);
+                              if (next.has(book.bookKey)) next.delete(book.bookKey);
+                              else next.add(book.bookKey);
+                              return next;
+                            })}
+                            className={`w-full flex items-center gap-2 px-2 py-1 rounded text-left ${hasFail ? 'bg-red-900/20 hover:bg-red-900/30' : 'bg-gray-800/50 hover:bg-gray-700/50'} transition-colors`}
+                          >
+                            <svg className={`w-3 h-3 text-gray-500 shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${hasFail ? 'bg-red-400' : 'bg-green-400'}`} />
+                            <span className="text-xs text-gray-200 truncate flex-1">{book.bookLabel}</span>
+                            <div className="flex gap-1.5 shrink-0">
+                              {ok > 0 && <span className="text-xs text-green-400">{ok}✓</span>}
+                              {err > 0 && <span className="text-xs text-red-400">{err}✗</span>}
+                            </div>
+                          </button>
+                          {isExpanded && (
+                            <div className="ml-6 mt-0.5 space-y-px">
+                              {book.logs.map(log => (
+                                <div key={log.id} className={`flex items-center gap-2 px-2 py-1 rounded text-xs ${log.status === 'failed' ? 'bg-red-950/40' : 'bg-gray-900/60'}`}>
+                                  <span className={log.status === 'failed' ? 'text-red-400' : 'text-green-400'}>
+                                    {log.status === 'failed' ? '✗' : '✓'}
+                                  </span>
+                                  <span className="text-gray-400 truncate flex-1">{log.ruleName || log.action || log.targetName}</span>
+                                  {log.status === 'failed' && log.errorMessage && (
+                                    <span className="text-red-500 text-[10px] truncate max-w-[120px]" title={log.errorMessage}>{log.errorMessage}</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
