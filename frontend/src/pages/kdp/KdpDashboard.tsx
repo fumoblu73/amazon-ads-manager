@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { kdpAnalyticsApi, amazonAdsApi, kdpBooksApi } from '../../services/api';
 import StatsCard from '../../components/kdp/StatsCard';
 import type { KdpDashboardSummary, BookStatsData } from '../../types';
@@ -54,27 +54,24 @@ export default function KdpDashboard() {
     percent: 0,
     text: ''
   });
-  const autoSyncTriggered = useRef(false);
+  const [syncLastResult, setSyncLastResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Controlla stato estensione
   const checkExtensionStatus = useCallback(() => {
     window.postMessage({ type: 'KDP_EXTENSION_CHECK' }, '*');
   }, []);
 
-  // Avvia sync automatico
-  const startAutoSync = useCallback(() => {
+  // Avvia sync manuale bookshelf (libri + BSR + pagine)
+  const startBookshelfSync = useCallback(() => {
     if (!extensionStatus.installed) {
-      alert('Estensione non installata. Installa l\'estensione Amazon Ads Manager - KDP Sync per sincronizzare i dati.');
-      return;
-    }
-    if (!extensionStatus.authenticated) {
-      alert('Estensione non autenticata. Ricarica la pagina per autenticare l\'estensione.');
+      setSyncLastResult({ success: false, message: 'Estensione Chrome non installata. Installala per sincronizzare BSR e dati libri.' });
       return;
     }
 
+    setSyncLastResult(null);
     setSyncProgress({ active: true, percent: 5, text: 'Avvio sincronizzazione...' });
-    window.postMessage({ type: 'KDP_SYNC_REQUEST', action: 'startSync' }, '*');
-  }, [extensionStatus]);
+    window.postMessage({ type: 'KDP_BOOKSHELF_SYNC_REQUEST', marketplace: 'IT', forceRefresh: true }, '*');
+  }, [extensionStatus.installed]);
 
   // Listener per messaggi dall'estensione
   useEffect(() => {
@@ -131,23 +128,23 @@ export default function KdpDashboard() {
         });
       }
 
-      // Sync completato
-      if (type === 'KDP_SYNC_COMPLETE') {
-        setSyncProgress({ active: false, percent: 100, text: 'Completato!' });
+      // Sync bookshelf completato (libri + BSR + pagine)
+      if (type === 'KDP_BOOKSHELF_SYNC_COMPLETE') {
         if (event.data.success) {
-          setExtensionStatus(prev => ({
-            ...prev,
-            lastSync: new Date().toISOString(),
-            lastSyncSuccess: true
-          }));
-          // Ricarica i dati della dashboard
+          setSyncProgress({ active: false, percent: 100, text: 'Completato!' });
+          setSyncLastResult({ success: true, message: `Aggiornato: ${event.data.booksCount ?? '?'} libri` });
+          localStorage.setItem('lastBookshelfSyncTs', Date.now().toString());
           setTimeout(() => loadDashboardData(), 2000);
+        } else {
+          setSyncProgress({ active: false, percent: 0, text: '' });
+          setSyncLastResult({ success: false, message: event.data.error || 'Sincronizzazione fallita' });
         }
       }
 
       // Errore sync
-      if (type === 'KDP_SYNC_ERROR') {
+      if (type === 'KDP_SYNC_ERROR' || type === 'KDP_BOOKSHELF_SYNC_ERROR') {
         setSyncProgress({ active: false, percent: 0, text: '' });
+        setSyncLastResult({ success: false, message: event.data.error || 'Errore durante la sincronizzazione' });
       }
     };
 
@@ -173,22 +170,6 @@ export default function KdpDashboard() {
     loadDashboardData();
   }, []);
 
-  // Auto-sync on-demand: se dati stale (>6h) e estensione autenticata, sincronizza silenziosamente
-  useEffect(() => {
-    if (!summary || !extensionStatus.authenticated || autoSyncTriggered.current) return;
-
-    const SIX_HOURS = 6 * 60 * 60 * 1000;
-    const snapshotAge = summary.snapshotInfo?.createdAt
-      ? Date.now() - new Date(summary.snapshotInfo.createdAt).getTime()
-      : Infinity;
-
-    if (snapshotAge > SIX_HOURS) {
-      autoSyncTriggered.current = true;
-      console.log('[Dashboard] Dati stale, avvio auto-sync via estensione...');
-      setSyncProgress({ active: true, percent: 5, text: 'Aggiornamento dati KDP...' });
-      window.postMessage({ type: 'KDP_SYNC_REQUEST', action: 'startSync' }, '*');
-    }
-  }, [summary, extensionStatus.authenticated]);
 
   const loadDashboardData = async () => {
     try {
@@ -306,18 +287,25 @@ export default function KdpDashboard() {
             {summary.period.label || `${summary.period.startDate} - ${summary.period.endDate}`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={startAutoSync}
-            disabled={!extensionStatus.installed || syncProgress.active}
-            title={extensionStatus.installed ? 'Sincronizza libri e vendite KDP' : 'Estensione non installata'}
-            className="px-4 py-2 bg-orange-500/20 text-orange-500 rounded-lg hover:bg-orange-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            <svg className={`w-4 h-4 ${syncProgress.active ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            {syncProgress.active ? 'Sync...' : 'Sync KDP'}
-          </button>
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            {syncLastResult && (
+              <p className={`text-xs mb-1 ${syncLastResult.success ? 'text-green-400' : 'text-red-400'}`}>
+                {syncLastResult.success ? '✓' : '✗'} {syncLastResult.message}
+              </p>
+            )}
+            <button
+              onClick={startBookshelfSync}
+              disabled={syncProgress.active}
+              title="Sincronizza libri, BSR e numero pagine via estensione Chrome"
+              className="px-4 py-2 bg-orange-500/20 text-orange-500 rounded-lg hover:bg-orange-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <svg className={`w-4 h-4 ${syncProgress.active ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {syncProgress.active ? 'Sync...' : 'Sync ora'}
+            </button>
+          </div>
           <button
             onClick={loadDashboardData}
             disabled={loading}

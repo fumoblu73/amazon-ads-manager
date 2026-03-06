@@ -17,9 +17,6 @@ export default function Bookshelf() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cookieStatus, setCookieStatus] = useState<CookieStatus | null>(null);
-  const [extensionInstalled, setExtensionInstalled] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'done' | 'error'>('idle');
-  const [syncProgress, setSyncProgress] = useState<{ percent: number; text: string } | null>(null);
   const [filters, setFilters] = useState<BookshelfFilters>({
     status: 'all',
     page: 1,
@@ -31,40 +28,17 @@ export default function Bookshelf() {
     checkCookieStatus();
   }, [filters]);
 
-  // Listen for extension messages (sync progress/completion)
+  // Ricarica libri quando il sync (avviato da Overview) si completa
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
-      const { type } = event.data || {};
-
-      if (type === 'EXTENSION_INSTALLED') setExtensionInstalled(true);
-      if (type === 'KDP_BOOKSHELF_SYNC_RESPONSE') {
-        if (event.data.success) setSyncStatus('syncing');
-        else { setSyncStatus('error'); setError(event.data.error || 'Sync failed'); }
-      }
-      if (type === 'KDP_SYNC_PROGRESS') {
-        setSyncProgress({ percent: event.data.percent, text: event.data.text });
-      }
-      if (type === 'KDP_BOOKSHELF_SYNC_COMPLETE') {
-        setSyncStatus(event.data.success ? 'done' : 'error');
-        setSyncProgress(null);
-        if (event.data.success) {
-          setTimeout(() => { setSyncStatus('idle'); loadBooks(); }, 1500);
-        }
+      if (event.data?.type === 'KDP_BOOKSHELF_SYNC_COMPLETE' && event.data.success) {
+        setTimeout(() => loadBooks(), 1500);
       }
     };
-
     window.addEventListener('message', handleMessage);
-    // Check if extension is installed
-    window.postMessage({ type: 'KDP_EXTENSION_CHECK' }, '*');
     return () => window.removeEventListener('message', handleMessage);
   }, []);
-
-  const triggerBookshelfSync = () => {
-    setSyncStatus('syncing');
-    setSyncProgress({ percent: 0, text: 'Avvio sync...' });
-    window.postMessage({ type: 'KDP_BOOKSHELF_SYNC_REQUEST', marketplace: 'IT', forceRefresh: true }, '*');
-  };
 
   const loadBooks = async () => {
     try {
@@ -243,28 +217,6 @@ export default function Bookshelf() {
           <p className="text-gray-400">{books.length} books in library</p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Sync KDP button — visible only if extension is installed */}
-          {extensionInstalled && (
-            <button
-              onClick={triggerBookshelfSync}
-              disabled={syncStatus === 'syncing'}
-              className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors ${
-                syncStatus === 'syncing' ? 'bg-orange-600/30 text-orange-400 cursor-not-allowed' :
-                syncStatus === 'done' ? 'bg-green-600/30 text-green-400' :
-                syncStatus === 'error' ? 'bg-red-600/30 text-red-400' :
-                'bg-orange-600 text-white hover:bg-orange-500'
-              }`}
-            >
-              {syncStatus === 'syncing' ? (
-                <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              )}
-              {syncStatus === 'syncing' ? 'Sync in corso...' : syncStatus === 'done' ? 'Sync completato' : 'Sync KDP'}
-            </button>
-          )}
           <button
             onClick={loadBooks}
             disabled={loading}
@@ -277,22 +229,6 @@ export default function Bookshelf() {
           </button>
         </div>
       </div>
-
-      {/* Sync progress bar */}
-      {syncStatus === 'syncing' && syncProgress && (
-        <div className="bg-gray-900 border border-gray-700 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-300">{syncProgress.text}</span>
-            <span className="text-sm text-orange-400 font-mono">{syncProgress.percent}%</span>
-          </div>
-          <div className="w-full bg-gray-700 rounded-full h-2">
-            <div
-              className="bg-orange-500 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${syncProgress.percent}%` }}
-            />
-          </div>
-        </div>
-      )}
 
       {/* Cookie Status Banner */}
       {cookieStatus && cookieStatus.cookiesExpired && (

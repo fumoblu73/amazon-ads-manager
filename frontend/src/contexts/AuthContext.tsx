@@ -181,7 +181,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setTimeout(() => { window.removeEventListener('message', handler); resolve(); }, 2000);
       });
 
-      if (cancelled || !extensionAvailable) return;
+      if (cancelled) return;
+      if (!extensionAvailable) {
+        addNotification({ type: 'kdp_bsr', status: 'error', message: 'Estensione Chrome non trovata: BSR libri non aggiornato' });
+        return;
+      }
 
       addNotification({ type: 'kdp_bsr', status: 'syncing', message: 'Aggiornamento BSR libri...' });
 
