@@ -70,7 +70,7 @@ export default function KdpDashboard() {
 
     setSyncLastResult(null);
     setSyncProgress({ active: true, percent: 5, text: 'Avvio sincronizzazione...' });
-    window.postMessage({ type: 'KDP_SYNC_REQUEST', marketplace: 'IT', forceRefresh: true }, '*');
+    window.postMessage({ type: 'KDP_SYNC_REQUEST', action: 'startSync', marketplace: 'IT', forceRefresh: true }, '*');
   }, [extensionStatus.installed]);
 
   // Listener per messaggi dall'estensione

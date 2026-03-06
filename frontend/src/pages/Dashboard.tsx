@@ -420,13 +420,27 @@ export default function Dashboard() {
                           {isExpanded && (
                             <div className="ml-6 mt-0.5 space-y-px">
                               {book.logs.map(log => (
-                                <div key={log.id} className={`flex items-center gap-2 px-2 py-1 rounded text-xs ${log.status === 'failed' ? 'bg-red-950/40' : 'bg-gray-900/60'}`}>
-                                  <span className={log.status === 'failed' ? 'text-red-400' : 'text-green-400'}>
-                                    {log.status === 'failed' ? '✗' : '✓'}
-                                  </span>
-                                  <span className="text-gray-400 truncate flex-1">{log.ruleName || log.action || log.targetName}</span>
+                                <div key={log.id} className={`flex flex-col gap-0.5 px-2 py-1.5 rounded ${log.status === 'failed' ? 'bg-red-950/40' : 'bg-gray-900/60'}`}>
+                                  <div className="flex items-center gap-2">
+                                    <span className={`text-xs shrink-0 ${log.status === 'failed' ? 'text-red-400' : 'text-green-400'}`}>
+                                      {log.status === 'failed' ? '✗' : '✓'}
+                                    </span>
+                                    <span className="text-xs text-gray-300 font-medium truncate">{log.targetName || log.targetId}</span>
+                                    <span className="text-[10px] text-gray-600 shrink-0">{log.ruleName}</span>
+                                  </div>
+                                  {(log.oldValue != null || log.newValue != null) && (
+                                    <div className="text-[10px] text-gray-500 pl-4">
+                                      {log.action && <span className="text-gray-600 mr-1">{log.action}:</span>}
+                                      {log.oldValue != null && <span className="text-gray-400">${log.oldValue.toFixed(2)}</span>}
+                                      {log.oldValue != null && log.newValue != null && <span className="text-gray-600 mx-1">→</span>}
+                                      {log.newValue != null && <span className="text-blue-400 font-medium">${log.newValue.toFixed(2)}</span>}
+                                    </div>
+                                  )}
+                                  {log.reason && (
+                                    <div className="text-[10px] text-gray-600 pl-4 truncate" title={log.reason}>{log.reason}</div>
+                                  )}
                                   {log.status === 'failed' && log.errorMessage && (
-                                    <span className="text-red-500 text-[10px] truncate max-w-[120px]" title={log.errorMessage}>{log.errorMessage}</span>
+                                    <div className="text-[10px] text-red-500 pl-4 truncate" title={log.errorMessage}>{log.errorMessage}</div>
                                   )}
                                 </div>
                               ))}
