@@ -268,41 +268,6 @@ export default function Dashboard() {
   return (
     <div className="flex h-full overflow-hidden">
 
-      {/* ── Log Panel — stessa larghezza della sidebar (w-32) ── */}
-      {selectedDay && (
-        <div className="w-32 flex-shrink-0 bg-gray-900 border-r border-gray-800 overflow-y-auto flex flex-col">
-          <div className="p-2 border-b border-gray-800">
-            <span className="text-[9px] font-semibold text-orange-400 uppercase block">
-              {new Date(selectedDay + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'short' })}
-            </span>
-            {selectedDayBooks.length > 0 && (
-              <span className="text-[8px] text-gray-500">{selectedDayBooks.length} libr{selectedDayBooks.length === 1 ? 'o' : 'i'}</span>
-            )}
-          </div>
-          {selectedDayBooks.length === 0 ? (
-            <p className="text-[9px] text-gray-500 p-2">Nessuna attività</p>
-          ) : (
-            selectedDayBooks.map(book => {
-              const hasFail = book.logs.some(l => l.status === 'failed');
-              const ok = book.logs.filter(l => l.status === 'success').length;
-              const err = book.logs.filter(l => l.status === 'failed').length;
-              return (
-                <div key={book.bookKey} className={`border-b border-gray-700/30 px-2 py-1.5 ${hasFail ? 'bg-red-900/20' : ''}`}>
-                  <div className="flex items-center gap-1 mb-0.5">
-                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${hasFail ? 'bg-red-400' : 'bg-green-400'}`} />
-                    <span className="text-[8px] text-gray-200 truncate leading-tight">{book.bookLabel}</span>
-                  </div>
-                  <div className="flex gap-1 pl-2.5">
-                    {ok > 0 && <span className="text-[7px] text-green-400">{ok}✓</span>}
-                    {err > 0 && <span className="text-[7px] text-red-400">{err}✗</span>}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      )}
-
       {/* ── Contenuto principale ── */}
       <div className="flex-1 overflow-auto p-8">
       <div className="flex flex-col gap-6">
@@ -398,7 +363,7 @@ export default function Dashboard() {
                         {total > 0 && (
                           <div className="flex flex-col items-center leading-none gap-px">
                             {success > 0 && <span className="text-[9px] text-green-400 font-bold">{success}</span>}
-                            {failed > 0 && <span className="text-[9px] text-red-400 font-bold">{failed}</span>}
+                            <span className="text-[9px] text-red-400 font-bold">{failed}</span>
                           </div>
                         )}
                       </div>
@@ -409,6 +374,41 @@ export default function Dashboard() {
                 })}
               </div>
             </div>
+
+            {/* Dettaglio giorno selezionato — sotto il calendario */}
+            {selectedDay && (
+              <div className="border-t border-gray-700 pt-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-semibold text-orange-400">
+                    {new Date(selectedDay + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'short' })}
+                  </span>
+                  {selectedDayBooks.length > 0 && (
+                    <span className="text-xs text-gray-500">{selectedDayBooks.length} libr{selectedDayBooks.length === 1 ? 'o' : 'i'}</span>
+                  )}
+                </div>
+                {selectedDayBooks.length === 0 ? (
+                  <p className="text-xs text-gray-500">Nessuna attività</p>
+                ) : (
+                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                    {selectedDayBooks.map(book => {
+                      const hasFail = book.logs.some(l => l.status === 'failed');
+                      const ok = book.logs.filter(l => l.status === 'success').length;
+                      const err = book.logs.filter(l => l.status === 'failed').length;
+                      return (
+                        <div key={book.bookKey} className={`flex items-center gap-2 px-2 py-1 rounded ${hasFail ? 'bg-red-900/20' : 'bg-gray-800/50'}`}>
+                          <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${hasFail ? 'bg-red-400' : 'bg-green-400'}`} />
+                          <span className="text-xs text-gray-200 truncate flex-1">{book.bookLabel}</span>
+                          <div className="flex gap-1.5 shrink-0">
+                            {ok > 0 && <span className="text-xs text-green-400">{ok}✓</span>}
+                            {err > 0 && <span className="text-xs text-red-400">{err}✗</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* COLONNA 2: CAMPAGNE */}

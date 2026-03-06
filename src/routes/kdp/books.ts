@@ -44,11 +44,26 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
 
     const books = await queryBuilder.getMany();
 
+    // Deduplica per ASIN: stesso libro può esistere su più marketplace.
+    // Teniamo il record con più dati (preferenza: bsrRank > pageCount > qualsiasi)
+    const byAsin = new Map<string, KdpBook>();
+    for (const book of books) {
+      const existing = byAsin.get(book.asin);
+      if (!existing) {
+        byAsin.set(book.asin, book);
+      } else {
+        const existingScore = (existing.bsrRank ? 2 : 0) + (existing.pageCount ? 1 : 0);
+        const bookScore = (book.bsrRank ? 2 : 0) + (book.pageCount ? 1 : 0);
+        if (bookScore > existingScore) byAsin.set(book.asin, book);
+      }
+    }
+    const deduped = Array.from(byAsin.values());
+
     res.json({
       success: true,
-      data: books,    // campo atteso dal frontend (Bookshelf + KdpDashboard)
-      count: books.length,
-      books            // backward compat per estensione Chrome
+      data: deduped,
+      count: deduped.length,
+      books: deduped   // backward compat per estensione Chrome
     });
   } catch (error) {
     console.error('Errore nel recupero dei libri:', error);
