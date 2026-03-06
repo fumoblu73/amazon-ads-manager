@@ -61,7 +61,7 @@ export default function KdpDashboard() {
     window.postMessage({ type: 'KDP_EXTENSION_CHECK' }, '*');
   }, []);
 
-  // Avvia sync manuale bookshelf (libri + BSR + pagine)
+  // Avvia sync manuale completo (bookshelf + sales via kdpreports)
   const startBookshelfSync = useCallback(() => {
     if (!extensionStatus.installed) {
       setSyncLastResult({ success: false, message: 'Estensione Chrome non installata. Installala per sincronizzare BSR e dati libri.' });
@@ -70,7 +70,7 @@ export default function KdpDashboard() {
 
     setSyncLastResult(null);
     setSyncProgress({ active: true, percent: 5, text: 'Avvio sincronizzazione...' });
-    window.postMessage({ type: 'KDP_BOOKSHELF_SYNC_REQUEST', marketplace: 'IT', forceRefresh: true }, '*');
+    window.postMessage({ type: 'KDP_SYNC_REQUEST', marketplace: 'IT', forceRefresh: true }, '*');
   }, [extensionStatus.installed]);
 
   // Listener per messaggi dall'estensione
@@ -128,7 +128,20 @@ export default function KdpDashboard() {
         });
       }
 
-      // Sync bookshelf completato (libri + BSR + pagine)
+      // Sync completo (bookshelf + sales) completato
+      if (type === 'KDP_SYNC_COMPLETE') {
+        if (event.data.success) {
+          setSyncProgress({ active: false, percent: 100, text: 'Completato!' });
+          setSyncLastResult({ success: true, message: `Sync completo: ${event.data.booksCount ?? '?'} libri + royalties` });
+          localStorage.setItem('lastBookshelfSyncTs', Date.now().toString());
+          setTimeout(() => loadDashboardData(), 2000);
+        } else {
+          setSyncProgress({ active: false, percent: 0, text: '' });
+          setSyncLastResult({ success: false, message: event.data.error || 'Sincronizzazione fallita' });
+        }
+      }
+
+      // Sync bookshelf completato (solo BSR/pagine — da AuthContext auto-trigger)
       if (type === 'KDP_BOOKSHELF_SYNC_COMPLETE') {
         if (event.data.success) {
           setSyncProgress({ active: false, percent: 100, text: 'Completato!' });
