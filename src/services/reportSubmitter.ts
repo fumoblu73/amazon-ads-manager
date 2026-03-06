@@ -191,7 +191,7 @@ export async function submitReportsForUser(userId: string): Promise<{ reportsSub
       // Submit spAdvertisedProduct report once per marketplace (for all ASINs)
       try {
         const productReportSubmitted = await submitAdvertisedProductReport(
-          userId, marketplace, apiService
+          userId, marketplace
         );
         stats.reportsSubmitted += productReportSubmitted;
       } catch (error: any) {
@@ -425,8 +425,7 @@ async function submitReportsForCampaign(
  */
 async function submitAdvertisedProductReport(
   userId: string,
-  marketplace: string,
-  apiService: any
+  marketplace: string
 ): Promise<number> {
   const reportRepo = AppDataSource.getRepository(PendingReport);
   const now = new Date();
@@ -440,7 +439,8 @@ async function submitAdvertisedProductReport(
   try {
     let reportId: string;
     try {
-      reportId = await apiService.requestAdvertisedProductReport(startDateStr, endDateStr);
+      const userApiService = createUserAmazonApiService(userId, marketplace);
+      reportId = await userApiService.requestAdvertisedProductReport(startDateStr, endDateStr);
     } catch (submitError: any) {
       const duplicateId = extractReportIdFrom425(submitError);
       if (duplicateId) {

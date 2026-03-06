@@ -187,8 +187,9 @@ export class UserAmazonApiService {
       const campaigns = response.data.campaigns || [];
       console.log(`✅ Found ${campaigns.length} campaigns for profile ${profileId}`);
       return campaigns;
-    } catch (error) {
-      console.error(`❌ Error fetching campaigns for profile ${profileId}:`, error);
+    } catch (error: any) {
+      const detail = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+      console.error(`❌ Error fetching campaigns for profile ${profileId}: ${detail}`);
       throw error;
     }
   }

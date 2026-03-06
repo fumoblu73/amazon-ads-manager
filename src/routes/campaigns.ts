@@ -384,9 +384,10 @@ export async function syncAllMarketplacesForUser(
     for (const profile of profiles) {
       const profileId = profile.profileId.toString();
       const countryCode = profile.countryCode || 'UNKNOWN';
+      const accountType = profile.accountInfo?.type || 'unknown';
 
       try {
-        console.log(`🔄 [AllMarkets] Syncing ${countryCode} (profile ${profileId})...`);
+        console.log(`🔄 [AllMarkets] Syncing ${countryCode} (profile ${profileId}, type: ${accountType})...`);
         // Create a per-profile service with the correct marketplace so the interceptor
         // routes to the right regional endpoint (NA/EU/FE) for campaign requests
         const profileApiService = createUserAmazonApiService(userId, countryCode);
@@ -397,9 +398,14 @@ export async function syncAllMarketplacesForUser(
         marketplaces.push({ marketplace: countryCode, profileId, created: result.created, updated: result.updated, errors: result.errors, totalCampaigns: result.total });
         console.log(`✅ [AllMarkets] ${countryCode}: ${result.created} new, ${result.updated} updated, ${result.total} total`);
       } catch (err: any) {
-        console.error(`⚠️ [AllMarkets] ${countryCode} sync failed: ${err.message}`);
-        marketplaces.push({ marketplace: countryCode, profileId, created: 0, updated: 0, errors: 1, totalCampaigns: 0 });
-        totals.errors++;
+        if (err.response?.status === 400) {
+          console.warn(`⚠️ [AllMarkets] ${countryCode} (profile ${profileId}, type: ${accountType}): skipped — SP advertising not available (400)`);
+          marketplaces.push({ marketplace: countryCode, profileId, created: 0, updated: 0, errors: 0, totalCampaigns: 0 });
+        } else {
+          console.error(`❌ [AllMarkets] ${countryCode} sync failed: ${err.message}`);
+          marketplaces.push({ marketplace: countryCode, profileId, created: 0, updated: 0, errors: 1, totalCampaigns: 0 });
+          totals.errors++;
+        }
       }
     }
   } catch (err: any) {
