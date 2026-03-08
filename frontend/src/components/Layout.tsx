@@ -54,7 +54,7 @@ export default function Layout() {
               key={item.path}
               to={item.path}
               className={({ isActive }) =>
-                `group flex flex-col items-center p-3 rounded-lg transition-all ${
+                `group flex flex-col items-center p-3 rounded-lg transition-all w-full ${
                   isActive ? 'bg-orange-500' : 'hover:bg-gray-800'
                 }`
               }

@@ -420,27 +420,35 @@ export default function Dashboard() {
                           {isExpanded && (
                             <div className="ml-6 mt-0.5 space-y-px">
                               {book.logs.map(log => (
-                                <div key={log.id} className={`flex flex-col gap-0.5 px-2 py-1.5 rounded ${log.status === 'failed' ? 'bg-red-950/40' : 'bg-gray-900/60'}`}>
-                                  <div className="flex items-center gap-2">
-                                    <span className={`text-xs shrink-0 ${log.status === 'failed' ? 'text-red-400' : 'text-green-400'}`}>
+                                <div key={log.id} className={`flex flex-col gap-1 px-2 py-1.5 rounded ${log.status === 'failed' ? 'bg-red-950/40' : 'bg-gray-900/60'}`}>
+                                  {/* Riga 1: stato + funzione + campagna */}
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className={`text-[10px] font-bold shrink-0 px-1 rounded ${log.status === 'failed' ? 'bg-red-900/60 text-red-300' : 'bg-green-900/60 text-green-300'}`}>
                                       {log.status === 'failed' ? '✗' : '✓'}
                                     </span>
-                                    <span className="text-xs text-gray-300 font-medium truncate">{log.targetName || log.targetId}</span>
-                                    <span className="text-[10px] text-gray-600 shrink-0">{log.ruleName}</span>
+                                    {log.ruleName && (
+                                      <span className="text-[10px] font-bold text-orange-400 shrink-0">{log.ruleName}</span>
+                                    )}
+                                    <span className="text-xs text-gray-300 truncate flex-1" title={log.targetName || log.targetId}>
+                                      {log.targetName || log.targetId}
+                                    </span>
                                   </div>
+                                  {/* Riga 2: risultato numerico */}
                                   {(log.oldValue != null || log.newValue != null) && (
-                                    <div className="text-[10px] text-gray-500 pl-4">
-                                      {log.action && <span className="text-gray-600 mr-1">{log.action}:</span>}
-                                      {log.oldValue != null && <span className="text-gray-400">${log.oldValue.toFixed(2)}</span>}
-                                      {log.oldValue != null && log.newValue != null && <span className="text-gray-600 mx-1">→</span>}
-                                      {log.newValue != null && <span className="text-blue-400 font-medium">${log.newValue.toFixed(2)}</span>}
+                                    <div className="flex items-center gap-1 pl-4 text-xs">
+                                      {log.action && <span className="text-gray-500 text-[10px]">{log.action}</span>}
+                                      {log.oldValue != null && <span className="text-gray-400 font-mono">${log.oldValue.toFixed(2)}</span>}
+                                      {log.oldValue != null && log.newValue != null && <span className="text-gray-500">→</span>}
+                                      {log.newValue != null && <span className="text-blue-300 font-mono font-bold">${log.newValue.toFixed(2)}</span>}
                                     </div>
                                   )}
+                                  {/* Riga 3: motivazione */}
                                   {log.reason && (
-                                    <div className="text-[10px] text-gray-600 pl-4 truncate" title={log.reason}>{log.reason}</div>
+                                    <div className="text-[10px] text-gray-500 pl-4 truncate italic" title={log.reason}>{log.reason}</div>
                                   )}
+                                  {/* Riga 4: errore */}
                                   {log.status === 'failed' && log.errorMessage && (
-                                    <div className="text-[10px] text-red-500 pl-4 truncate" title={log.errorMessage}>{log.errorMessage}</div>
+                                    <div className="text-[10px] text-red-400 pl-4 truncate" title={log.errorMessage}>{log.errorMessage}</div>
                                   )}
                                 </div>
                               ))}

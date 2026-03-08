@@ -166,19 +166,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let syncCompleteHandler: ((e: MessageEvent) => void) | null = null;
 
     const run = async () => {
-      // Controlla se l'estensione è attiva (attendi max 2s)
+      // Controlla se l'estensione è attiva E autenticata (attendi max 2s)
       let extensionAvailable = false;
+      let extensionAuthenticated = false;
       await new Promise<void>(resolve => {
         const handler = (e: MessageEvent) => {
-          // Accept either EXTENSION_INSTALLED (fires at extension load) or
-          // KDP_EXTENSION_STATUS with installed:true (response to KDP_EXTENSION_CHECK)
-          if (
-            e.data?.type === 'EXTENSION_INSTALLED' ||
-            (e.data?.type === 'KDP_EXTENSION_STATUS' && e.data.installed)
-          ) {
-            extensionAvailable = true;
+          if (e.data?.type === 'KDP_EXTENSION_STATUS') {
+            extensionAvailable = !!e.data.installed;
+            extensionAuthenticated = !!e.data.authenticated;
             window.removeEventListener('message', handler);
             resolve();
+          } else if (e.data?.type === 'EXTENSION_INSTALLED') {
+            extensionAvailable = true;
+            // EXTENSION_INSTALLED non include auth status — follow-up check
+            window.postMessage({ type: 'KDP_EXTENSION_CHECK' }, '*');
           }
         };
         window.addEventListener('message', handler);
@@ -188,30 +189,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (cancelled) return;
       if (!extensionAvailable) {
-        addNotification({ type: 'kdp_bsr', status: 'error', message: 'Estensione Chrome non trovata: BSR libri non aggiornato' });
+        addNotification({ type: 'kdp_bsr', status: 'skipped', message: 'Estensione Chrome non trovata — BSR non aggiornato' });
+        return;
+      }
+      if (!extensionAuthenticated) {
+        addNotification({ type: 'kdp_bsr', status: 'skipped', message: 'Estensione non autenticata — ricarica la pagina dopo il login' });
         return;
       }
 
-      addNotification({ type: 'kdp_bsr', status: 'syncing', message: 'Aggiornamento BSR libri...' });
+      // Progress messages simulati (un passo ogni ~20s)
+      const steps = ['Accesso KDP...', 'Recupero lista libri...', 'Aggiornamento BSR e pagine...', 'Salvataggio...'];
+      let stepIdx = 0;
+      addNotification({ type: 'kdp_bsr', status: 'syncing', message: steps[0] });
+      const progressTimer = setInterval(() => {
+        if (stepIdx < steps.length - 1) {
+          stepIdx++;
+          addNotification({ type: 'kdp_bsr', status: 'syncing', message: steps[stepIdx] });
+        }
+      }, 20000);
+
+      let timeoutTimer: ReturnType<typeof setTimeout>;
 
       syncCompleteHandler = (e: MessageEvent) => {
-        if (e.data?.type !== 'KDP_BOOKSHELF_SYNC_COMPLETE' || cancelled) return;
+        if (cancelled) return;
+        const t = e.data?.type;
+        if (t !== 'KDP_BOOKSHELF_SYNC_COMPLETE' && t !== 'KDP_BOOKSHELF_SYNC_RESPONSE') return;
+        clearInterval(progressTimer);
+        clearTimeout(timeoutTimer);
         window.removeEventListener('message', syncCompleteHandler!);
+        syncCompleteHandler = null;
         localStorage.setItem('lastBookshelfSyncTs', Date.now().toString());
-        if (e.data.success) {
-          addNotification({ type: 'kdp_bsr', status: 'success', message: `BSR aggiornato: ${e.data.booksCount} libri` });
+        if (e.data.success !== false) {
+          addNotification({ type: 'kdp_bsr', status: 'success', message: `BSR aggiornato: ${e.data.booksCount ?? '?'} libri` });
         } else {
-          removeNotification('kdp_bsr');
+          addNotification({ type: 'kdp_bsr', status: 'error', message: e.data.error || 'Sync BSR fallito' });
         }
       };
       window.addEventListener('message', syncCompleteHandler);
 
       window.postMessage({ type: 'KDP_BOOKSHELF_SYNC_REQUEST', marketplace: 'IT', forceRefresh: false }, '*');
 
-      // Cleanup di sicurezza dopo 10 minuti
-      setTimeout(() => {
-        if (syncCompleteHandler) window.removeEventListener('message', syncCompleteHandler);
-      }, 10 * 60 * 1000);
+      // Timeout dopo 3 minuti
+      timeoutTimer = setTimeout(() => {
+        if (syncCompleteHandler) {
+          clearInterval(progressTimer);
+          window.removeEventListener('message', syncCompleteHandler);
+          syncCompleteHandler = null;
+          addNotification({ type: 'kdp_bsr', status: 'error', message: 'Timeout sync BSR (3 min) — riprova manualmente' });
+        }
+      }, 3 * 60 * 1000);
     };
 
     run();

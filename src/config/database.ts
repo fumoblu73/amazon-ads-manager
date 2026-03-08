@@ -97,6 +97,10 @@ export const initializeDatabase = async () => {
       await AppDataSource.query(`ALTER TABLE automation_logs ADD COLUMN IF NOT EXISTS book_asin VARCHAR(20)`);
       await AppDataSource.query(`ALTER TABLE automation_logs ADD COLUMN IF NOT EXISTS book_title VARCHAR(255)`);
 
+      // automation_settings: VAT fields (added v2.4.4)
+      await AppDataSource.query(`ALTER TABLE automation_settings ADD COLUMN IF NOT EXISTS use_vat_in_fast_acos BOOLEAN DEFAULT true`);
+      await AppDataSource.query(`ALTER TABLE automation_settings ADD COLUMN IF NOT EXISTS vat_percentage DECIMAL(5,2) DEFAULT 22`);
+
       // book_spend_cache table
       await AppDataSource.query(`
         CREATE TABLE IF NOT EXISTS book_spend_cache (
