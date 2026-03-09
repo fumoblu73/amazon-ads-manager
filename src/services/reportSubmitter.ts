@@ -482,7 +482,7 @@ async function submitAdvertisedProductReport(
     console.log(`     ✅ spAdvertisedProduct report submitted for ${marketplace}: ${reportId}`);
     return 1;
   } catch (error: any) {
-    console.error(`     ❌ spAdvertisedProduct submit failed for ${marketplace}: ${error.message}`);
+    console.warn(`     ⚠️ spAdvertisedProduct submit skipped for ${marketplace}: ${error.message}`);
     return 0;
   }
 }

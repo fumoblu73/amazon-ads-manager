@@ -405,6 +405,43 @@ export class UserAmazonApiService {
           return existingReportId;
         }
       }
+      // spAdvertisedProduct + 400: alcuni marketplace (es. CA) non supportano groupBy=advertiserProduct
+      // Retry con groupBy=advertiser (compatibile con tutti i marketplace)
+      if (error.response?.status === 400 && reportType === 'spAdvertisedProduct') {
+        console.warn(`⚠️ [API v3] spAdvertisedProduct groupBy=advertiserProduct non supportato (400), retry con groupBy=advertiser...`);
+        try {
+          const fallbackBody = {
+            startDate,
+            endDate,
+            configuration: {
+              adProduct: 'SPONSORED_PRODUCTS',
+              groupBy: ['advertiser'],
+              columns: ['campaignId', 'campaignName', 'adGroupId', 'adGroupName', 'impressions', 'clicks', 'cost', 'purchases14d', 'sales14d'],
+              reportTypeId: 'spAdvertisedProduct',
+              timeUnit: 'SUMMARY',
+              format: 'GZIP_JSON'
+            }
+          };
+          const fallbackResponse = await this.client.post('/reporting/reports', fallbackBody, {
+            headers: { 'Content-Type': 'application/vnd.createasyncreportrequest.v3+json' }
+          });
+          const fallbackId = fallbackResponse.data.reportId;
+          console.log(`✅ [API v3] Fallback report (groupBy=advertiser) requested. ID: ${fallbackId}`);
+          return fallbackId;
+        } catch (fallbackError: any) {
+          if (fallbackError.response?.status === 425 && fallbackError.response?.data?.detail) {
+            const m = fallbackError.response.data.detail.match(/duplicate of\s*:\s*([a-f0-9-]+)/i);
+            if (m) {
+              console.log(`♻️ [API v3] Fallback report già esistente (425). Using: ${m[1]}`);
+              return m[1];
+            }
+          }
+          const fbDetail = fallbackError.response?.data?.message || fallbackError.response?.data?.detail || fallbackError.message;
+          console.warn(`⚠️ [API v3] Anche il fallback spAdvertisedProduct è fallito (${fallbackError.response?.status}): ${fbDetail}`);
+          throw new Error(`Report request failed with fallback (${fallbackError.response?.status}): ${fbDetail}`);
+        }
+      }
+
       console.error('❌ [API v3] Error requesting report:', JSON.stringify(error.response?.data || error.message, null, 2));
       console.error('❌ [API v3] HTTP status:', error.response?.status);
       // Include dettaglio errore Amazon nel messaggio
@@ -721,6 +758,7 @@ export class UserAmazonApiService {
       console.log(`📊 [API v3] Requesting advertised product report ${startDate} - ${endDate}...`);
 
       // Colonne disponibili per spAdvertisedProduct
+      // NOTA: productName e productCategory non supportate da tutti i marketplace (es. CA)
       const columns = [
         'advertisedAsin',
         'advertisedSku',
@@ -728,8 +766,6 @@ export class UserAmazonApiService {
         'campaignName',
         'adGroupId',
         'adGroupName',
-        'productName',
-        'productCategory',
         'impressions',
         'clicks',
         'cost',

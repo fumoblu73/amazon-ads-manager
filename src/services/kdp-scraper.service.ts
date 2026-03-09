@@ -134,12 +134,6 @@ export class KdpScraperService {
       // Imposta cookie nel browser (naviga prima a KDP)
       await this.setCookies(page, cookies, kdpDomain);
 
-      // Cancella tutti i libri esistenti per questo utente (per avere dati sempre freschi)
-      console.log('🗑️ Clearing existing books for fresh sync...');
-      const bookRepository = AppDataSource.getRepository(KdpBook);
-      const deleteResult = await bookRepository.delete({ userId });
-      console.log(`✅ Deleted ${deleteResult.affected || 0} existing books`);
-
       // Scrape bookshelf
       const books = await this.scrapeBookshelf(page, user.kdpMarketplace || 'US');
 
@@ -831,22 +825,39 @@ export class KdpScraperService {
     const bookRepository = AppDataSource.getRepository(KdpBook);
     let saved = 0;
 
-    // Since we delete all books before sync, we only need to create new ones
     for (const bookData of books) {
       try {
-        const newBook = bookRepository.create({
-          userId,
-          asin: bookData.asin,
-          title: bookData.title,
-          author: bookData.author || null,
-          seriesName: bookData.seriesName || null,
-          marketplace: bookData.marketplace,
-          format: bookData.format || null,
-          price: bookData.price || null,
-          publishDate: bookData.publishDate || null,
-          coverUrl: bookData.coverUrl || null
+        // Upsert: aggiorna se esiste, crea se non esiste.
+        // Preserva bsrRank e pageCount già impostati dall'estensione Chrome.
+        const existing = await bookRepository.findOne({
+          where: { userId, asin: bookData.asin, marketplace: bookData.marketplace }
         });
-        await bookRepository.save(newBook);
+
+        if (existing) {
+          // Aggiorna solo i metadati testuali; NON sovrascrivere bsrRank/pageCount (impostati dall'estensione)
+          existing.title = bookData.title || existing.title;
+          existing.author = bookData.author || existing.author;
+          existing.seriesName = bookData.seriesName || existing.seriesName;
+          existing.format = bookData.format || existing.format;
+          existing.price = bookData.price || existing.price;
+          existing.publishDate = bookData.publishDate || existing.publishDate;
+          existing.coverUrl = bookData.coverUrl || existing.coverUrl;
+          await bookRepository.save(existing);
+        } else {
+          const newBook = bookRepository.create({
+            userId,
+            asin: bookData.asin,
+            title: bookData.title,
+            author: bookData.author || null,
+            seriesName: bookData.seriesName || null,
+            marketplace: bookData.marketplace,
+            format: bookData.format || null,
+            price: bookData.price || null,
+            publishDate: bookData.publishDate || null,
+            coverUrl: bookData.coverUrl || null
+          });
+          await bookRepository.save(newBook);
+        }
         saved++;
       } catch (error) {
         console.error(`Error saving book ${bookData.asin}:`, error);

@@ -282,7 +282,22 @@ class RegionApiClient {
       console.log(`✅ [${this.region}] Report ${adType} richiesto: ${response.data.reportId}`);
       return response.data.reportId;
     } catch (error: any) {
-      console.error(`❌ [${this.region}] Errore richiesta report ${adType}:`, error.response?.data || error.message);
+      // 425 = duplicate request — reuse existing reportId
+      if (error.response?.status === 425) {
+        const detail = error.response?.data?.detail || '';
+        const match = detail.match(/duplicate of\s*:\s*([a-f0-9-]+)/i);
+        if (match) {
+          console.log(`♻️ [${this.region}] Report ${adType} già esistente (425), riuso: ${match[1]}`);
+          return match[1];
+        }
+      }
+      // Profile not found or no SP advertising — treat as warning, not error
+      const msg = error.response?.data?.message || error.response?.data?.detail || error.message || '';
+      if (msg.includes('Profile not found') || error.response?.status === 400) {
+        console.warn(`⚠️ [${this.region}] Report ${adType} non disponibile (${error.response?.status}): ${msg.substring(0, 100)}`);
+      } else {
+        console.error(`❌ [${this.region}] Errore richiesta report ${adType}:`, error.response?.data || error.message);
+      }
       return null;
     }
   }
