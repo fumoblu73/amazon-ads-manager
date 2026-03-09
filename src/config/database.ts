@@ -148,6 +148,23 @@ export const initializeDatabase = async () => {
       // Ignore if column already exists or table doesn't exist yet
     }
 
+    // kdp_books: rimuovi righe duplicate (stesso user_id+asin+marketplace) — one-time cleanup (v2.4.10)
+    try {
+      await AppDataSource.query(`
+        DELETE FROM kdp_books
+        WHERE id NOT IN (
+          SELECT DISTINCT ON (user_id, UPPER(TRIM(asin)), marketplace) id
+          FROM kdp_books
+          ORDER BY user_id, UPPER(TRIM(asin)), marketplace,
+            (CASE WHEN bsr_rank IS NOT NULL THEN 2 ELSE 0 END) +
+            (CASE WHEN page_count IS NOT NULL THEN 1 ELSE 0 END) DESC,
+            created_at ASC
+        )
+      `);
+    } catch (e) {
+      // Ignora se la tabella non esiste ancora
+    }
+
     // monthly_ads_spend table (added v2.3.9)
     try {
       await AppDataSource.query(`

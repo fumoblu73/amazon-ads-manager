@@ -42,17 +42,20 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
     // when the limit cuts the result set mid-way.
     const books = await queryBuilder.getMany();
 
-    // Deduplica per ASIN: stesso libro può esistere su più marketplace.
-    // Teniamo il record con più dati (preferenza: bsrRank > pageCount > qualsiasi)
+    // Deduplica per ASIN: stesso libro può esistere su più marketplace,
+    // oppure il DB può contenere righe duplicate (constraint non applicato in prod).
+    // Normalizziamo l'ASIN (trim+uppercase) come chiave per catturare anche
+    // duplicati con whitespace o casing diverso.
     const byAsin = new Map<string, KdpBook>();
     for (const book of books) {
-      const existing = byAsin.get(book.asin);
+      const key = (book.asin || '').trim().toUpperCase();
+      const existing = byAsin.get(key);
       if (!existing) {
-        byAsin.set(book.asin, book);
+        byAsin.set(key, book);
       } else {
         const existingScore = (existing.bsrRank ? 2 : 0) + (existing.pageCount ? 1 : 0);
         const bookScore = (book.bsrRank ? 2 : 0) + (book.pageCount ? 1 : 0);
-        if (bookScore > existingScore) byAsin.set(book.asin, book);
+        if (bookScore > existingScore) byAsin.set(key, book);
       }
     }
     let deduped = Array.from(byAsin.values());

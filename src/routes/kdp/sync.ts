@@ -92,6 +92,9 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
           continue;
         }
 
+        // Normalizza ASIN (trim + uppercase) per evitare duplicati con whitespace/casing diverso
+        bookData.asin = bookData.asin.trim().toUpperCase();
+
         // Cerca o crea il libro
         let book = await bookRepo.findOne({
           where: {

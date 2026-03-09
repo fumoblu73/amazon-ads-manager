@@ -827,10 +827,13 @@ export class KdpScraperService {
 
     for (const bookData of books) {
       try {
+        // Normalizza ASIN (trim + uppercase) per evitare duplicati con whitespace/casing diverso
+        const asin = (bookData.asin || '').trim().toUpperCase();
+
         // Upsert: aggiorna se esiste, crea se non esiste.
         // Preserva bsrRank e pageCount già impostati dall'estensione Chrome.
         const existing = await bookRepository.findOne({
-          where: { userId, asin: bookData.asin, marketplace: bookData.marketplace }
+          where: { userId, asin, marketplace: bookData.marketplace }
         });
 
         if (existing) {
@@ -846,7 +849,7 @@ export class KdpScraperService {
         } else {
           const newBook = bookRepository.create({
             userId,
-            asin: bookData.asin,
+            asin,
             title: bookData.title,
             author: bookData.author || null,
             seriesName: bookData.seriesName || null,
