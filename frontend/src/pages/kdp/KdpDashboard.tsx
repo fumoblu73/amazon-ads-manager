@@ -70,6 +70,10 @@ export default function KdpDashboard() {
 
     setSyncLastResult(null);
     setSyncProgress({ active: true, percent: 5, text: 'Avvio sincronizzazione...' });
+    localStorage.removeItem('lastBookshelfSyncTs'); // force BSR re-sync
+    // Bookshelf+BSR sync (parallel with sales sync)
+    window.postMessage({ type: 'KDP_BOOKSHELF_SYNC_REQUEST', marketplace: 'IT', forceRefresh: true }, '*');
+    // Sales/royalties sync (kdpreports)
     window.postMessage({ type: 'KDP_SYNC_REQUEST', action: 'startSync', marketplace: 'IT', forceRefresh: true }, '*');
   }, [extensionStatus.installed]);
 

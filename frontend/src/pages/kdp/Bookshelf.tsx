@@ -28,7 +28,7 @@ export default function Bookshelf() {
     checkCookieStatus();
   }, [filters]);
 
-  // Ricarica libri quando il sync (avviato da Overview) si completa
+  // Ricarica libri quando il sync BSR si completa (triggerato da KdpDashboard "Sync ora")
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
