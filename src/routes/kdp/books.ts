@@ -37,11 +37,9 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
       );
     }
 
-    // Limite opzionale
-    if (limit) {
-      queryBuilder.take(Number(limit));
-    }
-
+    // Fetch ALL books first, then dedup by ASIN, then apply limit.
+    // Applying take() before dedup causes cross-marketplace duplicates to slip through
+    // when the limit cuts the result set mid-way.
     const books = await queryBuilder.getMany();
 
     // Deduplica per ASIN: stesso libro può esistere su più marketplace.
@@ -57,7 +55,10 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
         if (bookScore > existingScore) byAsin.set(book.asin, book);
       }
     }
-    const deduped = Array.from(byAsin.values());
+    let deduped = Array.from(byAsin.values());
+
+    // Apply limit after dedup
+    if (limit) deduped = deduped.slice(0, Number(limit));
 
     res.json({
       success: true,

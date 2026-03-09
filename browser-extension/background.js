@@ -667,11 +667,16 @@ async function fetchPageCountFromAmazon(asin, marketplace) {
   const cacheKey = `${asin}:${marketplace}`;
   const cached = _bookMetaCache[cacheKey];
 
-  // Return cached data if still fresh (both BSR and pageCount are display-only)
-  if (cached && cached.bsrUpdatedAt && (Date.now() - cached.bsrUpdatedAt) < BSR_CACHE_TTL_MS) {
+  // Return cached data if still fresh AND bsrRank was actually found.
+  // If cached bsrRank is null, bypass cache so we retry the fetch (extraction may have failed).
+  if (cached && cached.bsrUpdatedAt && cached.bsrRank && (Date.now() - cached.bsrUpdatedAt) < BSR_CACHE_TTL_MS) {
     const ageMin = Math.round((Date.now() - cached.bsrUpdatedAt) / 60000);
-    console.log(`[Background] ${asin}: using cache (age: ${ageMin}min)`);
+    console.log(`[Background] ${asin}: using cache (age: ${ageMin}min, bsr=#${cached.bsrRank})`);
     return { pageCount: cached.pageCount, bsrRank: cached.bsrRank, bsrCategory: cached.bsrCategory };
+  }
+  // If we have a recent pageCount but stale/missing bsrRank, still return cached pageCount to avoid re-fetching
+  if (cached && cached.pageCount && !cached.bsrRank) {
+    console.log(`[Background] ${asin}: cached pageCount=${cached.pageCount} but bsrRank null — will re-fetch`);
   }
 
   const domain = getAmazonDomain(marketplace);
@@ -701,12 +706,16 @@ async function fetchPageCountFromAmazon(asin, marketplace) {
   const pageCount = extractPageCountFromHtml(html);
   const bsr = extractBsrFromHtml(html);
 
-  // Update cache — preserve stored pageCount if Amazon didn't return one
+  // Update cache.
+  // - pageCount: use new value, or preserve old if not returned
+  // - bsrRank: use new value, or preserve old if extraction failed (don't overwrite good BSR with null)
+  // - bsrUpdatedAt: only mark fresh if BSR was actually found; otherwise keep old timestamp so next sync retries
+  const newBsrRank = bsr?.rank || null;
   _bookMetaCache[cacheKey] = {
     pageCount: pageCount || cached?.pageCount || null,
-    bsrRank: bsr?.rank || null,
-    bsrCategory: bsr?.category || null,
-    bsrUpdatedAt: Date.now()
+    bsrRank: newBsrRank || cached?.bsrRank || null,
+    bsrCategory: newBsrRank ? (bsr?.category || null) : (cached?.bsrCategory || null),
+    bsrUpdatedAt: newBsrRank ? Date.now() : (cached?.bsrUpdatedAt || null)
   };
   chrome.storage.local.set({ bookMetaCache: _bookMetaCache });
 
