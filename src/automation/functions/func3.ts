@@ -246,7 +246,8 @@ export async function executeFunc3(
           (clicks65 >= cfg.clicks65days && orders65 === 0);
 
         if (shouldPause) {
-          console.log(`   ⏸️  ${cfg.dryRun ? '[DRY RUN] ' : ''}PAUSA ${itemName}: clicks=${clicks}/${clicks65}, orders=${orders}/${orders65}`);
+          const currentState = item.state || item.status || 'unknown';
+          console.log(`   ⏸️  ${cfg.dryRun ? '[DRY RUN] ' : ''}PAUSA ${itemName}: clicks=${clicks}/${clicks65}, orders=${orders}/${orders65}, stato_attuale=${currentState}`);
 
           if (!cfg.dryRun) {
             if (campaignType === 1 || campaignType === 3) {

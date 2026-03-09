@@ -218,7 +218,7 @@ class AmazonApiService {
     try {
       console.log('📥 Recupero keywords...');
 
-      const body: any = { maxResults: 5000 };
+      const body: any = { maxResults: 5000, stateFilter: { include: ['ENABLED'] } };
       if (campaignId) {
         body.campaignIdFilter = { include: [campaignId] };
       }
@@ -546,7 +546,7 @@ class AmazonApiService {
     try {
       console.log('📥 Recupero targets...');
 
-      const body: any = { maxResults: 5000 };
+      const body: any = { maxResults: 5000, stateFilter: { include: ['ENABLED'] } };
       if (campaignId) {
         body.campaignIdFilter = { include: [campaignId] };
       }
