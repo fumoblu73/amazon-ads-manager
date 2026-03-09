@@ -5,6 +5,7 @@ import { requireAmazonAuth, AuthRequest } from '../middleware/requireAmazonAuth'
 import { submitReportsForAllUsers, submitReportsForUser } from '../services/reportSubmitter';
 import { processCompletedReports, processCompletedReportsForUser } from '../services/reportProcessor';
 import { syncAllMarketplacesForUser } from './campaigns';
+import { createMarketplaceApiService } from '../services/MarketplaceApiFactory';
 
 const router = Router();
 
@@ -1520,6 +1521,32 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
   } catch (error: any) {
     console.error('❌ [TEST] Test function error:', error.message);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/automation/diag-state?secret=XXX — diagnostico temporaneo pausa target/keyword
+router.post('/diag-state', async (req: Request, res: Response) => {
+  const cronSecret = process.env.CRON_SECRET || process.env.ADMIN_TOKEN;
+  if (req.query.secret !== cronSecret) {
+    res.status(403).json({ error: 'Forbidden' });
+    return;
+  }
+  const { targetId, keywordId, state = 'paused', marketplace = 'US' } = req.body;
+  if (!targetId && !keywordId) {
+    res.status(400).json({ error: 'targetId o keywordId obbligatorio' });
+    return;
+  }
+  try {
+    const apiService = createMarketplaceApiService(marketplace);
+    let rawResponse: any;
+    if (targetId) {
+      rawResponse = await apiService.updateTargetState(targetId, state as 'paused' | 'enabled');
+    } else {
+      rawResponse = await apiService.updateKeywordState(keywordId, state as 'paused' | 'enabled');
+    }
+    res.json({ success: true, amazonResponse: rawResponse });
+  } catch (error: any) {
+    res.json({ success: false, error: error.message });
   }
 });
 
