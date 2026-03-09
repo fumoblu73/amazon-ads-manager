@@ -275,7 +275,15 @@ class AmazonApiService {
         }
       });
 
-      console.log(`✅ Stato keyword aggiornato`);
+      // API v3 restituisce 207 con per-item success/error — controllare esplicitamente
+      const errors = response.data?.keywords?.error;
+      if (errors && errors.length > 0) {
+        const errDetail = JSON.stringify(errors[0]);
+        console.error(`❌ Keyword ${keywordId} → ${state} rifiutato da Amazon: ${errDetail}`);
+        throw new Error(`Amazon rejected keyword state update: ${errDetail}`);
+      }
+
+      console.log(`✅ Keyword ${keywordId} → ${state}`);
       return response.data;
     } catch (error) {
       console.error(`❌ Errore aggiornamento stato keyword ${keywordId}:`, error);
@@ -599,7 +607,18 @@ class AmazonApiService {
         }
       });
 
-      console.log(`✅ Stato target aggiornato`);
+      // Logga risposta completa per diagnostica (temporaneo)
+      console.log(`📄 Target state response: ${JSON.stringify(response.data)}`);
+
+      // API v3 restituisce 207 con per-item success/error — controllare esplicitamente
+      const errors = response.data?.targetingClauses?.error;
+      if (errors && errors.length > 0) {
+        const errDetail = JSON.stringify(errors[0]);
+        console.error(`❌ Target ${targetId} → ${state} rifiutato da Amazon: ${errDetail}`);
+        throw new Error(`Amazon rejected target state update: ${errDetail}`);
+      }
+
+      console.log(`✅ Target ${targetId} → ${state}`);
       return response.data;
     } catch (error) {
       console.error(`❌ Errore aggiornamento stato target ${targetId}:`, error);
