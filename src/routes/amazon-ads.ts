@@ -495,4 +495,33 @@ router.get('/monthly-spend', authMiddleware, async (req: AuthRequest, res: Respo
   }
 });
 
+// POST /api/amazon-ads/diag-state?adminToken=XXX
+// Endpoint diagnostico temporaneo: chiama updateTargetState/updateKeywordState e restituisce risposta raw Amazon
+router.post('/diag-state', async (req: Request, res: Response) => {
+  const adminToken = process.env.ADMIN_TOKEN || process.env.CRON_SECRET;
+  if (req.query.adminToken !== adminToken) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  const { targetId, keywordId, state = 'paused', marketplace = 'US' } = req.body;
+  if (!targetId && !keywordId) {
+    return res.status(400).json({ error: 'targetId o keywordId obbligatorio' });
+  }
+
+  try {
+    const apiService = createMarketplaceApiService(marketplace);
+    let rawResponse: any;
+
+    if (targetId) {
+      rawResponse = await apiService.updateTargetState(targetId, state as 'paused' | 'enabled');
+    } else {
+      rawResponse = await apiService.updateKeywordState(keywordId, state as 'paused' | 'enabled');
+    }
+
+    res.json({ success: true, amazonResponse: rawResponse });
+  } catch (error: any) {
+    res.status(200).json({ success: false, error: error.message });
+  }
+});
+
 export default router;
