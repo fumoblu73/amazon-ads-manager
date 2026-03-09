@@ -1,6 +1,6 @@
 {
   "name": "amazon-ads-manager",
-  "version": "2.4.5",
+  "version": "2.4.6",
   "description": "Applicazione per gestire e automatizzare le campagne Amazon Ads",
   "main": "dist/index.js",
   "scripts": {
