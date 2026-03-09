@@ -664,7 +664,7 @@ function getAmazonDomain(marketplace) {
  * Returns { pageCount, bsrRank, bsrCategory }.
  */
 async function fetchPageCountFromAmazon(asin, marketplace) {
-  const cacheKey = `${asin}:${marketplace}`;
+  const cacheKey = `${asin}:US`; // Always keyed on US since we always fetch from amazon.com
   const cached = _bookMetaCache[cacheKey];
 
   // Return cached data if still fresh AND bsrRank was actually found.
@@ -679,7 +679,10 @@ async function fetchPageCountFromAmazon(asin, marketplace) {
     console.log(`[Background] ${asin}: cached pageCount=${cached.pageCount} but bsrRank null — will re-fetch`);
   }
 
-  const domain = getAmazonDomain(marketplace);
+  // Always fetch from amazon.com for reliable BSR and pageCount.
+  // Books scraped from KDP IT locale get marketplace='IT', but their BSR ranking
+  // on amazon.it may not exist if they are primarily US-market books.
+  const domain = getAmazonDomain('US');
   const url = `https://${domain}/dp/${asin}`;
 
   console.log(`[Background] Fetching book meta for ${asin} from ${url}`);
@@ -750,8 +753,14 @@ function extractBsrFromHtml(html) {
 
   if (snippetStart === -1) return null;
 
-  const snippet = html.slice(snippetStart, snippetStart + 600);
-  const match = snippet.match(/#([\d,\.]+)\s+in\s+([^<\n(]{3,60})/);
+  // Strip HTML tags from snippet so the regex works even when the category
+  // is wrapped in an anchor tag: "#145 in <a href="...">Books</a>"
+  const snippet = html.slice(snippetStart, snippetStart + 800)
+    .replace(/<[^>]+>/g, ' ')   // strip tags
+    .replace(/&nbsp;/g, ' ')    // decode non-breaking spaces
+    .replace(/\s+/g, ' ');      // collapse whitespace
+
+  const match = snippet.match(/#([\d,\.]+)\s+in\s+([^(<\n]{3,80})/);
   if (!match) return null;
 
   const rank = parseInt(match[1].replace(/[,.]/g, ''));
