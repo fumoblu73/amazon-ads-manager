@@ -402,33 +402,28 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       spending: parseFloat(row.spending || 0)
     }));
 
-    // Get monthly ADS spend per marketplace from __AGGREGATE__ rows in kdp_user_stats
+    // Get ADS spend per marketplace from book_spend_cache (written by refresh-spend cron)
+    // book_spend_cache has 7d rolling spend — we map it to current year-month
+    const currentYm = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
     const spendByMarketplace: Record<string, Array<{ yearMonth: string; spend: number }>> = {};
     try {
-      const aggRows = await statsRepository
-        .createQueryBuilder('stats')
-        .select('stats.marketplace', 'marketplace')
-        .addSelect(`TO_CHAR(stats.date, 'YYYY-MM')`, 'yearMonth')
-        .addSelect('SUM(stats.spending)', 'spend')
-        .where('stats.userId = :userId', { userId })
-        .andWhere('stats.asin = :agg', { agg: '__AGGREGATE__' })
-        .andWhere('stats.marketplace IS NOT NULL')
-        .groupBy('stats.marketplace')
-        .addGroupBy(`TO_CHAR(stats.date, 'YYYY-MM')`)
-        .orderBy(`TO_CHAR(stats.date, 'YYYY-MM')`, 'ASC')
-        .getRawMany();
-      for (const row of aggRows) {
-        const mp = (row.marketplace || 'US').toUpperCase();
-        if (!spendByMarketplace[mp]) spendByMarketplace[mp] = [];
-        spendByMarketplace[mp].push({ yearMonth: row.yearMonth, spend: parseFloat(row.spend || 0) });
+      const cacheRows: Array<{ marketplace: string; spend: string }> = await AppDataSource.query(`
+        SELECT marketplace, SUM(spend_7d)::float AS spend
+        FROM book_spend_cache
+        WHERE user_id = $1 AND spend_7d > 0
+        GROUP BY marketplace
+      `, [userId]);
+      for (const row of cacheRows) {
+        const mp = (row.marketplace || '').toUpperCase();
+        if (mp) spendByMarketplace[mp] = [{ yearMonth: currentYm, spend: parseFloat(row.spend || '0') }];
       }
     } catch (e) {
-      console.warn('[Dashboard] spendByMarketplace query failed:', e);
+      console.warn('[Dashboard] book_spend_cache spend query failed:', e);
     }
 
     // Build per-marketplace monthly chart:
     // - Net royalties estimated via historicalMonths total × marketplace % (from latest snapshot.marketplaceData)
-    // - ADS spend per marketplace per month from kdp_user_stats.__AGGREGATE__
+    // - ADS spend from book_spend_cache (7d rolling, mapped to current month; historical months show spend=0)
     // - 'ALL' view: exact net royalties (historicalMonths total - combined spend) + combined spend
     const chartByMarketplace: Record<string, Array<{ yearMonth: string; label: string; royalties: number; spend: number }>> = {};
 
