@@ -34,7 +34,7 @@ export default function KdpDashboard() {
   const [error, setError] = useState<string | null>(null);
 
   // Selettore marketplace per il grafico mensile
-  const [selectedMarketplace, setSelectedMarketplace] = useState<string>('US');
+  const [selectedMarketplace, setSelectedMarketplace] = useState<string>('ALL');
 
   // Profitto per libro (7 giorni)
   const [bookStats7d, setBookStats7d] = useState<BookStatsData | null>(null);
@@ -678,7 +678,7 @@ export default function KdpDashboard() {
           : availableMarketplaces[0] ?? selectedMarketplace;
         const chartData = byMp[activeMp] ?? [];
 
-        const ALL_MARKETPLACES = ['US', 'CA', 'UK', 'DE', 'FR', 'IT', 'ES', 'AU'];
+        const ALL_MARKETPLACES = ['ALL', 'US', 'CA', 'UK', 'DE', 'FR', 'IT', 'ES', 'AU'];
 
         return (
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
@@ -730,13 +730,13 @@ export default function KdpDashboard() {
                     contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
                     labelStyle={{ color: '#F3F4F6' }}
                     formatter={(value: any, name: string | undefined) => {
-                      if (name === 'royalties') return [`$${Number(value).toFixed(2)}`, 'Royalties'];
+                      if (name === 'royalties') return [`$${Number(value).toFixed(2)}`, activeMp === 'ALL' ? 'Net Royalties' : 'Net Royalties (est.)'];
                       if (name === 'spend') return [`$${Number(value).toFixed(2)}`, 'ADS Spend'];
                       return [value, name ?? ''];
                     }}
                   />
                   <Legend
-                    formatter={(value) => value === 'royalties' ? 'Royalties' : 'ADS Spend'}
+                    formatter={(value) => value === 'royalties' ? (activeMp === 'ALL' ? 'Net Royalties' : 'Net Royalties (est.)') : 'ADS Spend'}
                     wrapperStyle={{ color: '#9CA3AF', fontSize: 12 }}
                   />
                   <Bar dataKey="royalties" fill="#F59E0B" name="royalties" radius={[3, 3, 0, 0]} />

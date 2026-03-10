@@ -170,10 +170,11 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
         const currentMonthHistorical = historicalMap.get(currentMonthKey);
 
         if (currentMonthHistorical) {
+          const gross = currentMonthHistorical.totalRoyalties || 0;
           currentMonthStats = {
-            grossRoyalties: currentMonthHistorical.totalRoyalties || 0,
-            spending: 0,
-            netRoyalties: currentMonthHistorical.totalRoyalties || 0,
+            grossRoyalties: gross,
+            spending: currentMonthStats.spending,
+            netRoyalties: gross - currentMonthStats.spending,
             paidUnits: (currentMonthHistorical.printOrders || 0) + (currentMonthHistorical.digitalOrders || 0),
             freeUnits: 0,
             kenpReads: currentMonthHistorical.kenpRead || 0,
@@ -181,10 +182,11 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
             digitalOrders: currentMonthHistorical.digitalOrders || 0
           };
         } else if (latestSnapshot.totalRoyalties) {
+          const gross = parseFloat(latestSnapshot.totalRoyalties.toString());
           currentMonthStats = {
-            grossRoyalties: parseFloat(latestSnapshot.totalRoyalties.toString()),
-            spending: 0,
-            netRoyalties: parseFloat(latestSnapshot.totalRoyalties.toString()),
+            grossRoyalties: gross,
+            spending: currentMonthStats.spending,
+            netRoyalties: gross - currentMonthStats.spending,
             paidUnits: (latestSnapshot.printOrders || 0) + (latestSnapshot.digitalOrders || 0),
             freeUnits: 0,
             kenpReads: latestSnapshot.kenpRead || 0,
@@ -200,10 +202,11 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
         const prevMonthData = historicalMap.get(prevMonthKey);
 
         if (prevMonthData) {
+          const prevGross = prevMonthData.totalRoyalties || 0;
           previousMonthStats = {
-            grossRoyalties: prevMonthData.totalRoyalties || 0,
-            spending: 0,
-            netRoyalties: prevMonthData.totalRoyalties || 0,
+            grossRoyalties: prevGross,
+            spending: previousMonthStats.spending,
+            netRoyalties: prevGross - previousMonthStats.spending,
             paidUnits: (prevMonthData.printOrders || 0) + (prevMonthData.digitalOrders || 0),
             freeUnits: 0,
             kenpReads: prevMonthData.kenpRead || 0,
@@ -399,66 +402,87 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       spending: parseFloat(row.spending || 0)
     }));
 
-    // Get monthly royalties per marketplace (last 12 months) — use stats.marketplace directly
-    const royaltiesByMarketplace: Record<string, Array<{ yearMonth: string; royalties: number }>> = {};
+    // Get monthly ADS spend per marketplace from __AGGREGATE__ rows in kdp_user_stats
+    const spendByMarketplace: Record<string, Array<{ yearMonth: string; spend: number }>> = {};
     try {
-      const mpRoyaltiesRaw = await statsRepository
+      const aggRows = await statsRepository
         .createQueryBuilder('stats')
         .select('stats.marketplace', 'marketplace')
         .addSelect(`TO_CHAR(stats.date, 'YYYY-MM')`, 'yearMonth')
-        .addSelect('SUM(stats."grossroyalties")', 'royalties')
-        .where('stats."userId" = :userId', { userId })
-        .andWhere(`stats.date >= NOW() - INTERVAL '12 months'`)
+        .addSelect('SUM(stats.spending)', 'spend')
+        .where('stats.userId = :userId', { userId })
+        .andWhere('stats.asin = :agg', { agg: '__AGGREGATE__' })
         .andWhere('stats.marketplace IS NOT NULL')
         .groupBy('stats.marketplace')
         .addGroupBy(`TO_CHAR(stats.date, 'YYYY-MM')`)
         .orderBy(`TO_CHAR(stats.date, 'YYYY-MM')`, 'ASC')
         .getRawMany();
-
-      for (const row of mpRoyaltiesRaw) {
+      for (const row of aggRows) {
         const mp = (row.marketplace || 'US').toUpperCase();
-        if (!royaltiesByMarketplace[mp]) royaltiesByMarketplace[mp] = [];
-        royaltiesByMarketplace[mp].push({
-          yearMonth: row.yearMonth,
-          royalties: parseFloat(row.royalties || 0)
-        });
-      }
-    } catch (e) {
-      console.warn('[Dashboard] royaltiesByMarketplace query failed:', e);
-    }
-
-    // Get monthly ADS spend from cache table
-    const spendByMarketplace: Record<string, Array<{ yearMonth: string; spend: number }>> = {};
-    try {
-      const spendRepo = AppDataSource.getRepository(MonthlyAdsSpend);
-      const spendRows = await spendRepo.find({ where: { userId }, order: { yearMonth: 'ASC' } });
-      for (const row of spendRows) {
-        if (!spendByMarketplace[row.marketplace]) spendByMarketplace[row.marketplace] = [];
-        spendByMarketplace[row.marketplace].push({
-          yearMonth: row.yearMonth,
-          spend: parseFloat(row.totalSpend as any) || 0
-        });
+        if (!spendByMarketplace[mp]) spendByMarketplace[mp] = [];
+        spendByMarketplace[mp].push({ yearMonth: row.yearMonth, spend: parseFloat(row.spend || 0) });
       }
     } catch (e) {
       console.warn('[Dashboard] spendByMarketplace query failed:', e);
     }
 
-    // Merge royalties + spend per marketplace into a unified chart structure
-    const allMarketplaces = new Set([
-      ...Object.keys(royaltiesByMarketplace),
-      ...Object.keys(spendByMarketplace)
-    ]);
+    // Build per-marketplace monthly chart:
+    // - Net royalties estimated via historicalMonths total × marketplace % (from latest snapshot.marketplaceData)
+    // - ADS spend per marketplace per month from kdp_user_stats.__AGGREGATE__
+    // - 'ALL' view: exact net royalties (historicalMonths total - combined spend) + combined spend
     const chartByMarketplace: Record<string, Array<{ yearMonth: string; label: string; royalties: number; spend: number }>> = {};
+
+    const histRoyMap = new Map<string, number>();
+    if (latestSnapshot?.historicalMonths?.length > 0) {
+      latestSnapshot.historicalMonths.forEach((hm: any) => histRoyMap.set(hm.month, hm.totalRoyalties || 0));
+    }
+
+    // Marketplace distribution from latest snapshot (for royalties estimation)
+    const mpPercent: Record<string, number> = {};
+    if (latestSnapshot?.marketplaceData?.length > 0) {
+      const totalMpRoy = latestSnapshot.marketplaceData.reduce((s: number, m: any) => s + (m.royalties || 0), 0);
+      if (totalMpRoy > 0) {
+        for (const m of latestSnapshot.marketplaceData) {
+          const mp = (m.marketplace || '').toUpperCase();
+          if (mp) mpPercent[mp] = (m.royalties || 0) / totalMpRoy;
+        }
+      }
+    }
+
+    // Build per-marketplace charts
+    const allMarketplaces = new Set([...Object.keys(spendByMarketplace), ...Object.keys(mpPercent)]);
     for (const mp of allMarketplaces) {
-      const royMap = new Map((royaltiesByMarketplace[mp] || []).map(r => [r.yearMonth, r.royalties]));
       const spMap = new Map((spendByMarketplace[mp] || []).map(s => [s.yearMonth, s.spend]));
-      const allMonths = new Set([...royMap.keys(), ...spMap.keys()]);
-      chartByMarketplace[mp] = [...allMonths].sort().map(ym => ({
-        yearMonth: ym,
-        label: new Date(ym + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
-        royalties: royMap.get(ym) || 0,
-        spend: spMap.get(ym) || 0
-      }));
+      const allMonths = new Set([...histRoyMap.keys(), ...spMap.keys()]);
+      chartByMarketplace[mp] = [...allMonths].sort().map(ym => {
+        const grossEst = (histRoyMap.get(ym) || 0) * (mpPercent[mp] || 0);
+        const spend = spMap.get(ym) || 0;
+        return {
+          yearMonth: ym,
+          label: new Date(ym + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+          royalties: Math.max(0, grossEst - spend),  // net royalties per marketplace (estimated)
+          spend
+        };
+      });
+    }
+
+    // Build 'ALL' combined view: exact net royalties from historicalMonths - total spend
+    if (histRoyMap.size > 0) {
+      const allSpendMap = new Map<string, number>();
+      for (const entries of Object.values(spendByMarketplace)) {
+        for (const e of entries) allSpendMap.set(e.yearMonth, (allSpendMap.get(e.yearMonth) || 0) + e.spend);
+      }
+      const allMonthsSet = new Set([...allSpendMap.keys(), ...histRoyMap.keys()]);
+      chartByMarketplace['ALL'] = [...allMonthsSet].sort().map(ym => {
+        const totalSpend = allSpendMap.get(ym) || 0;
+        const grossRoy = histRoyMap.get(ym) || 0;
+        return {
+          yearMonth: ym,
+          label: new Date(ym + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+          royalties: Math.max(0, grossRoy - totalSpend),  // net royalties (exact)
+          spend: totalSpend
+        };
+      });
     }
 
     // Count total live books
@@ -907,7 +931,7 @@ router.get('/analytics/book-stats', authMiddleware, async (req: AuthRequest, res
       value: parseFloat(row.value || 0)
     }));
 
-    // Get book-level data
+    // Get book-level data (exclude __AGGREGATE__ rows used for ad spend tracking)
     const bookStats = await statsRepository
       .createQueryBuilder('stats')
       .select('stats.asin', 'asin')
@@ -916,6 +940,7 @@ router.get('/analytics/book-stats', authMiddleware, async (req: AuthRequest, res
       .where('stats.userId = :userId', { userId })
       .andWhere('stats.date BETWEEN :startDate AND :endDate', { startDate, endDate })
       .andWhere('stats.asin IS NOT NULL')
+      .andWhere("stats.asin != '__AGGREGATE__'")
       .groupBy('stats.asin')
       .orderBy('SUM(stats.grossRoyalties)', 'DESC')
       .getRawMany();
