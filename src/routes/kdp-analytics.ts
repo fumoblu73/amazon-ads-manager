@@ -402,11 +402,28 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       spending: parseFloat(row.spending || 0)
     }));
 
-    // Get ADS spend per marketplace from book_spend_cache (written by refresh-spend cron)
-    // book_spend_cache has 7d rolling spend — we map it to current year-month
+    // Get ADS spend per marketplace:
+    // - Historical months: from monthly_ads_spend table
+    // - Current month: from book_spend_cache (7d rolling, more accurate)
     const currentYm = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
     const spendByMarketplace: Record<string, Array<{ yearMonth: string; spend: number }>> = {};
     try {
+      // Historical spend from monthly_ads_spend
+      const histSpendRows: Array<{ marketplace: string; year_month: string; spend: string }> = await AppDataSource.query(`
+        SELECT marketplace, year_month, total_spend::float AS spend
+        FROM monthly_ads_spend
+        WHERE user_id = $1 AND total_spend > 0
+        ORDER BY year_month ASC
+      `, [userId]);
+      for (const row of histSpendRows) {
+        const mp = (row.marketplace || '').toUpperCase();
+        const ym = row.year_month;
+        if (mp && ym) {
+          if (!spendByMarketplace[mp]) spendByMarketplace[mp] = [];
+          spendByMarketplace[mp].push({ yearMonth: ym, spend: parseFloat(row.spend || '0') });
+        }
+      }
+      // Current month spend from book_spend_cache (overrides monthly_ads_spend for current month)
       const cacheRows: Array<{ marketplace: string; spend: string }> = await AppDataSource.query(`
         SELECT marketplace, SUM(spend_7d)::float AS spend
         FROM book_spend_cache
@@ -415,10 +432,17 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       `, [userId]);
       for (const row of cacheRows) {
         const mp = (row.marketplace || '').toUpperCase();
-        if (mp) spendByMarketplace[mp] = [{ yearMonth: currentYm, spend: parseFloat(row.spend || '0') }];
+        if (mp) {
+          if (!spendByMarketplace[mp]) spendByMarketplace[mp] = [];
+          // Replace current month entry if exists, otherwise push
+          const idx = spendByMarketplace[mp].findIndex(e => e.yearMonth === currentYm);
+          const entry = { yearMonth: currentYm, spend: parseFloat(row.spend || '0') };
+          if (idx >= 0) spendByMarketplace[mp][idx] = entry;
+          else spendByMarketplace[mp].push(entry);
+        }
       }
     } catch (e) {
-      console.warn('[Dashboard] book_spend_cache spend query failed:', e);
+      console.warn('[Dashboard] spend query failed:', e);
     }
 
     // Build per-marketplace monthly chart:
