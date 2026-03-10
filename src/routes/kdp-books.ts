@@ -85,12 +85,28 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const [books, total] = await bookRepository.findAndCount({
+    // Fetch all (no skip/take) to dedup by ASIN before paginating
+    const allBooks = await bookRepository.find({
       where: whereConditions,
-      skip,
-      take: filters.limit,
       order: { createdAt: 'DESC' }
     });
+
+    // Dedup: same ASIN can appear in multiple marketplaces — keep the one with most data
+    const byAsin = new Map<string, typeof allBooks[0]>();
+    for (const book of allBooks) {
+      const key = (book.asin || '').trim().toUpperCase();
+      const existing = byAsin.get(key);
+      if (!existing) {
+        byAsin.set(key, book);
+      } else {
+        const existingScore = (existing.bsrRank ? 2 : 0) + (existing.pageCount ? 1 : 0);
+        const bookScore = (book.bsrRank ? 2 : 0) + (book.pageCount ? 1 : 0);
+        if (bookScore > existingScore) byAsin.set(key, book);
+      }
+    }
+    const deduped = Array.from(byAsin.values());
+    const total = deduped.length;
+    const books = deduped.slice(skip, skip + filters.limit!);
 
     res.json({
       success: true,
