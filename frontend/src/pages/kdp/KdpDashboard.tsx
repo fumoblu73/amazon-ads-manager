@@ -760,9 +760,11 @@ export default function KdpDashboard() {
             const netProfit = royalties - adSpend;
             const acos7d = royalties > 0 ? (adSpend / royalties) * 100 : null;
             const cover = book.cover || `https://m.media-amazon.com/images/P/${book.asin}.jpg`;
-            const meta = bookMeta.get(book.asin);
+            const meta = bookMeta.get(book.asin) || bookMeta.get((book.asin || '').trim().toUpperCase());
             return { ...book, cover, adSpend7d: adSpend, adSales7d, netProfit, acos7d,
-              pageCount: meta?.pageCount, bsrRank: meta?.bsrRank, bsrCategory: meta?.bsrCategory };
+              pageCount: book.pageCount ?? meta?.pageCount,
+              bsrRank: book.bsrRank ?? meta?.bsrRank,
+              bsrCategory: book.bsrCategory ?? meta?.bsrCategory };
           })
           .filter(b => b.grossRoyalties > 0 || b.adSpend7d > 0)
           .sort((a, b) => b.netProfit - a.netProfit);

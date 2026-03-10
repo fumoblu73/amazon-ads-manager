@@ -466,23 +466,25 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       });
     }
 
-    // Build 'ALL' combined view: exact net royalties from historicalMonths - total spend
-    if (histRoyMap.size > 0) {
+    // Build 'ALL' combined view: always built from any available data (spend + royalties)
+    {
       const allSpendMap = new Map<string, number>();
       for (const entries of Object.values(spendByMarketplace)) {
         for (const e of entries) allSpendMap.set(e.yearMonth, (allSpendMap.get(e.yearMonth) || 0) + e.spend);
       }
       const allMonthsSet = new Set([...allSpendMap.keys(), ...histRoyMap.keys()]);
-      chartByMarketplace['ALL'] = [...allMonthsSet].sort().map(ym => {
-        const totalSpend = allSpendMap.get(ym) || 0;
-        const grossRoy = histRoyMap.get(ym) || 0;
-        return {
-          yearMonth: ym,
-          label: new Date(ym + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
-          royalties: Math.max(0, grossRoy - totalSpend),  // net royalties (exact)
-          spend: totalSpend
-        };
-      });
+      if (allMonthsSet.size > 0) {
+        chartByMarketplace['ALL'] = [...allMonthsSet].sort().map(ym => {
+          const totalSpend = allSpendMap.get(ym) || 0;
+          const grossRoy = histRoyMap.get(ym) || 0;
+          return {
+            yearMonth: ym,
+            label: new Date(ym + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+            royalties: Math.max(0, grossRoy - totalSpend),
+            spend: totalSpend
+          };
+        });
+      }
     }
 
     // Count total live books
@@ -954,7 +956,10 @@ router.get('/analytics/book-stats', authMiddleware, async (req: AuthRequest, res
         asin: stat.asin,
         title: book?.title || 'Unknown',
         grossRoyalties: parseFloat(stat.grossRoyalties || 0),
-        spending: parseFloat(stat.spending || 0)
+        spending: parseFloat(stat.spending || 0),
+        pageCount: book?.pageCount ?? undefined,
+        bsrRank: book?.bsrRank ?? undefined,
+        bsrCategory: book?.bsrCategory ?? undefined
       });
     }
 
@@ -996,12 +1001,18 @@ router.get('/analytics/book-stats', authMiddleware, async (req: AuthRequest, res
 
         // Use topTitles for books if empty
         if (books.length === 0 && latestSnapshot.topTitles && latestSnapshot.topTitles.length > 0) {
-          books = latestSnapshot.topTitles.map((t: any) => ({
-            asin: t.asin,
-            title: t.title || 'Unknown',
-            grossRoyalties: t.royalties || 0,
-            spending: 0
-          }));
+          for (const t of latestSnapshot.topTitles) {
+            const kdpBook = await bookRepository.findOne({ where: { asin: t.asin, userId } });
+            books.push({
+              asin: t.asin,
+              title: t.title || 'Unknown',
+              grossRoyalties: t.royalties || 0,
+              spending: 0,
+              pageCount: kdpBook?.pageCount ?? undefined,
+              bsrRank: kdpBook?.bsrRank ?? undefined,
+              bsrCategory: kdpBook?.bsrCategory ?? undefined
+            });
+          }
         }
       }
     }
