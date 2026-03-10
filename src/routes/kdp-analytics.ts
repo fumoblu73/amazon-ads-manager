@@ -457,13 +457,22 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
     }
 
     // Marketplace distribution from latest snapshot (for royalties estimation)
+    // Normalize KDP domain-style codes (e.g. 'amazon.com') to ADS 2-letter codes (e.g. 'US')
+    const KDP_TO_ADS: Record<string, string> = {
+      'AMAZON.COM': 'US', 'AMAZON.CO.UK': 'UK', 'AMAZON.DE': 'DE',
+      'AMAZON.FR': 'FR', 'AMAZON.IT': 'IT', 'AMAZON.ES': 'ES',
+      'AMAZON.CA': 'CA', 'AMAZON.COM.AU': 'AU', 'AMAZON.CO.JP': 'JP',
+      'AMAZON.COM.BR': 'BR', 'AMAZON.COM.MX': 'MX', 'AMAZON.IN': 'IN',
+      'AMAZON.NL': 'NL',
+    };
     const mpPercent: Record<string, number> = {};
     if (latestSnapshot?.marketplaceData?.length > 0) {
       const totalMpRoy = latestSnapshot.marketplaceData.reduce((s: number, m: any) => s + (m.royalties || 0), 0);
       if (totalMpRoy > 0) {
         for (const m of latestSnapshot.marketplaceData) {
-          const mp = (m.marketplace || '').toUpperCase();
-          if (mp) mpPercent[mp] = (m.royalties || 0) / totalMpRoy;
+          let mp = (m.marketplace || '').toUpperCase();
+          mp = KDP_TO_ADS[mp] || mp; // normalize domain → 2-letter code
+          if (mp) mpPercent[mp] = (mpPercent[mp] || 0) + (m.royalties || 0) / totalMpRoy;
         }
       }
     }
