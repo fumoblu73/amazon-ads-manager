@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { AppDataSource } from '../config/database';
 import { User } from '../entities/User';
 import { KdpSalesSnapshot } from '../entities/KdpSalesSnapshot';
+import { MonthlyRoyalties } from '../entities/MonthlyRoyalties';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { encryptCookies, extractKdpAuthCookies, Cookie } from '../utils/encryption';
 import { kdpSyncScheduler } from '../services/kdp-sync-scheduler';
@@ -304,6 +305,38 @@ router.post('/sales-data', authMiddleware, async (req: AuthRequest, res: Respons
     });
 
     await snapshotRepository.save(snapshot);
+
+    // Upsert monthly_royalties from marketplaceData for the current month
+    if (marketplaceDistribution.length > 0) {
+      const KDP_TO_ADS: Record<string, string> = {
+        'AMAZON.COM': 'US', 'AMAZON.CO.UK': 'UK', 'AMAZON.DE': 'DE',
+        'AMAZON.FR': 'FR', 'AMAZON.IT': 'IT', 'AMAZON.ES': 'ES',
+        'AMAZON.CA': 'CA', 'AMAZON.COM.AU': 'AU', 'AMAZON.CO.JP': 'JP',
+        'AMAZON.COM.BR': 'BR', 'AMAZON.COM.MX': 'MX', 'AMAZON.IN': 'IN',
+        'AMAZON.NL': 'NL',
+      };
+      const MP_CURRENCY: Record<string, string> = {
+        'UK': 'GBP', 'DE': 'EUR', 'FR': 'EUR', 'IT': 'EUR', 'ES': 'EUR',
+        'CA': 'CAD', 'AU': 'AUD', 'JP': 'JPY', 'BR': 'BRL', 'MX': 'MXN', 'IN': 'INR',
+      };
+      const currentYm = new Date().toISOString().slice(0, 7);
+      for (const item of marketplaceDistribution) {
+        let mp = (item.bin || '').toUpperCase();
+        mp = KDP_TO_ADS[mp] || mp;
+        if (!mp) continue;
+        const royalties = parseFloat(item.values?.Royalties || 0);
+        const currency = MP_CURRENCY[mp] || 'USD';
+        await AppDataSource.query(`
+          INSERT INTO monthly_royalties (user_id, marketplace, year_month, royalties, currency)
+          VALUES ($1, $2, $3, $4, $5)
+          ON CONFLICT (user_id, marketplace, year_month) DO UPDATE SET
+            royalties = EXCLUDED.royalties,
+            currency = EXCLUDED.currency,
+            updated_at = NOW()
+        `, [userId, mp, currentYm, royalties, currency]);
+      }
+      console.log(`   Monthly royalties upserted for ${marketplaceDistribution.length} marketplaces (${currentYm})`);
+    }
 
     console.log(`✅ Sales snapshot saved for user ${userId}`);
     console.log(`   Total royalties: ${overview.currency || 'USD'} ${overview.totalRoyalties || 0}`);

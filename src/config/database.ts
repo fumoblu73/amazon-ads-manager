@@ -17,6 +17,7 @@ import { PendingReport } from '../entities/PendingReport';
 import { KdpUserStats } from '../models/KdpDailyStats';
 import { BookSpendCache } from '../entities/BookSpendCache';
 import { MonthlyAdsSpend } from '../entities/MonthlyAdsSpend';
+import { MonthlyRoyalties } from '../entities/MonthlyRoyalties';
 import { KdpSyncLog as KdpSyncLogModel } from '../models/KdpSyncLog';
 
 dotenv.config();
@@ -41,6 +42,7 @@ const getDatabaseConfig = () => {
     KdpUserStats,
     BookSpendCache,
     MonthlyAdsSpend,
+    MonthlyRoyalties,
     KdpSyncLogModel
   ];
 
@@ -182,6 +184,28 @@ export const initializeDatabase = async () => {
       await AppDataSource.query(`
         CREATE INDEX IF NOT EXISTS idx_monthly_ads_spend_user
         ON monthly_ads_spend(user_id, marketplace, year_month)
+      `);
+    } catch (e) {
+      // Table already exists
+    }
+
+    // monthly_royalties table (added v2.4.22)
+    try {
+      await AppDataSource.query(`
+        CREATE TABLE IF NOT EXISTS monthly_royalties (
+          id SERIAL PRIMARY KEY,
+          user_id UUID NOT NULL,
+          marketplace VARCHAR(10) NOT NULL,
+          year_month VARCHAR(7) NOT NULL,
+          royalties DECIMAL(10,2) NOT NULL DEFAULT 0,
+          currency VARCHAR(5) NOT NULL DEFAULT 'USD',
+          updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          UNIQUE(user_id, marketplace, year_month)
+        )
+      `);
+      await AppDataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_monthly_royalties_user
+        ON monthly_royalties(user_id, marketplace, year_month)
       `);
     } catch (e) {
       // Table already exists

@@ -451,60 +451,70 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
     // - 'ALL' view: exact net royalties (historicalMonths total - combined spend) + combined spend
     const chartByMarketplace: Record<string, Array<{ yearMonth: string; label: string; royalties: number; spend: number }>> = {};
 
+    // historicalMonths fallback (for 'ALL' chart when monthly_royalties has gaps)
     const histRoyMap = new Map<string, number>();
     if (latestSnapshot?.historicalMonths?.length > 0) {
       latestSnapshot.historicalMonths.forEach((hm: any) => histRoyMap.set(hm.month, hm.totalRoyalties || 0));
     }
 
-    // Marketplace distribution from latest snapshot (for royalties estimation)
-    // Normalize KDP domain-style codes (e.g. 'amazon.com') to ADS 2-letter codes (e.g. 'US')
-    const KDP_TO_ADS: Record<string, string> = {
-      'AMAZON.COM': 'US', 'AMAZON.CO.UK': 'UK', 'AMAZON.DE': 'DE',
-      'AMAZON.FR': 'FR', 'AMAZON.IT': 'IT', 'AMAZON.ES': 'ES',
-      'AMAZON.CA': 'CA', 'AMAZON.COM.AU': 'AU', 'AMAZON.CO.JP': 'JP',
-      'AMAZON.COM.BR': 'BR', 'AMAZON.COM.MX': 'MX', 'AMAZON.IN': 'IN',
-      'AMAZON.NL': 'NL',
-    };
-    const mpPercent: Record<string, number> = {};
-    if (latestSnapshot?.marketplaceData?.length > 0) {
-      const totalMpRoy = latestSnapshot.marketplaceData.reduce((s: number, m: any) => s + (m.royalties || 0), 0);
-      if (totalMpRoy > 0) {
-        for (const m of latestSnapshot.marketplaceData) {
-          let mp = (m.marketplace || '').toUpperCase();
-          mp = KDP_TO_ADS[mp] || mp; // normalize domain → 2-letter code
-          if (mp) mpPercent[mp] = (mpPercent[mp] || 0) + (m.royalties || 0) / totalMpRoy;
-        }
+    // Per-marketplace royalties from monthly_royalties table (exact, per month)
+    const royByMarketplace: Record<string, Map<string, number>> = {};
+    try {
+      const royRows: Array<{ marketplace: string; year_month: string; royalties: string }> = await AppDataSource.query(`
+        SELECT marketplace, year_month, royalties::float AS royalties
+        FROM monthly_royalties
+        WHERE user_id = $1 AND royalties > 0
+        ORDER BY year_month ASC
+      `, [userId]);
+      for (const row of royRows) {
+        const mp = (row.marketplace || '').toUpperCase();
+        if (!royByMarketplace[mp]) royByMarketplace[mp] = new Map();
+        royByMarketplace[mp].set(row.year_month, parseFloat(row.royalties || '0'));
       }
+    } catch (e) {
+      console.warn('[Dashboard] monthly_royalties query failed:', e);
     }
 
-    // Build per-marketplace charts
-    const allMarketplaces = new Set([...Object.keys(spendByMarketplace), ...Object.keys(mpPercent)]);
+    // Build allRoyMap: sum per-marketplace royalties by month; fallback to histRoyMap for missing months
+    const allRoyMap = new Map<string, number>();
+    for (const rMap of Object.values(royByMarketplace)) {
+      for (const [ym, r] of rMap.entries()) {
+        allRoyMap.set(ym, (allRoyMap.get(ym) || 0) + r);
+      }
+    }
+    for (const [ym, r] of histRoyMap.entries()) {
+      if (!allRoyMap.has(ym)) allRoyMap.set(ym, r); // fallback only where monthly_royalties has no data
+    }
+
+    // Build per-marketplace charts using exact royalties from monthly_royalties
+    const allMarketplaces = new Set([...Object.keys(spendByMarketplace), ...Object.keys(royByMarketplace)]);
     for (const mp of allMarketplaces) {
       const spMap = new Map((spendByMarketplace[mp] || []).map(s => [s.yearMonth, s.spend]));
-      const allMonths = new Set([...histRoyMap.keys(), ...spMap.keys()]);
+      const rMap = royByMarketplace[mp] || new Map<string, number>();
+      const allMonths = new Set([...rMap.keys(), ...spMap.keys()]);
       chartByMarketplace[mp] = [...allMonths].sort().map(ym => {
-        const grossEst = (histRoyMap.get(ym) || 0) * (mpPercent[mp] || 0);
+        const gross = rMap.get(ym) || 0;
         const spend = spMap.get(ym) || 0;
         return {
           yearMonth: ym,
           label: new Date(ym + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
-          royalties: Math.max(0, grossEst - spend),  // net royalties per marketplace (estimated)
+          royalties: Math.max(0, gross - spend),
           spend
         };
       });
     }
 
-    // Build 'ALL' combined view: always built from any available data (spend + royalties)
+    // Build 'ALL' combined view
     {
       const allSpendMap = new Map<string, number>();
       for (const entries of Object.values(spendByMarketplace)) {
         for (const e of entries) allSpendMap.set(e.yearMonth, (allSpendMap.get(e.yearMonth) || 0) + e.spend);
       }
-      const allMonthsSet = new Set([...allSpendMap.keys(), ...histRoyMap.keys()]);
+      const allMonthsSet = new Set([...allSpendMap.keys(), ...allRoyMap.keys()]);
       if (allMonthsSet.size > 0) {
         chartByMarketplace['ALL'] = [...allMonthsSet].sort().map(ym => {
           const totalSpend = allSpendMap.get(ym) || 0;
-          const grossRoy = histRoyMap.get(ym) || 0;
+          const grossRoy = allRoyMap.get(ym) || 0;
           return {
             yearMonth: ym,
             label: new Date(ym + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
