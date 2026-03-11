@@ -577,8 +577,8 @@ class AmazonAdsService {
           const reportId = await client.requestAdvertisedProductReport(profileId, startDate, endDate, 'SP');
           if (!reportId) return;
 
-          // Polling fino a ~7 minuti (210 tentativi × 2s)
-          const data = await client.waitAndDownloadReport(profileId, reportId, 210);
+          // Polling fino a ~12 minuti (360 tentativi × 2s)
+          const data = await client.waitAndDownloadReport(profileId, reportId, 360);
           for (const row of data) {
             if (!row.advertisedAsin) continue;
             results.push({

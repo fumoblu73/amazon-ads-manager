@@ -487,12 +487,19 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
     }
 
     // Build per-marketplace charts using exact royalties from monthly_royalties
-    // globalMonths: union of ALL months across all marketplaces (same range shown everywhere)
     const globalAllSpendMap = new Map<string, number>();
     for (const entries of Object.values(spendByMarketplace)) {
       for (const e of entries) globalAllSpendMap.set(e.yearMonth, (globalAllSpendMap.get(e.yearMonth) || 0) + e.spend);
     }
-    const globalMonths = new Set([...globalAllSpendMap.keys(), ...allRoyMap.keys()]);
+    // globalMonths for per-marketplace: only months from actual monthly_royalties + ADS spend
+    // (excludes histRoyMap-only months like current month before KDP sync, avoiding misleading 0-bars)
+    const globalRoyMonths = new Set<string>();
+    for (const rMap of Object.values(royByMarketplace)) {
+      for (const ym of rMap.keys()) globalRoyMonths.add(ym);
+    }
+    const globalMonths = new Set([...globalAllSpendMap.keys(), ...globalRoyMonths]);
+    // globalMonthsAll for ALL chart: also includes histRoyMap fallback months (e.g. current month from snapshot)
+    const globalMonthsAll = new Set([...globalMonths, ...allRoyMap.keys()]);
 
     const allMarketplaces = new Set([...Object.keys(spendByMarketplace), ...Object.keys(royByMarketplace)]);
     for (const mp of allMarketplaces) {
@@ -510,9 +517,9 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       });
     }
 
-    // Build 'ALL' combined view (reuse globalAllSpendMap and globalMonths already computed above)
-    if (globalMonths.size > 0) {
-      chartByMarketplace['ALL'] = [...globalMonths].sort().map(ym => {
+    // Build 'ALL' combined view — uses globalMonthsAll (includes histRoyMap fallback months)
+    if (globalMonthsAll.size > 0) {
+      chartByMarketplace['ALL'] = [...globalMonthsAll].sort().map(ym => {
           const totalSpend = globalAllSpendMap.get(ym) || 0;
           const grossRoy = allRoyMap.get(ym) || 0;
           return {
