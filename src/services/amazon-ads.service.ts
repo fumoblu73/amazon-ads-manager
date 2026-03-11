@@ -359,7 +359,9 @@ class RegionApiClient {
         return [];
       }
 
-      console.log(`   [${this.region}] Attesa report... (${attempt}/${maxAttempts})`);
+      if (attempt === 1 || attempt % 15 === 0) {
+        console.log(`   [${this.region}] Attesa report... (${attempt}/${maxAttempts}) status=${status}`);
+      }
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
 
