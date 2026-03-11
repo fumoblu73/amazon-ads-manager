@@ -23,6 +23,7 @@ import { executeFunc3 } from '../automation/functions/func3';
 import { executeFunc4 } from '../automation/functions/func4';
 import { executeFunc5, CampaignMapping } from '../automation/functions/func5';
 import { getUserAutomationSettings, AutomationConfig } from '../automation/rules';
+import { updateSpendCacheFromReportData, SPEND_CACHE_REPORT_TYPE } from './spendCacheService';
 
 /**
  * Pre-loaded data to avoid N+1 queries in report processing loops
@@ -248,7 +249,14 @@ export async function processCompletedReports(): Promise<{
 
             // Execute associated automation functions or enrich data
             try {
-              if (report.reportType === 'spAdvertisedProduct') {
+              if (report.reportType === SPEND_CACHE_REPORT_TYPE) {
+                // Special handling: update book_spend_cache from spTargeting report
+                await updateSpendCacheFromReportData(reportData, marketplace, report.userId);
+                report.status = 'processed';
+                await reportRepo.save(report);
+                stats.processed++;
+                console.log(`   ✅ ${report.reportId}: book_spend_cache aggiornato (${marketplace})`);
+              } else if (report.reportType === 'spAdvertisedProduct') {
                 // Special handling: enrich kdp_books with productName/productCategory
                 await enrichKdpBooksFromAdvertisedProductReport(
                   report, reportData, marketplace

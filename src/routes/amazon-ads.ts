@@ -6,6 +6,7 @@
 import { Router, Request, Response } from 'express';
 import { amazonAdsService, AsinSpendRow } from '../services/amazon-ads.service';
 import { adsSpendSyncService } from '../services/ads-spend-sync.service';
+import { submitSpendCacheReports, collectSpendCacheReports } from '../services/spendCacheService';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { AppDataSource } from '../config/database';
 import { User } from '../entities/User';
@@ -362,53 +363,46 @@ router.post('/refresh-spend', async (req: Request, res: Response) => {
     // Esegue in background senza bloccare la risposta
     setImmediate(async () => {
       try {
-        const end = new Date().toISOString().split('T')[0];
-        const start = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-
-        console.log(`💰 [Spend Cache] Aggiornamento cache spesa ${start} → ${end}`);
-
-        const asinRows: AsinSpendRow[] = await amazonAdsService.getAllAsinSpend(start, end);
-
-        const totalSpend = asinRows.reduce((sum, r) => sum + r.spend7d, 0);
-        const totalSales = asinRows.reduce((sum, r) => sum + r.sales7d, 0);
-
-        const userRepo = AppDataSource.getRepository(User);
-        const users = await userRepo.find({ where: { isActive: true } });
-
-        for (const user of users) {
-          for (const row of asinRows) {
-            await AppDataSource.query(`
-              INSERT INTO book_spend_cache (user_id, marketplace, asin, ad_type, spend_7d, sales_7d, impressions_7d, clicks_7d, updated_at)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-              ON CONFLICT (user_id, marketplace, asin, ad_type)
-              DO UPDATE SET
-                spend_7d = EXCLUDED.spend_7d,
-                sales_7d = EXCLUDED.sales_7d,
-                impressions_7d = EXCLUDED.impressions_7d,
-                clicks_7d = EXCLUDED.clicks_7d,
-                updated_at = NOW()
-            `, [user.id, row.marketplace, row.asin, row.adType, row.spend7d, row.sales7d, row.impressions7d, row.clicks7d]);
-          }
-
-          const [cacheTotal] = await AppDataSource.query(`
-            SELECT COALESCE(SUM(spend_7d), 0)::float AS total_spend,
-                   COALESCE(SUM(sales_7d), 0)::float AS total_sales
-            FROM book_spend_cache WHERE user_id = $1
-          `, [user.id]);
-          await userRepo.update(user.id, {
-            spendCache7d: parseFloat(cacheTotal.total_spend),
-            salesCache7d: parseFloat(cacheTotal.total_sales),
-            spendCacheUpdatedAt: new Date()
-          });
-        }
-
-        console.log(`✅ [Spend Cache] ${asinRows.length} ASIN salvati, totale: $${totalSpend.toFixed(2)} spesa / $${totalSales.toFixed(2)} vendite`);
+        await submitSpendCacheReports();
       } catch (bgError: any) {
-        console.error('❌ [Spend Cache] Errore background:', bgError.message);
+        console.error('❌ [Spend Cache] Errore submit background:', bgError.message);
       }
     });
   } catch (error: any) {
     console.error('❌ [Spend Cache] Errore:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ================================================
+// POST /api/amazon-ads/collect-spend - Raccoglie i report spesa già sottomessi (ogni giorno)
+// Accetta: Authorization: Bearer <token>  OPPURE  ?adminToken=<token>
+// ================================================
+router.post('/collect-spend', async (req: Request, res: Response) => {
+  try {
+    const adminToken = process.env.ADMIN_TOKEN;
+    const authHeader = req.headers.authorization;
+    const queryToken = req.query.adminToken as string | undefined;
+    const isAuthorized = (authHeader && authHeader === `Bearer ${adminToken}`)
+      || (queryToken && queryToken === adminToken);
+
+    if (!isAuthorized) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    // Risposta immediata al cron (evita timeout cron-job.org)
+    res.json({ success: true, message: 'Collect spend avviato in background' });
+
+    setImmediate(async () => {
+      try {
+        const stats = await collectSpendCacheReports();
+        console.log(`✅ [Spend Cache] Collect completato: ${stats.processed} processati, ${stats.pending} pending, ${stats.failed} falliti`);
+      } catch (bgError: any) {
+        console.error('❌ [Spend Cache] Errore collect background:', bgError.message);
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ [Spend Cache] Errore collect:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
