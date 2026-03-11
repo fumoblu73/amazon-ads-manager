@@ -487,42 +487,41 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
     }
 
     // Build per-marketplace charts using exact royalties from monthly_royalties
+    // globalMonths: union of ALL months across all marketplaces (same range shown everywhere)
+    const globalAllSpendMap = new Map<string, number>();
+    for (const entries of Object.values(spendByMarketplace)) {
+      for (const e of entries) globalAllSpendMap.set(e.yearMonth, (globalAllSpendMap.get(e.yearMonth) || 0) + e.spend);
+    }
+    const globalMonths = new Set([...globalAllSpendMap.keys(), ...allRoyMap.keys()]);
+
     const allMarketplaces = new Set([...Object.keys(spendByMarketplace), ...Object.keys(royByMarketplace)]);
     for (const mp of allMarketplaces) {
       const spMap = new Map((spendByMarketplace[mp] || []).map(s => [s.yearMonth, s.spend]));
       const rMap = royByMarketplace[mp] || new Map<string, number>();
-      const allMonths = new Set([...rMap.keys(), ...spMap.keys()]);
-      chartByMarketplace[mp] = [...allMonths].sort().map(ym => {
+      chartByMarketplace[mp] = [...globalMonths].sort().map(ym => {
         const gross = rMap.get(ym) || 0;
         const spend = spMap.get(ym) || 0;
         return {
           yearMonth: ym,
           label: new Date(ym + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
-          royalties: Math.max(0, gross - spend),
+          royalties: gross,  // gross KDP royalties (independent bar, not net of ADS)
           spend
         };
       });
     }
 
-    // Build 'ALL' combined view
-    {
-      const allSpendMap = new Map<string, number>();
-      for (const entries of Object.values(spendByMarketplace)) {
-        for (const e of entries) allSpendMap.set(e.yearMonth, (allSpendMap.get(e.yearMonth) || 0) + e.spend);
-      }
-      const allMonthsSet = new Set([...allSpendMap.keys(), ...allRoyMap.keys()]);
-      if (allMonthsSet.size > 0) {
-        chartByMarketplace['ALL'] = [...allMonthsSet].sort().map(ym => {
-          const totalSpend = allSpendMap.get(ym) || 0;
+    // Build 'ALL' combined view (reuse globalAllSpendMap and globalMonths already computed above)
+    if (globalMonths.size > 0) {
+      chartByMarketplace['ALL'] = [...globalMonths].sort().map(ym => {
+          const totalSpend = globalAllSpendMap.get(ym) || 0;
           const grossRoy = allRoyMap.get(ym) || 0;
           return {
             yearMonth: ym,
             label: new Date(ym + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
-            royalties: Math.max(0, grossRoy - totalSpend),
+            royalties: grossRoy,  // gross KDP royalties (independent bar, not net of ADS)
             spend: totalSpend
           };
-        });
-      }
+      });
     }
 
     // Count total live books
@@ -987,9 +986,12 @@ router.get('/analytics/book-stats', authMiddleware, async (req: AuthRequest, res
 
     let books: any[] = [];
     for (const stat of bookStats) {
-      const book = await bookRepository.findOne({
-        where: { asin: stat.asin, userId }
+      // Prefer the entry with most metadata (page_count not null first)
+      const bookEntries = await bookRepository.find({
+        where: { asin: stat.asin, userId },
+        order: { pageCount: { direction: 'DESC', nulls: 'LAST' } }
       });
+      const book = bookEntries[0] ?? null;
       books.push({
         asin: stat.asin,
         title: book?.title || 'Unknown',

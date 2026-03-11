@@ -213,7 +213,14 @@ export default function KdpDashboard() {
       if (booksRes.status === 'fulfilled' && booksRes.value.data) {
         const meta = new Map<string, { pageCount?: number; bsrRank?: number; bsrCategory?: string }>();
         for (const b of booksRes.value.data) {
-          if (b.asin) meta.set(b.asin, { pageCount: b.pageCount, bsrRank: b.bsrRank, bsrCategory: b.bsrCategory });
+          if (!b.asin) continue;
+          const existing = meta.get(b.asin);
+          // Keep first non-null value across marketplace entries for the same ASIN
+          meta.set(b.asin, {
+            pageCount: existing?.pageCount ?? b.pageCount,
+            bsrRank: existing?.bsrRank ?? b.bsrRank,
+            bsrCategory: existing?.bsrCategory ?? b.bsrCategory,
+          });
         }
         setBookMeta(meta);
       }
@@ -730,13 +737,13 @@ export default function KdpDashboard() {
                     contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
                     labelStyle={{ color: '#F3F4F6' }}
                     formatter={(value: any, name: string | undefined) => {
-                      if (name === 'royalties') return [`$${Number(value).toFixed(2)}`, activeMp === 'ALL' ? 'Net Royalties' : 'Net Royalties (est.)'];
+                      if (name === 'royalties') return [`$${Number(value).toFixed(2)}`, 'KDP Royalties'];
                       if (name === 'spend') return [`$${Number(value).toFixed(2)}`, 'ADS Spend'];
                       return [value, name ?? ''];
                     }}
                   />
                   <Legend
-                    formatter={(value) => value === 'royalties' ? (activeMp === 'ALL' ? 'Net Royalties' : 'Net Royalties (est.)') : 'ADS Spend'}
+                    formatter={(value) => value === 'royalties' ? 'KDP Royalties' : 'ADS Spend'}
                     wrapperStyle={{ color: '#9CA3AF', fontSize: 12 }}
                   />
                   <Bar dataKey="royalties" fill="#F59E0B" name="royalties" radius={[3, 3, 0, 0]} />
