@@ -375,9 +375,12 @@ router.post('/refresh-spend', async (req: Request, res: Response) => {
 });
 
 // ================================================
-// POST /api/amazon-ads/collect-spend - Raccoglie i report spesa già sottomessi (ogni giorno)
+// POST /api/amazon-ads/collect-spend - Raccoglie i report spesa già sottomessi
 // Accetta: Authorization: Bearer <token>  OPPURE  ?adminToken=<token>
+// Chiamato ogni 15 min nella finestra 11:00-13:00 — bypassa se già in esecuzione
 // ================================================
+let isCollecting = false;
+
 router.post('/collect-spend', async (req: Request, res: Response) => {
   try {
     const adminToken = process.env.ADMIN_TOKEN;
@@ -390,15 +393,23 @@ router.post('/collect-spend', async (req: Request, res: Response) => {
       return res.status(401).json({ success: false, error: 'Unauthorized' });
     }
 
+    if (isCollecting) {
+      console.log('⚠️ [Spend Cache] collect-spend già in esecuzione — skip');
+      return res.json({ success: true, message: 'Already running — skipped' });
+    }
+
     // Risposta immediata al cron (evita timeout cron-job.org)
     res.json({ success: true, message: 'Collect spend avviato in background' });
 
+    isCollecting = true;
     setImmediate(async () => {
       try {
         const stats = await collectSpendCacheReports();
         console.log(`✅ [Spend Cache] Collect completato: ${stats.processed} processati, ${stats.pending} pending, ${stats.failed} falliti`);
       } catch (bgError: any) {
         console.error('❌ [Spend Cache] Errore collect background:', bgError.message);
+      } finally {
+        isCollecting = false;
       }
     });
   } catch (error: any) {
