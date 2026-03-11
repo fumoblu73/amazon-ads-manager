@@ -4,6 +4,7 @@ import { authMiddleware } from '../middleware/auth';
 import { requireAmazonAuth, AuthRequest } from '../middleware/requireAmazonAuth';
 import { submitReportsForAllUsers, submitReportsForUser } from '../services/reportSubmitter';
 import { processCompletedReports, processCompletedReportsForUser } from '../services/reportProcessor';
+import { submitSpendCacheReports } from '../services/spendCacheService';
 import { syncAllMarketplacesForUser } from './campaigns';
 import { createMarketplaceApiService } from '../services/MarketplaceApiFactory';
 
@@ -455,6 +456,13 @@ router.post('/submit-reports', async (req: Request, res: Response) => {
       console.log(`✅ Phase 1 completed: ${stats.reportsSubmitted} reports submitted`);
     } catch (error) {
       console.error('❌ Phase 1 failed:', error);
+    }
+
+    // Submit spend cache reports (processati da process-reports via Option C+)
+    try {
+      await submitSpendCacheReports();
+    } catch (error: any) {
+      console.error('❌ [Spend Cache] Submit fallito in submit-reports:', error.message);
     }
   })();
 });
