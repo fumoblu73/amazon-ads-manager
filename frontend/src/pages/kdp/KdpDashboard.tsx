@@ -934,7 +934,7 @@ export default function KdpDashboard() {
             <p className="text-gray-400 text-center py-8">No data for {monthlyStats.previousMonth.label}</p>
           ) : (
             <div className="space-y-3">
-              {summary.topEarners.previousMonth.slice(0, 5).map((book, index) => (
+              {summary.topEarners.previousMonth.filter(b => bookMeta.has(b.asin)).slice(0, 5).map((book, index) => (
                 <div key={book.bookId} className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors">
                   <span className={`text-lg font-bold w-6 ${index === 0 ? 'text-yellow-500' : index === 1 ? 'text-gray-400' : index === 2 ? 'text-orange-600' : 'text-gray-500'}`}>
                     #{index + 1}
@@ -968,7 +968,7 @@ export default function KdpDashboard() {
             <p className="text-gray-400 text-center py-8">No data for {monthlyStats.currentMonth.label}</p>
           ) : (
             <div className="space-y-3">
-              {summary.topEarners.currentMonth.slice(0, 5).map((book, index) => (
+              {summary.topEarners.currentMonth.filter(b => bookMeta.has(b.asin)).slice(0, 5).map((book, index) => (
                 <div key={book.bookId} className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors">
                   <span className={`text-lg font-bold w-6 ${index === 0 ? 'text-yellow-500' : index === 1 ? 'text-gray-400' : index === 2 ? 'text-orange-600' : 'text-gray-500'}`}>
                     #{index + 1}
