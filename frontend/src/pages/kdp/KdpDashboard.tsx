@@ -774,7 +774,7 @@ export default function KdpDashboard() {
               bsrRank: book.bsrRank ?? meta?.bsrRank,
               bsrCategory: book.bsrCategory ?? meta?.bsrCategory };
           })
-          .filter(b => b.grossRoyalties > 0 || b.adSpend7d > 0)
+          .filter(b => (b.grossRoyalties > 0 || b.adSpend7d > 0) && !!bookSpendData?.[b.asin])
           .sort((a, b) => b.netProfit - a.netProfit);
 
         // Aggiungi libri con solo spend (es. paperback con campagne ma 0 vendite KDP nel periodo)
