@@ -538,7 +538,7 @@ export default function KdpDashboard() {
       {/* Widgets Grid - Row 1 */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         <StatsCard
-          title="Gross Royalties"
+          title="Royalties"
           value={formatCurrency(summary.widgets.grossRoyaltiesEstimator)}
           subtitle={summary.widgets.royaltiesChange != null ? `${summary.widgets.royaltiesChange >= 0 ? '+' : ''}${summary.widgets.royaltiesChange.toFixed(1)}% vs last month` : undefined}
           variant="primary"
@@ -585,7 +585,7 @@ export default function KdpDashboard() {
         />
 
         <StatsCard
-          title="Daily Avg Gross"
+          title="Daily Avg"
           value={formatCurrency(summary.widgets.dailyAvgGrossRoyalties)}
           subtitle="This month avg"
           icon={
@@ -634,8 +634,8 @@ export default function KdpDashboard() {
 
         <StatsCard
           title="Organic Orders"
-          value={summary.widgets.organicOrders || 0}
-          subtitle="Digital sales"
+          value={summary.widgets.inorganicOrders || 0}
+          subtitle="Paperback (tot)"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
@@ -644,9 +644,9 @@ export default function KdpDashboard() {
         />
 
         <StatsCard
-          title="Print Orders"
-          value={summary.widgets.inorganicOrders || 0}
-          subtitle="Paperbacks"
+          title="Ebook Orders"
+          value={summary.widgets.organicOrders || 0}
+          subtitle="Kindle"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
@@ -668,7 +668,7 @@ export default function KdpDashboard() {
         <StatsCard
           title="Live Books"
           value={summary.widgets.totalLiveBooks}
-          subtitle="In catalog"
+          subtitle="Paperback"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -759,48 +759,82 @@ export default function KdpDashboard() {
       {/* Profitto per Libro — Ultimi 7 giorni */}
       {(() => {
         const hasCacheData = bookSpendData && Object.keys(bookSpendData).length > 0;
-        const bookProfitData = (bookStats7d?.books ?? [])
-          .map(book => {
-            const spendEntry = bookSpendData?.[book.asin];
-            const adSpend = spendEntry?.totalSpend7d ?? book.spending ?? 0;
-            const adSales7d = spendEntry?.totalSales7d ?? 0;
-            const royalties = book.grossRoyalties ?? 0;
-            const netProfit = royalties - adSpend;
-            const acos7d = royalties > 0 ? (adSpend / royalties) * 100 : null;
-            const cover = book.cover || `https://m.media-amazon.com/images/P/${book.asin}.jpg`;
-            const meta = bookMeta.get(book.asin) || bookMeta.get((book.asin || '').trim().toUpperCase());
-            return { ...book, cover, adSpend7d: adSpend, adSales7d, netProfit, acos7d,
-              pageCount: book.pageCount ?? meta?.pageCount,
-              bsrRank: book.bsrRank ?? meta?.bsrRank,
-              bsrCategory: book.bsrCategory ?? meta?.bsrCategory };
-          })
-          .filter(b => (b.grossRoyalties > 0 || b.adSpend7d > 0) && !!bookSpendData?.[b.asin])
-          .sort((a, b) => b.netProfit - a.netProfit);
 
-        // Aggiungi libri con solo spend (es. paperback con campagne ma 0 vendite KDP nel periodo)
-        const royaltyAsins = new Set((bookStats7d?.books ?? []).map(b => b.asin));
+        // Mappa titolo → ASIN paperback (da bookMeta = solo paperback da kdp_books)
+        const titleToPaperbackAsin = new Map<string, string>();
+        for (const [asin, meta] of bookMeta.entries()) {
+          if (meta.title) {
+            const key = meta.title.split(':')[0].trim().toLowerCase();
+            if (!titleToPaperbackAsin.has(key)) titleToPaperbackAsin.set(key, asin);
+          }
+        }
+
+        // Processa i libri da bookStats7d con fallback title-matching verso il paperback
+        const processedAsins = new Set<string>();
+        const bookProfitRows: any[] = [];
+
+        for (const book of (bookStats7d?.books ?? [])) {
+          let displayAsin = book.asin;
+          let spendEntry = bookSpendData?.[book.asin];
+          let meta = bookMeta.get(book.asin);
+
+          // Se non è un ASIN con campagne (ebook), cerca il paperback per titolo
+          if (!spendEntry) {
+            const key = book.title?.split(':')[0].trim().toLowerCase();
+            const matchedAsin = key ? titleToPaperbackAsin.get(key) : undefined;
+            if (matchedAsin) {
+              displayAsin = matchedAsin;
+              spendEntry = bookSpendData?.[matchedAsin] ?? undefined;
+              meta = bookMeta.get(matchedAsin);
+            }
+          }
+
+          if (processedAsins.has(displayAsin)) continue;
+          processedAsins.add(displayAsin);
+
+          const adSpend = spendEntry?.totalSpend7d ?? book.spending ?? 0;
+          const adSales7d = spendEntry?.totalSales7d ?? 0;
+          const royalties = book.grossRoyalties ?? 0;
+          const netProfit = royalties - adSpend;
+          const acos7d = royalties > 0 ? (adSpend / royalties) * 100 : null;
+          bookProfitRows.push({
+            ...book,
+            asin: displayAsin,
+            title: meta?.title ?? book.title,
+            cover: `https://m.media-amazon.com/images/P/${displayAsin}.jpg`,
+            adSpend7d: adSpend,
+            adSales7d,
+            netProfit,
+            acos7d,
+            pageCount: book.pageCount ?? meta?.pageCount,
+            bsrRank: book.bsrRank ?? meta?.bsrRank,
+            bsrCategory: book.bsrCategory ?? meta?.bsrCategory,
+          });
+        }
+
+        bookProfitRows.sort((a, b) => b.netProfit - a.netProfit);
+
+        // Aggiungi libri con solo spend non ancora processati (campagne senza vendite nel periodo)
         const spendOnlyBooks = Object.entries(bookSpendData ?? {})
-          .filter(([asin, spend]) => !royaltyAsins.has(asin) && spend.totalSpend7d > 0)
+          .filter(([asin, spend]) => !processedAsins.has(asin) && spend.totalSpend7d > 0)
           .map(([asin, spend]) => {
             const meta = bookMeta.get(asin);
-            const adSpend = spend.totalSpend7d;
-            const adSales7d = spend.totalSales7d;
             return {
               asin,
               title: meta?.title ?? asin,
               cover: `https://m.media-amazon.com/images/P/${asin}.jpg`,
               grossRoyalties: 0,
               spending: 0,
-              adSpend7d: adSpend,
-              adSales7d,
-              netProfit: -adSpend,
+              adSpend7d: spend.totalSpend7d,
+              adSales7d: spend.totalSales7d,
+              netProfit: -spend.totalSpend7d,
               acos7d: null,
               pageCount: meta?.pageCount,
               bsrRank: meta?.bsrRank,
               bsrCategory: meta?.bsrCategory,
             };
           });
-        const allBookProfitData = [...bookProfitData, ...spendOnlyBooks];
+        const allBookProfitData = [...bookProfitRows, ...spendOnlyBooks];
 
         const formatTimeAgo = (dateStr: string) => {
           const diff = Date.now() - new Date(dateStr).getTime();
@@ -934,7 +968,18 @@ export default function KdpDashboard() {
             <p className="text-gray-400 text-center py-8">No data for {monthlyStats.previousMonth.label}</p>
           ) : (
             <div className="space-y-3">
-              {summary.topEarners.previousMonth.filter(b => bookMeta.has(b.asin)).slice(0, 5).map((book, index) => (
+              {summary.topEarners.previousMonth
+                .map(book => {
+                  if (bookMeta.has(book.asin)) return book;
+                  const key = book.title?.split(':')[0].trim().toLowerCase();
+                  for (const [asin, meta] of bookMeta.entries()) {
+                    if (meta.title?.split(':')[0].trim().toLowerCase() === key)
+                      return { ...book, asin, coverUrl: `https://m.media-amazon.com/images/P/${asin}.jpg` };
+                  }
+                  return null;
+                })
+                .filter((b): b is NonNullable<typeof b> => b !== null)
+                .slice(0, 5).map((book, index) => (
                 <div key={book.bookId} className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors">
                   <span className={`text-lg font-bold w-6 ${index === 0 ? 'text-yellow-500' : index === 1 ? 'text-gray-400' : index === 2 ? 'text-orange-600' : 'text-gray-500'}`}>
                     #{index + 1}
@@ -968,7 +1013,18 @@ export default function KdpDashboard() {
             <p className="text-gray-400 text-center py-8">No data for {monthlyStats.currentMonth.label}</p>
           ) : (
             <div className="space-y-3">
-              {summary.topEarners.currentMonth.filter(b => bookMeta.has(b.asin)).slice(0, 5).map((book, index) => (
+              {summary.topEarners.currentMonth
+                .map(book => {
+                  if (bookMeta.has(book.asin)) return book;
+                  const key = book.title?.split(':')[0].trim().toLowerCase();
+                  for (const [asin, meta] of bookMeta.entries()) {
+                    if (meta.title?.split(':')[0].trim().toLowerCase() === key)
+                      return { ...book, asin, coverUrl: `https://m.media-amazon.com/images/P/${asin}.jpg` };
+                  }
+                  return null;
+                })
+                .filter((b): b is NonNullable<typeof b> => b !== null)
+                .slice(0, 5).map((book, index) => (
                 <div key={book.bookId} className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors">
                   <span className={`text-lg font-bold w-6 ${index === 0 ? 'text-yellow-500' : index === 1 ? 'text-gray-400' : index === 2 ? 'text-orange-600' : 'text-gray-500'}`}>
                     #{index + 1}

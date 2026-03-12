@@ -264,8 +264,6 @@ export async function processCompletedReports(): Promise<{
                 report.status = 'processed';
                 await reportRepo.save(report);
                 stats.processed++;
-                await saveAutomationLog(report, 'success', undefined, preloaded);
-                emailItems.push({ campaignName: report.campaignName, campaignId: report.campaignId, functions: JSON.parse(report.functionNumbers), status: 'processed', details: 'KDP books enriched' });
                 console.log(`   ✅ ${report.reportId}: kdp_books enriched successfully`);
               } else {
                 const opSummary = await executeAutomationFunctions(

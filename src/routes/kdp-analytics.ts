@@ -531,9 +531,9 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       });
     }
 
-    // Count total live books
+    // Count live paperback books only
     const totalLiveBooks = await bookRepository.count({
-      where: { userId }
+      where: { userId, format: 'Paperback' }
     });
 
     // Calculate days in current month so far
