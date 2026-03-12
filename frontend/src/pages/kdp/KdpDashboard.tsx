@@ -40,7 +40,7 @@ export default function KdpDashboard() {
   const [bookStats7d, setBookStats7d] = useState<BookStatsData | null>(null);
   const [bookSpendData, setBookSpendData] = useState<Record<string, { totalSpend7d: number; totalSales7d: number; acos: number | null }> | null>(null);
   const [bookSpendUpdatedAt, setBookSpendUpdatedAt] = useState<string | null>(null);
-  const [bookMeta, setBookMeta] = useState<Map<string, { pageCount?: number; bsrRank?: number; bsrCategory?: string }>>(new Map());
+  const [bookMeta, setBookMeta] = useState<Map<string, { pageCount?: number; bsrRank?: number; bsrCategory?: string; title?: string }>>(new Map());
 
   // Stato estensione e sync
   const [extensionStatus, setExtensionStatus] = useState<ExtensionStatus>({
@@ -211,7 +211,7 @@ export default function KdpDashboard() {
         setBookSpendUpdatedAt(bookSpendRes.value.updatedAt);
       }
       if (booksRes.status === 'fulfilled' && booksRes.value.data) {
-        const meta = new Map<string, { pageCount?: number; bsrRank?: number; bsrCategory?: string }>();
+        const meta = new Map<string, { pageCount?: number; bsrRank?: number; bsrCategory?: string; title?: string }>();
         for (const b of booksRes.value.data) {
           if (!b.asin) continue;
           const existing = meta.get(b.asin);
@@ -220,6 +220,7 @@ export default function KdpDashboard() {
             pageCount: existing?.pageCount ?? b.pageCount,
             bsrRank: existing?.bsrRank ?? b.bsrRank,
             bsrCategory: existing?.bsrCategory ?? b.bsrCategory,
+            title: existing?.title ?? b.title,
           });
         }
         setBookMeta(meta);
@@ -776,6 +777,31 @@ export default function KdpDashboard() {
           .filter(b => b.grossRoyalties > 0 || b.adSpend7d > 0)
           .sort((a, b) => b.netProfit - a.netProfit);
 
+        // Aggiungi libri con solo spend (es. paperback con campagne ma 0 vendite KDP nel periodo)
+        const royaltyAsins = new Set((bookStats7d?.books ?? []).map(b => b.asin));
+        const spendOnlyBooks = Object.entries(bookSpendData ?? {})
+          .filter(([asin, spend]) => !royaltyAsins.has(asin) && spend.totalSpend7d > 0)
+          .map(([asin, spend]) => {
+            const meta = bookMeta.get(asin);
+            const adSpend = spend.totalSpend7d;
+            const adSales7d = spend.totalSales7d;
+            return {
+              asin,
+              title: meta?.title ?? asin,
+              cover: `https://m.media-amazon.com/images/P/${asin}.jpg`,
+              grossRoyalties: 0,
+              spending: 0,
+              adSpend7d: adSpend,
+              adSales7d,
+              netProfit: -adSpend,
+              acos7d: null,
+              pageCount: meta?.pageCount,
+              bsrRank: meta?.bsrRank,
+              bsrCategory: meta?.bsrCategory,
+            };
+          });
+        const allBookProfitData = [...bookProfitData, ...spendOnlyBooks];
+
         const formatTimeAgo = (dateStr: string) => {
           const diff = Date.now() - new Date(dateStr).getTime();
           const h = Math.floor(diff / 3600000);
@@ -805,7 +831,7 @@ export default function KdpDashboard() {
               </div>
             )}
 
-            {bookProfitData.length === 0 ? (
+            {allBookProfitData.length === 0 ? (
               <p className="text-gray-400 text-center py-6">No royalties data in the last 7 days</p>
             ) : (
               <div className="overflow-x-auto">
@@ -824,7 +850,7 @@ export default function KdpDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {bookProfitData.map((book, index) => (
+                    {allBookProfitData.map((book, index) => (
                       <tr key={book.asin} className="border-b border-gray-800 hover:bg-gray-800/50 transition-colors">
                         <td className="py-3 pr-4">
                           <span className={`text-sm font-bold ${index === 0 ? 'text-yellow-500' : index === 1 ? 'text-gray-400' : index === 2 ? 'text-orange-600' : 'text-gray-600'}`}>
