@@ -370,7 +370,7 @@ export default function KdpDashboard() {
               </thead>
               <tbody className="text-white">
                 <tr className="border-b border-gray-700/50">
-                  <td className="py-3 text-gray-400">AD Orders</td>
+                  <td className="py-3 text-gray-400">Total Orders</td>
                   <td className="py-3 text-center">{monthlyStats.previousMonth.adOrders}</td>
                   <td className="py-3 text-center font-medium">{monthlyStats.currentMonth.adOrders}</td>
                   <td className={`py-3 text-center ${formatChange(monthlyStats.change.adOrders).color}`}>
@@ -423,18 +423,6 @@ export default function KdpDashboard() {
                   <td className="py-3 text-center font-medium">{formatPercentage(monthlyStats.currentMonth.overallROI)}</td>
                   <td className="py-3 text-center text-gray-400">-</td>
                 </tr>
-                <tr className="border-b border-gray-700/50">
-                  <td className="py-3 text-gray-400">AMS ROI</td>
-                  <td className="py-3 text-center">{formatPercentage(monthlyStats.previousMonth.amsROI)}</td>
-                  <td className="py-3 text-center font-medium">{formatPercentage(monthlyStats.currentMonth.amsROI)}</td>
-                  <td className="py-3 text-center text-gray-400">-</td>
-                </tr>
-                <tr>
-                  <td className="py-3 text-gray-400">AMS ACoS</td>
-                  <td className="py-3 text-center">{formatPercentage(monthlyStats.previousMonth.amsACoS)}</td>
-                  <td className="py-3 text-center font-medium">{formatPercentage(monthlyStats.currentMonth.amsACoS)}</td>
-                  <td className="py-3 text-center text-gray-400">-</td>
-                </tr>
               </tbody>
             </table>
           </div>
@@ -464,7 +452,7 @@ export default function KdpDashboard() {
               </thead>
               <tbody className="text-white">
                 <tr className="border-b border-gray-700/50">
-                  <td className="py-3 text-gray-400">AD Orders</td>
+                  <td className="py-3 text-gray-400">Total Orders</td>
                   <td className="py-3 text-center">{dailyStats.yesterday.adOrders}</td>
                   <td className="py-3 text-center font-medium">{dailyStats.today.adOrders}</td>
                   <td className={`py-3 text-center ${formatChange(dailyStats.change.adOrders).color}`}>
@@ -517,18 +505,6 @@ export default function KdpDashboard() {
                   <td className="py-3 text-center font-medium">{formatPercentage(dailyStats.today.overallROI)}</td>
                   <td className="py-3 text-center text-gray-400">-</td>
                 </tr>
-                <tr className="border-b border-gray-700/50">
-                  <td className="py-3 text-gray-400">AMS ROI</td>
-                  <td className="py-3 text-center">{formatPercentage(dailyStats.yesterday.amsROI)}</td>
-                  <td className="py-3 text-center font-medium">{formatPercentage(dailyStats.today.amsROI)}</td>
-                  <td className="py-3 text-center text-gray-400">-</td>
-                </tr>
-                <tr>
-                  <td className="py-3 text-gray-400">AMS ACoS</td>
-                  <td className="py-3 text-center">{formatPercentage(dailyStats.yesterday.amsACoS)}</td>
-                  <td className="py-3 text-center font-medium">{formatPercentage(dailyStats.today.amsACoS)}</td>
-                  <td className="py-3 text-center text-gray-400">-</td>
-                </tr>
               </tbody>
             </table>
           </div>
@@ -550,13 +526,13 @@ export default function KdpDashboard() {
         />
 
         <StatsCard
-          title="Net Royalties"
-          value={formatCurrency(summary.widgets.netRoyaltiesThisMonth || summary.widgets.grossRoyaltiesEstimator)}
-          subtitle="This month"
+          title="Sales"
+          value={formatCurrency((summary.widgets as any).grossSalesEstimate ?? 0)}
+          subtitle="US marketplace"
           variant="success"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
             </svg>
           }
         />

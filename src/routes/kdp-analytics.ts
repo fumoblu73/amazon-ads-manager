@@ -230,17 +230,38 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       }
     }
 
+    // Get monthly ADS spend from monthly_ads_spend + book_spend_cache (more reliable than kdp_daily_stats.spending)
+    const currentYm = currentMonth.startDate.slice(0, 7);  // 'YYYY-MM'
+    const previousYm = previousMonth.startDate.slice(0, 7);
+    let currentMonthSpend = 0;
+    let previousMonthSpend = 0;
+    try {
+      // monthly_ads_spend has month-to-date spend (updated by process-reports Mon/Wed/Fri)
+      const spendRows: Array<{ year_month: string; total: string }> = await AppDataSource.query(`
+        SELECT year_month, SUM(total_spend)::float AS total
+        FROM monthly_ads_spend
+        WHERE user_id = $1 AND year_month IN ($2, $3)
+        GROUP BY year_month
+      `, [userId, currentYm, previousYm]);
+      for (const row of spendRows) {
+        if (row.year_month === currentYm) currentMonthSpend = parseFloat(row.total || '0');
+        if (row.year_month === previousYm) previousMonthSpend = parseFloat(row.total || '0');
+      }
+    } catch (e) {
+      console.warn('[Dashboard] monthly spend query failed:', e);
+    }
+
     // Calculate ROI/ACOS for current month
-    const currentROI = currentMonthStats.spending > 0
-      ? ((currentMonthStats.netRoyalties / currentMonthStats.spending) * 100) : null;
-    const currentACoS = currentMonthStats.grossRoyalties > 0 && currentMonthStats.spending > 0
-      ? ((currentMonthStats.spending / currentMonthStats.grossRoyalties) * 100) : null;
+    const currentROI = currentMonthSpend > 0
+      ? ((currentMonthStats.netRoyalties / currentMonthSpend) * 100) : null;
+    const currentACoS = currentMonthStats.grossRoyalties > 0 && currentMonthSpend > 0
+      ? ((currentMonthSpend / currentMonthStats.grossRoyalties) * 100) : null;
 
     // Calculate ROI/ACOS for previous month
-    const previousROI = previousMonthStats.spending > 0
-      ? ((previousMonthStats.netRoyalties / previousMonthStats.spending) * 100) : null;
-    const previousACoS = previousMonthStats.grossRoyalties > 0 && previousMonthStats.spending > 0
-      ? ((previousMonthStats.spending / previousMonthStats.grossRoyalties) * 100) : null;
+    const previousROI = previousMonthSpend > 0
+      ? ((previousMonthStats.netRoyalties / previousMonthSpend) * 100) : null;
+    const previousACoS = previousMonthStats.grossRoyalties > 0 && previousMonthSpend > 0
+      ? ((previousMonthSpend / previousMonthStats.grossRoyalties) * 100) : null;
 
     // Calculate ROI/ACOS for today
     const todayROI = todayStats.spending > 0
@@ -405,7 +426,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
     // Get ADS spend per marketplace:
     // - Historical months: from monthly_ads_spend table
     // - Current month: from book_spend_cache (7d rolling, more accurate)
-    const currentYm = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+    const currentYm2 = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
     const spendByMarketplace: Record<string, Array<{ yearMonth: string; spend: number }>> = {};
     try {
       // Historical spend from monthly_ads_spend
@@ -435,8 +456,8 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
         if (mp) {
           if (!spendByMarketplace[mp]) spendByMarketplace[mp] = [];
           // Replace current month entry if exists, otherwise push
-          const idx = spendByMarketplace[mp].findIndex(e => e.yearMonth === currentYm);
-          const entry = { yearMonth: currentYm, spend: parseFloat(row.spend || '0') };
+          const idx = spendByMarketplace[mp].findIndex(e => e.yearMonth === currentYm2);
+          const entry = { yearMonth: currentYm2, spend: parseFloat(row.spend || '0') };
           if (idx >= 0) spendByMarketplace[mp][idx] = entry;
           else spendByMarketplace[mp].push(entry);
         }
@@ -536,6 +557,28 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       where: { userId, format: 'Paperback' }
     });
 
+    // Gross sales estimate: US price × print orders
+    let grossSalesEstimate = 0;
+    if (currentMonthStats.printOrders > 0) {
+      const paperbackBooks = await bookRepository.find({ where: { userId, format: 'Paperback' } });
+      let usPrice = 0;
+      for (const book of paperbackBooks) {
+        if (book.price?.includes('$')) {
+          usPrice = parseFloat(book.price.replace(/[^0-9.]/g, ''));
+          if (usPrice > 0) break;
+        }
+      }
+      if (usPrice === 0) {
+        for (const book of paperbackBooks) {
+          if (book.price) {
+            usPrice = parseFloat(book.price.replace(/[^0-9.]/g, ''));
+            if (usPrice > 0) break;
+          }
+        }
+      }
+      grossSalesEstimate = usPrice * currentMonthStats.printOrders;
+    }
+
     // Calculate days in current month so far
     const daysInCurrentMonth = Math.ceil(
       (new Date(currentMonth.endDate).getTime() - new Date(currentMonth.startDate).getTime())
@@ -572,7 +615,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
             paperbacks: previousMonthStats.printOrders || 0,
             reads: previousMonthStats.kenpReads || 0,
             grossRoyalties: previousMonthStats.grossRoyalties,
-            spending: previousMonthStats.spending,
+            spending: previousMonthSpend,
             netRoyalties: previousMonthStats.netRoyalties,
             overallROI: previousROI,
             amsROI: previousROI,
@@ -584,7 +627,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
             paperbacks: currentMonthStats.printOrders || 0,
             reads: currentMonthStats.kenpReads || 0,
             grossRoyalties: currentMonthStats.grossRoyalties,
-            spending: currentMonthStats.spending,
+            spending: currentMonthSpend,
             netRoyalties: currentMonthStats.netRoyalties,
             overallROI: currentROI,
             amsROI: currentROI,
@@ -595,7 +638,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
             paperbacks: calculatePercentChange(currentMonthStats.printOrders || 0, previousMonthStats.printOrders || 0),
             reads: calculatePercentChange(currentMonthStats.kenpReads || 0, previousMonthStats.kenpReads || 0),
             grossRoyalties: calculatePercentChange(currentMonthStats.grossRoyalties, previousMonthStats.grossRoyalties),
-            spending: calculatePercentChange(currentMonthStats.spending, previousMonthStats.spending),
+            spending: calculatePercentChange(currentMonthSpend, previousMonthSpend),
             netRoyalties: calculatePercentChange(currentMonthStats.netRoyalties, previousMonthStats.netRoyalties)
           }
         },
@@ -641,6 +684,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       widgets: {
         grossRoyaltiesEstimator: currentMonthStats.grossRoyalties,
         netRoyaltiesThisMonth: currentMonthStats.netRoyalties,
+        grossSalesEstimate,
         todayNetRoyalties: todayStats.netRoyalties,
         yesterdayNetRoyalties: yesterdayStats.netRoyalties,
         kenpReadsThisMonth: currentMonthStats.kenpReads,
