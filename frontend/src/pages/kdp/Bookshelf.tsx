@@ -44,10 +44,10 @@ export default function Bookshelf() {
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  const loadBooks = async () => {
+  const loadBooks = async (overrideFilters?: BookshelfFilters) => {
     try {
       setLoading(true);
-      const response = await kdpBooksApi.getAll(filters);
+      const response = await kdpBooksApi.getAll(overrideFilters ?? filters);
       setBooks(response.data || []);
       setError(null);
     } catch (err: any) {
@@ -280,7 +280,7 @@ export default function Bookshelf() {
           {(['all', 'Paperback', 'Ebook', 'Hardcover'] as const).map((fmt) => (
             <button
               key={fmt}
-              onClick={() => setFilters({ ...filters, format: fmt })}
+              onClick={() => { const f = { ...filters, format: fmt }; setFilters(f); loadBooks(f); }}
               className={`px-3 py-1 text-sm rounded-full border transition-colors ${
                 filters.format === fmt
                   ? 'bg-orange-500 border-orange-500 text-white'
