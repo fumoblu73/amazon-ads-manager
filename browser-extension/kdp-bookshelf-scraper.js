@@ -137,21 +137,20 @@
       try {
         const rowId = row.id || '';
 
-        // Check format - only Paperback
+        // Detect print format (Paperback or Hardcover)
         const formatElement = row.querySelector(`span[id*="print-status-format-${rowId}"]`);
-        const format = formatElement ? cleanText(formatElement.innerText || formatElement.textContent) : '';
+        const formatRaw = formatElement ? cleanText(formatElement.innerText || formatElement.textContent) : '';
 
-        const isPaperback = format && (
-          format === 'Paperback' ||
-          format === 'Versione cartacea' ||
-          format === 'Tapa blanda' ||
-          format === 'Broch\u00e9' ||
-          format === 'Taschenbuch'
-        );
+        const isPaperback = formatRaw === 'Paperback' || formatRaw === 'Versione cartacea' ||
+          formatRaw === 'Tapa blanda' || formatRaw === 'Broch\u00e9' || formatRaw === 'Taschenbuch';
+        const isHardcover = formatRaw === 'Hardcover' || formatRaw === 'Copertina rigida' ||
+          formatRaw === 'Tapa dura' || formatRaw === 'Reli\u00e9' || formatRaw === 'Gebundene Ausgabe';
 
-        if (!isPaperback) return;
+        if (!isPaperback && !isHardcover) return;
 
-        // Extract ASIN
+        const normalizedFormat = isHardcover ? 'Hardcover' : 'Paperback';
+
+        // Extract print ASIN
         const asinElement = row.querySelector(`span[id*="print-price-asin-${rowId}"]`);
         let asin = '';
         if (asinElement) {
@@ -190,13 +189,20 @@
         const seriesElement = row.querySelector(`span[id*="series_title-${rowId}"]`);
         const seriesName = seriesElement ? cleanText(seriesElement.innerText || seriesElement.textContent) : '';
 
-        // Extract PRICE
+        // Extract PRICE (print)
         const priceElement = row.querySelector(`a[id*="print-price-list-price-${rowId}"]`);
         const price = priceElement ? cleanText(priceElement.innerText || priceElement.textContent) : '';
 
-        // Extract EBOOK PRICE
+        // Extract EBOOK PRICE and ASIN
         const ebookPriceElement = row.querySelector(`a[id*="digital-price-list-price-${rowId}"]`);
         const ebookPrice = ebookPriceElement ? cleanText(ebookPriceElement.innerText || ebookPriceElement.textContent) : '';
+        const ebookAsinElement = row.querySelector(`span[id*="digital-price-asin-${rowId}"]`);
+        let ebookAsin = '';
+        if (ebookAsinElement) {
+          const ebookAsinText = cleanText(ebookAsinElement.innerText || ebookAsinElement.textContent);
+          const ebookAsinMatch = ebookAsinText.match(/(?:Codice\s+)?ASIN:\s*([A-Z0-9]{10})/i);
+          if (ebookAsinMatch) ebookAsin = ebookAsinMatch[1];
+        }
 
         // Extract PUBLISH DATE
         const dateElement = row.querySelector(`span[id*="print-status-release-date-${rowId}"]`);
@@ -216,18 +222,37 @@
         const coverElement = row.querySelector(`td[id*="${rowId}-cover"] img`);
         const coverUrl = coverElement ? coverElement.src : '';
 
+        // Push print book (Paperback or Hardcover)
+        processedAsins.add(asin);
         books.push({
           titleId: rowId || null,
           title: title.substring(0, 500),
           asin: asin.substring(0, 15),
           author: author ? author.substring(0, 200) : null,
           seriesName: seriesName ? seriesName.substring(0, 200) : null,
-          format: 'Paperback',
+          format: normalizedFormat,
           price: price ? price.substring(0, 50) : null,
           ebookPrice: ebookPrice ? ebookPrice.substring(0, 50) : null,
           publishDate: publishDate || null,
           coverUrl: coverUrl || null
         });
+
+        // Push ebook as separate entry if ASIN available
+        if (ebookAsin && !processedAsins.has(ebookAsin)) {
+          processedAsins.add(ebookAsin);
+          books.push({
+            titleId: rowId || null,
+            title: title.substring(0, 500),
+            asin: ebookAsin.substring(0, 15),
+            author: author ? author.substring(0, 200) : null,
+            seriesName: seriesName ? seriesName.substring(0, 200) : null,
+            format: 'Ebook',
+            price: ebookPrice ? ebookPrice.substring(0, 50) : null,
+            ebookPrice: null,
+            publishDate: publishDate || null,
+            coverUrl: coverUrl || null
+          });
+        }
 
       } catch (error) {
         console.warn(`[KDP Bookshelf Scraper] Error processing row ${index}:`, error);

@@ -564,4 +564,6 @@ export interface BookshelfFilters {
   search?: string;
   page?: number;
   limit?: number;
+  format?: 'all' | 'Paperback' | 'Ebook' | 'Hardcover';
+  sort?: 'title_asc' | 'title_desc' | 'price_asc' | 'price_desc';
 }

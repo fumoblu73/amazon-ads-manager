@@ -273,7 +273,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
     const calcVatROI = (royalties: number, spend: number): number | null => {
       if (spend <= 0) return null;
       const vatAdjustedSpend = spend * (1 + vatPercentage / 100);
-      return ((royalties - vatAdjustedSpend) / vatAdjustedSpend) * 100;
+      return (royalties / vatAdjustedSpend) * 100;
     };
 
     // calcGrossSales placeholder — replaced by per-book async queries below

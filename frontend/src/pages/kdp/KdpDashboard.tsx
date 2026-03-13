@@ -413,7 +413,7 @@ export default function KdpDashboard() {
                 <tr className="border-b border-gray-700/50">
                   <td className="py-3 text-gray-400">Royalties</td>
                   <td className="py-3 text-center">{formatCurrency(monthlyStats.previousMonth.netRoyalties)}</td>
-                  <td className="py-3 text-center font-medium text-green-500">{formatCurrency(monthlyStats.currentMonth.netRoyalties)}</td>
+                  <td className="py-3 text-center font-medium">{formatCurrency(monthlyStats.currentMonth.netRoyalties)}</td>
                   <td className={`py-3 text-center ${formatChange(monthlyStats.change.netRoyalties).color}`}>
                     {formatChange(monthlyStats.change.netRoyalties).text}
                   </td>
@@ -501,7 +501,7 @@ export default function KdpDashboard() {
                 <tr className="border-b border-gray-700/50">
                   <td className="py-3 text-gray-400">Royalties</td>
                   <td className="py-3 text-center">{formatCurrency(dailyStats.yesterday.netRoyalties)}</td>
-                  <td className="py-3 text-center font-medium text-green-500">{formatCurrency(dailyStats.today.netRoyalties)}</td>
+                  <td className="py-3 text-center font-medium">{formatCurrency(dailyStats.today.netRoyalties)}</td>
                   <td className={`py-3 text-center ${formatChange(dailyStats.change.netRoyalties).color}`}>
                     {formatChange(dailyStats.change.netRoyalties).text}
                   </td>
@@ -524,147 +524,6 @@ export default function KdpDashboard() {
         </div>
       </div>
 
-      {/* Widgets Grid - Row 1 */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-        <StatsCard
-          title="Royalties"
-          value={formatCurrency(summary.widgets.grossRoyaltiesEstimator)}
-          subtitle={summary.widgets.royaltiesChange != null ? `${summary.widgets.royaltiesChange >= 0 ? '+' : ''}${summary.widgets.royaltiesChange.toFixed(1)}% vs last month` : undefined}
-          variant="primary"
-          icon={
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          }
-        />
-
-        <StatsCard
-          title="Sales"
-          value={formatCurrency((summary.widgets as any).grossSalesEstimate ?? 0)}
-          subtitle="US marketplace"
-          variant="success"
-          icon={
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-            </svg>
-          }
-        />
-
-        <StatsCard
-          title="Today's Net"
-          value={formatCurrency(summary.widgets.todayNetRoyalties)}
-          subtitle="Today"
-          variant="success"
-          icon={
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-            </svg>
-          }
-        />
-
-        <StatsCard
-          title="Yesterday's Net"
-          value={formatCurrency(summary.widgets.yesterdayNetRoyalties)}
-          subtitle="Yesterday"
-          icon={
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          }
-        />
-
-        <StatsCard
-          title="Daily Avg"
-          value={formatCurrency(summary.widgets.dailyAvgGrossRoyalties)}
-          subtitle="This month avg"
-          icon={
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-          }
-        />
-
-        <StatsCard
-          title="Projection"
-          value={formatCurrency(summary.widgets.estimatedProjection)}
-          subtitle="Full month est."
-          variant="primary"
-          icon={
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-            </svg>
-          }
-        />
-      </div>
-
-      {/* Widgets Grid - Row 2 */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-        <StatsCard
-          title="KENP Reads"
-          value={(summary.widgets?.kenpReadsThisMonth || 0).toLocaleString()}
-          subtitle="This month"
-          icon={
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-            </svg>
-          }
-        />
-
-        <StatsCard
-          title="Book Sales"
-          value={summary.widgets.bookSalesThisMonth}
-          subtitle={summary.widgets.ordersChange != null ? `${summary.widgets.ordersChange >= 0 ? '+' : ''}${summary.widgets.ordersChange.toFixed(1)}%` : undefined}
-          icon={
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-            </svg>
-          }
-        />
-
-        <StatsCard
-          title="Organic Orders"
-          value={summary.widgets.inorganicOrders || 0}
-          subtitle="Paperback (tot)"
-          icon={
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-            </svg>
-          }
-        />
-
-        <StatsCard
-          title="Ebook Orders"
-          value={summary.widgets.organicOrders || 0}
-          subtitle="Kindle"
-          icon={
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-            </svg>
-          }
-        />
-
-        <StatsCard
-          title="Pre-orders"
-          value={summary.widgets.preOrders || 0}
-          subtitle="Pending"
-          icon={
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          }
-        />
-
-        <StatsCard
-          title="Live Books"
-          value={summary.widgets.totalLiveBooks}
-          subtitle="Paperback"
-          icon={
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
-          }
-        />
-      </div>
 
       {/* Monthly Performance Chart — per marketplace */}
       {(() => {

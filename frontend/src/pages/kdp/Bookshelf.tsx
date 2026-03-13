@@ -20,7 +20,9 @@ export default function Bookshelf() {
   const [filters, setFilters] = useState<BookshelfFilters>({
     status: 'all',
     page: 1,
-    limit: 25
+    limit: 25,
+    format: 'all',
+    sort: 'title_asc'
   });
 
   useEffect(() => {
@@ -214,7 +216,7 @@ export default function Bookshelf() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white mb-2">Bookshelf & BSRs</h1>
-          <p className="text-gray-400">{books.length} books in library</p>
+          <p className="text-gray-400">{books.length} {filters.format && filters.format !== 'all' ? filters.format.toLowerCase() : ''} book{books.length !== 1 ? 's' : ''} in library</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -269,27 +271,11 @@ export default function Bookshelf() {
       )}
 
       {/* Filters */}
-      <div className="bg-gray-900 border border-gray-700 rounded-xl p-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-              Status
-            </label>
-            <select
-              value={filters.status}
-              onChange={(e) => setFilters({ ...filters, status: e.target.value as any })}
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none"
-            >
-              <option value="all">All Books</option>
-              <option value="active">Active</option>
-              <option value="archived">Archived</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-              Search
-            </label>
+      <div className="bg-gray-900 border border-gray-700 rounded-xl p-4 space-y-4">
+        <div className="flex flex-wrap items-end gap-4">
+          {/* Search */}
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Search</label>
             <input
               type="text"
               value={filters.search || ''}
@@ -298,6 +284,39 @@ export default function Bookshelf() {
               className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none"
             />
           </div>
+
+          {/* Sort */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Sort</label>
+            <select
+              value={filters.sort || 'title_asc'}
+              onChange={(e) => setFilters({ ...filters, sort: e.target.value as any })}
+              className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none"
+            >
+              <option value="title_asc">Title A→Z</option>
+              <option value="title_desc">Title Z→A</option>
+              <option value="price_asc">Price ↑</option>
+              <option value="price_desc">Price ↓</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Format filter buttons */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider mr-1">Format:</span>
+          {(['all', 'Paperback', 'Ebook', 'Hardcover'] as const).map((fmt) => (
+            <button
+              key={fmt}
+              onClick={() => setFilters({ ...filters, format: fmt })}
+              className={`px-3 py-1 text-sm rounded-full border transition-colors ${
+                filters.format === fmt
+                  ? 'bg-orange-500 border-orange-500 text-white'
+                  : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-orange-500 hover:text-orange-400'
+              }`}
+            >
+              {fmt === 'all' ? 'All' : fmt}
+            </button>
+          ))}
         </div>
       </div>
 

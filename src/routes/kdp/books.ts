@@ -14,7 +14,7 @@ router.use(authMiddleware);
  */
 router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { marketplace, search, limit } = req.query;
+    const { marketplace, search, limit, format, sort } = req.query;
 
     const bookRepo = AppDataSource.getRepository(KdpBook);
 
@@ -29,6 +29,11 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
       queryBuilder.andWhere('book.marketplace = :marketplace', { marketplace });
     }
 
+    // Filtra per formato se specificato
+    if (format && typeof format === 'string' && format !== 'all') {
+      queryBuilder.andWhere('book.format = :format', { format });
+    }
+
     // Ricerca case-insensitive (ILIKE) su titolo e ASIN
     if (search && typeof search === 'string' && search.trim()) {
       queryBuilder.andWhere(
@@ -38,14 +43,9 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
     }
 
     // Fetch ALL books first, then dedup by ASIN, then apply limit.
-    // Applying take() before dedup causes cross-marketplace duplicates to slip through
-    // when the limit cuts the result set mid-way.
     const books = await queryBuilder.getMany();
 
-    // Deduplica per ASIN: stesso libro può esistere su più marketplace,
-    // oppure il DB può contenere righe duplicate (constraint non applicato in prod).
-    // Normalizziamo l'ASIN (trim+uppercase) come chiave per catturare anche
-    // duplicati con whitespace o casing diverso.
+    // Deduplica per ASIN: stesso libro può esistere su più marketplace.
     const byAsin = new Map<string, KdpBook>();
     for (const book of books) {
       const key = (book.asin || '').trim().toUpperCase();
@@ -59,6 +59,18 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
       }
     }
     let deduped = Array.from(byAsin.values());
+
+    // Ordinamento dopo dedup
+    const parsePrice = (p: string | null | undefined) => parseFloat((p || '0').replace(/[^0-9.]/g, '')) || 0;
+    if (sort === 'title_desc') {
+      deduped.sort((a, b) => b.title.localeCompare(a.title));
+    } else if (sort === 'price_asc') {
+      deduped.sort((a, b) => parsePrice(a.price) - parsePrice(b.price));
+    } else if (sort === 'price_desc') {
+      deduped.sort((a, b) => parsePrice(b.price) - parsePrice(a.price));
+    } else {
+      deduped.sort((a, b) => a.title.localeCompare(b.title)); // default A-Z
+    }
 
     // Apply limit after dedup
     if (limit) deduped = deduped.slice(0, Number(limit));
