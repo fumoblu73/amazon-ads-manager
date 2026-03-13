@@ -274,20 +274,6 @@ export default function Bookshelf() {
 
       {/* Filters */}
       <div className="bg-gray-900 border border-gray-700 rounded-xl p-4 space-y-4">
-        <div className="flex flex-wrap items-end gap-4">
-          {/* Search */}
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Search</label>
-            <input
-              type="text"
-              value={filters.search || ''}
-              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-              placeholder="Search title or ASIN..."
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none"
-            />
-          </div>
-        </div>
-
         {/* Format filter buttons */}
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider mr-1">Format:</span>
