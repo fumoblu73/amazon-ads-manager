@@ -13,6 +13,8 @@ import {
 } from '../utils/mock-kdp-data';
 import { authMiddleware } from '../middleware/auth';
 import { MonthlyAdsSpend } from '../entities/MonthlyAdsSpend';
+import { KdpDailyStats as KdpDailyStatsEntity } from '../entities/KdpDailyStats';
+import { AutomationSettings } from '../entities/AutomationSettings';
 
 const router = Router();
 const USE_MOCK_DATA = process.env.USE_MOCK_DATA === 'true';
@@ -129,12 +131,23 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       const stats = await statsRepository.findOne({
         where: { userId, date }
       });
+      // Sum per-book digital/print orders from kdp_daily_stats
+      const perBookRepo = AppDataSource.getRepository(KdpDailyStatsEntity);
+      const perBook = await perBookRepo
+        .createQueryBuilder('s')
+        .innerJoin('kdp_books', 'b', 'b.id = s.book_id AND b.user_id = :userId', { userId })
+        .select('SUM(s.ebook_sales)', 'digitalOrders')
+        .addSelect('SUM(s.paperback_sales + s.hardcover_sales)', 'printOrders')
+        .where('s.date = :date', { date })
+        .getRawOne();
       return {
         grossRoyalties: stats ? parseFloat(stats.grossRoyalties.toString()) : 0,
         spending: stats ? parseFloat(stats.spending.toString()) : 0,
         netRoyalties: stats ? parseFloat(stats.netRoyalties.toString()) : 0,
         paidUnits: stats ? parseInt(stats.paidUnits.toString()) : 0,
-        kenpReads: stats ? parseInt(stats.kenpReads.toString()) : 0
+        kenpReads: stats ? parseInt(stats.kenpReads.toString()) : 0,
+        digitalOrders: parseInt(perBook?.digitalOrders || 0),
+        printOrders: parseInt(perBook?.printOrders || 0)
       };
     };
 
@@ -250,6 +263,22 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
     } catch (e) {
       console.warn('[Dashboard] monthly spend query failed:', e);
     }
+
+    // Fetch VAT percentage from AutomationSettings
+    const automationSettingsRepo = AppDataSource.getRepository(AutomationSettings);
+    const automationSettings = await automationSettingsRepo.findOne({ where: { userId } });
+    const vatPercentage = automationSettings?.vatPercentage ? Number(automationSettings.vatPercentage) : 22;
+
+    // Helper: ROI adjusted for VAT on ADS spend
+    const calcVatROI = (royalties: number, spend: number): number | null => {
+      if (spend <= 0) return null;
+      const vatAdjustedSpend = spend * (1 + vatPercentage / 100);
+      return ((royalties - vatAdjustedSpend) / vatAdjustedSpend) * 100;
+    };
+
+    // Gross sales per period: (printPrice × printOrders) + (ebookPrice × digitalOrders)
+    const calcGrossSales = (pOrders: number, dOrders: number) =>
+      (printPrice * pOrders) + (ebookPrice * dOrders);
 
     // Calculate ROI/ACOS for current month
     const currentROI = currentMonthSpend > 0
@@ -611,11 +640,14 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
             label: previousMonth.monthLabel,
             adOrders: previousMonthStats.paidUnits,
             paperbacks: previousMonthStats.printOrders || 0,
+            digitalOrders: previousMonthStats.digitalOrders || 0,
             reads: previousMonthStats.kenpReads || 0,
+            grossSales: calcGrossSales(previousMonthStats.printOrders || 0, previousMonthStats.digitalOrders || 0),
             grossRoyalties: previousMonthStats.grossRoyalties,
             spending: previousMonthSpend,
             netRoyalties: previousMonthStats.netRoyalties,
             overallROI: previousROI,
+            vatROI: calcVatROI(previousMonthStats.netRoyalties, previousMonthSpend),
             amsROI: previousROI,
             amsACoS: previousACoS
           },
@@ -623,18 +655,23 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
             label: currentMonth.monthLabel,
             adOrders: currentMonthStats.paidUnits,
             paperbacks: currentMonthStats.printOrders || 0,
+            digitalOrders: currentMonthStats.digitalOrders || 0,
             reads: currentMonthStats.kenpReads || 0,
+            grossSales: calcGrossSales(currentMonthStats.printOrders || 0, currentMonthStats.digitalOrders || 0),
             grossRoyalties: currentMonthStats.grossRoyalties,
             spending: currentMonthSpend,
             netRoyalties: currentMonthStats.netRoyalties,
             overallROI: currentROI,
+            vatROI: calcVatROI(currentMonthStats.netRoyalties, currentMonthSpend),
             amsROI: currentROI,
             amsACoS: currentACoS
           },
           change: {
             adOrders: calculatePercentChange(currentMonthStats.paidUnits, previousMonthStats.paidUnits),
             paperbacks: calculatePercentChange(currentMonthStats.printOrders || 0, previousMonthStats.printOrders || 0),
+            digitalOrders: calculatePercentChange(currentMonthStats.digitalOrders || 0, previousMonthStats.digitalOrders || 0),
             reads: calculatePercentChange(currentMonthStats.kenpReads || 0, previousMonthStats.kenpReads || 0),
+            grossSales: calculatePercentChange(calcGrossSales(currentMonthStats.printOrders || 0, currentMonthStats.digitalOrders || 0), calcGrossSales(previousMonthStats.printOrders || 0, previousMonthStats.digitalOrders || 0)),
             grossRoyalties: calculatePercentChange(currentMonthStats.grossRoyalties, previousMonthStats.grossRoyalties),
             spending: calculatePercentChange(currentMonthSpend, previousMonthSpend),
             netRoyalties: calculatePercentChange(currentMonthStats.netRoyalties, previousMonthStats.netRoyalties)
@@ -646,31 +683,39 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
           yesterday: {
             label: formatDateShort(yesterday),
             adOrders: yesterdayStats.paidUnits,
-            paperbacks: 0,
+            paperbacks: yesterdayStats.printOrders || 0,
+            digitalOrders: yesterdayStats.digitalOrders || 0,
             reads: yesterdayStats.kenpReads || 0,
+            grossSales: calcGrossSales(yesterdayStats.printOrders || 0, yesterdayStats.digitalOrders || 0),
             grossRoyalties: yesterdayStats.grossRoyalties,
             spending: yesterdayStats.spending,
             netRoyalties: yesterdayStats.netRoyalties,
             overallROI: yesterdayROI,
+            vatROI: calcVatROI(yesterdayStats.netRoyalties, yesterdayStats.spending),
             amsROI: yesterdayROI,
             amsACoS: yesterdayACoS
           },
           today: {
             label: formatDateShort(today),
             adOrders: todayStats.paidUnits,
-            paperbacks: 0,
+            paperbacks: todayStats.printOrders || 0,
+            digitalOrders: todayStats.digitalOrders || 0,
             reads: todayStats.kenpReads || 0,
+            grossSales: calcGrossSales(todayStats.printOrders || 0, todayStats.digitalOrders || 0),
             grossRoyalties: todayStats.grossRoyalties,
             spending: todayStats.spending,
             netRoyalties: todayStats.netRoyalties,
             overallROI: todayROI,
+            vatROI: calcVatROI(todayStats.netRoyalties, todayStats.spending),
             amsROI: todayROI,
             amsACoS: todayACoS
           },
           change: {
             adOrders: calculatePercentChange(todayStats.paidUnits, yesterdayStats.paidUnits),
-            paperbacks: null,
+            paperbacks: calculatePercentChange(todayStats.printOrders || 0, yesterdayStats.printOrders || 0),
+            digitalOrders: calculatePercentChange(todayStats.digitalOrders || 0, yesterdayStats.digitalOrders || 0),
             reads: calculatePercentChange(todayStats.kenpReads || 0, yesterdayStats.kenpReads || 0),
+            grossSales: calculatePercentChange(calcGrossSales(todayStats.printOrders || 0, todayStats.digitalOrders || 0), calcGrossSales(yesterdayStats.printOrders || 0, yesterdayStats.digitalOrders || 0)),
             grossRoyalties: calculatePercentChange(todayStats.grossRoyalties, yesterdayStats.grossRoyalties),
             spending: calculatePercentChange(todayStats.spending, yesterdayStats.spending),
             netRoyalties: calculatePercentChange(todayStats.netRoyalties, yesterdayStats.netRoyalties)

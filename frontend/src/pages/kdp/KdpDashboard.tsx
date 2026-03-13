@@ -378,7 +378,7 @@ export default function KdpDashboard() {
                   </td>
                 </tr>
                 <tr className="border-b border-gray-700/50">
-                  <td className="py-3 text-gray-400">Paperbacks</td>
+                  <td className="py-3 text-gray-400">Paperback/Hard Cover</td>
                   <td className="py-3 text-center">{monthlyStats.previousMonth.paperbacks || 0}</td>
                   <td className="py-3 text-center font-medium">{monthlyStats.currentMonth.paperbacks || 0}</td>
                   <td className={`py-3 text-center ${formatChange(monthlyStats.change.paperbacks).color}`}>
@@ -386,7 +386,15 @@ export default function KdpDashboard() {
                   </td>
                 </tr>
                 <tr className="border-b border-gray-700/50">
-                  <td className="py-3 text-gray-400">Reads</td>
+                  <td className="py-3 text-gray-400">Ebook</td>
+                  <td className="py-3 text-center">{(monthlyStats.previousMonth as any).digitalOrders || 0}</td>
+                  <td className="py-3 text-center font-medium">{(monthlyStats.currentMonth as any).digitalOrders || 0}</td>
+                  <td className={`py-3 text-center ${formatChange((monthlyStats.change as any).digitalOrders).color}`}>
+                    {formatChange((monthlyStats.change as any).digitalOrders).text}
+                  </td>
+                </tr>
+                <tr className="border-b border-gray-700/50">
+                  <td className="py-3 text-gray-400">KENP Reads</td>
                   <td className="py-3 text-center">{(monthlyStats.previousMonth.reads || 0).toLocaleString()}</td>
                   <td className="py-3 text-center font-medium">{(monthlyStats.currentMonth.reads || 0).toLocaleString()}</td>
                   <td className={`py-3 text-center ${formatChange(monthlyStats.change.reads).color}`}>
@@ -394,15 +402,15 @@ export default function KdpDashboard() {
                   </td>
                 </tr>
                 <tr className="border-b border-gray-700/50">
-                  <td className="py-3 text-gray-400">Royalties (Gross)</td>
-                  <td className="py-3 text-center">{formatCurrency(monthlyStats.previousMonth.grossRoyalties)}</td>
-                  <td className="py-3 text-center font-medium">{formatCurrency(monthlyStats.currentMonth.grossRoyalties)}</td>
-                  <td className={`py-3 text-center ${formatChange(monthlyStats.change.grossRoyalties).color}`}>
-                    {formatChange(monthlyStats.change.grossRoyalties).text}
+                  <td className="py-3 text-gray-400">Sales</td>
+                  <td className="py-3 text-center">{formatCurrency((monthlyStats.previousMonth as any).grossSales || 0)}</td>
+                  <td className="py-3 text-center font-medium">{formatCurrency((monthlyStats.currentMonth as any).grossSales || 0)}</td>
+                  <td className={`py-3 text-center ${formatChange((monthlyStats.change as any).grossSales).color}`}>
+                    {formatChange((monthlyStats.change as any).grossSales).text}
                   </td>
                 </tr>
                 <tr className="border-b border-gray-700/50">
-                  <td className="py-3 text-gray-400">Spending</td>
+                  <td className="py-3 text-gray-400">ADS Spend</td>
                   <td className="py-3 text-center">{formatCurrency(monthlyStats.previousMonth.spending)}</td>
                   <td className="py-3 text-center font-medium">{formatCurrency(monthlyStats.currentMonth.spending)}</td>
                   <td className={`py-3 text-center ${formatChange(monthlyStats.change.spending).color}`}>
@@ -410,7 +418,7 @@ export default function KdpDashboard() {
                   </td>
                 </tr>
                 <tr className="border-b border-gray-700/50">
-                  <td className="py-3 text-gray-400">Royalties (Net)</td>
+                  <td className="py-3 text-gray-400">Royalties</td>
                   <td className="py-3 text-center">{formatCurrency(monthlyStats.previousMonth.netRoyalties)}</td>
                   <td className="py-3 text-center font-medium text-green-500">{formatCurrency(monthlyStats.currentMonth.netRoyalties)}</td>
                   <td className={`py-3 text-center ${formatChange(monthlyStats.change.netRoyalties).color}`}>
@@ -418,9 +426,9 @@ export default function KdpDashboard() {
                   </td>
                 </tr>
                 <tr className="border-b border-gray-700/50">
-                  <td className="py-3 text-gray-400">Overall ROI</td>
-                  <td className="py-3 text-center">{formatPercentage(monthlyStats.previousMonth.overallROI)}</td>
-                  <td className="py-3 text-center font-medium">{formatPercentage(monthlyStats.currentMonth.overallROI)}</td>
+                  <td className="py-3 text-gray-400">Overall ROI (VAT incl.)</td>
+                  <td className="py-3 text-center">{formatPercentage((monthlyStats.previousMonth as any).vatROI)}</td>
+                  <td className="py-3 text-center font-medium">{formatPercentage((monthlyStats.currentMonth as any).vatROI)}</td>
                   <td className="py-3 text-center text-gray-400">-</td>
                 </tr>
               </tbody>
@@ -460,7 +468,7 @@ export default function KdpDashboard() {
                   </td>
                 </tr>
                 <tr className="border-b border-gray-700/50">
-                  <td className="py-3 text-gray-400">Paperbacks</td>
+                  <td className="py-3 text-gray-400">Paperback/Hard Cover</td>
                   <td className="py-3 text-center">{dailyStats.yesterday.paperbacks || 0}</td>
                   <td className="py-3 text-center font-medium">{dailyStats.today.paperbacks || 0}</td>
                   <td className={`py-3 text-center ${formatChange(dailyStats.change.paperbacks).color}`}>
@@ -468,7 +476,15 @@ export default function KdpDashboard() {
                   </td>
                 </tr>
                 <tr className="border-b border-gray-700/50">
-                  <td className="py-3 text-gray-400">Reads</td>
+                  <td className="py-3 text-gray-400">Ebook</td>
+                  <td className="py-3 text-center">{(dailyStats.yesterday as any).digitalOrders || 0}</td>
+                  <td className="py-3 text-center font-medium">{(dailyStats.today as any).digitalOrders || 0}</td>
+                  <td className={`py-3 text-center ${formatChange((dailyStats.change as any).digitalOrders).color}`}>
+                    {formatChange((dailyStats.change as any).digitalOrders).text}
+                  </td>
+                </tr>
+                <tr className="border-b border-gray-700/50">
+                  <td className="py-3 text-gray-400">KENP Reads</td>
                   <td className="py-3 text-center">{(dailyStats.yesterday.reads || 0).toLocaleString()}</td>
                   <td className="py-3 text-center font-medium">{(dailyStats.today.reads || 0).toLocaleString()}</td>
                   <td className={`py-3 text-center ${formatChange(dailyStats.change.reads).color}`}>
@@ -476,15 +492,15 @@ export default function KdpDashboard() {
                   </td>
                 </tr>
                 <tr className="border-b border-gray-700/50">
-                  <td className="py-3 text-gray-400">Royalties (Gross)</td>
-                  <td className="py-3 text-center">{formatCurrency(dailyStats.yesterday.grossRoyalties)}</td>
-                  <td className="py-3 text-center font-medium">{formatCurrency(dailyStats.today.grossRoyalties)}</td>
-                  <td className={`py-3 text-center ${formatChange(dailyStats.change.grossRoyalties).color}`}>
-                    {formatChange(dailyStats.change.grossRoyalties).text}
+                  <td className="py-3 text-gray-400">Sales</td>
+                  <td className="py-3 text-center">{formatCurrency((dailyStats.yesterday as any).grossSales || 0)}</td>
+                  <td className="py-3 text-center font-medium">{formatCurrency((dailyStats.today as any).grossSales || 0)}</td>
+                  <td className={`py-3 text-center ${formatChange((dailyStats.change as any).grossSales).color}`}>
+                    {formatChange((dailyStats.change as any).grossSales).text}
                   </td>
                 </tr>
                 <tr className="border-b border-gray-700/50">
-                  <td className="py-3 text-gray-400">Spending</td>
+                  <td className="py-3 text-gray-400">ADS Spend</td>
                   <td className="py-3 text-center">{formatCurrency(dailyStats.yesterday.spending)}</td>
                   <td className="py-3 text-center font-medium">{formatCurrency(dailyStats.today.spending)}</td>
                   <td className={`py-3 text-center ${formatChange(dailyStats.change.spending).color}`}>
@@ -492,7 +508,7 @@ export default function KdpDashboard() {
                   </td>
                 </tr>
                 <tr className="border-b border-gray-700/50">
-                  <td className="py-3 text-gray-400">Royalties (Net)</td>
+                  <td className="py-3 text-gray-400">Royalties</td>
                   <td className="py-3 text-center">{formatCurrency(dailyStats.yesterday.netRoyalties)}</td>
                   <td className="py-3 text-center font-medium text-green-500">{formatCurrency(dailyStats.today.netRoyalties)}</td>
                   <td className={`py-3 text-center ${formatChange(dailyStats.change.netRoyalties).color}`}>
@@ -500,9 +516,9 @@ export default function KdpDashboard() {
                   </td>
                 </tr>
                 <tr className="border-b border-gray-700/50">
-                  <td className="py-3 text-gray-400">Overall ROI</td>
-                  <td className="py-3 text-center">{formatPercentage(dailyStats.yesterday.overallROI)}</td>
-                  <td className="py-3 text-center font-medium">{formatPercentage(dailyStats.today.overallROI)}</td>
+                  <td className="py-3 text-gray-400">Overall ROI (VAT incl.)</td>
+                  <td className="py-3 text-center">{formatPercentage((dailyStats.yesterday as any).vatROI)}</td>
+                  <td className="py-3 text-center font-medium">{formatPercentage((dailyStats.today as any).vatROI)}</td>
                   <td className="py-3 text-center text-gray-400">-</td>
                 </tr>
               </tbody>
