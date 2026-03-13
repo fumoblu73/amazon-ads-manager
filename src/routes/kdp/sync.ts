@@ -20,6 +20,7 @@ interface BookData {
   publishDate?: string;
   coverUrl?: string;
   price?: string;
+  ebookPrice?: string;
   format?: string;
   pageCount?: number;
   bsrRank?: number;
@@ -113,6 +114,7 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
           book.publishDate = bookData.publishDate || book.publishDate;
           book.coverUrl = bookData.coverUrl || book.coverUrl;
           book.price = bookData.price || book.price;
+          if (bookData.ebookPrice) book.ebookPrice = bookData.ebookPrice;
           book.format = bookData.format || book.format;
           // Update pageCount if provided (overwrite or fill)
           if (bookData.pageCount) {
@@ -144,6 +146,7 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
             publishDate: bookData.publishDate,
             coverUrl: bookData.coverUrl,
             price: bookData.price,
+            ebookPrice: bookData.ebookPrice,
             format: bookData.format,
             pageCount: bookData.pageCount,
             bsrRank: bookData.bsrRank,
