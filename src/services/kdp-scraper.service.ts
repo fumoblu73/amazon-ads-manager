@@ -440,6 +440,10 @@ export class KdpScraperService {
               const priceElement = row.querySelector(`a[id*="print-price-list-price-${rowId}"]`) as HTMLElement | null;
               const price = priceElement ? cleanText(priceElement.innerText || priceElement.textContent || '') : '';
 
+              // Extract EBOOK PRICE from digital-price-list-price link
+              const ebookPriceElement = row.querySelector(`a[id*="digital-price-list-price-${rowId}"]`) as HTMLElement | null;
+              const ebookPrice = ebookPriceElement ? cleanText(ebookPriceElement.innerText || ebookPriceElement.textContent || '') : '';
+
               // Extract PUBLISH DATE from print-status-release-date
               debugInfo.push(`🔍 Row ${index} - Attempting to find date element for rowId: ${rowId}`);
 
@@ -506,6 +510,7 @@ export class KdpScraperService {
               debugInfo.push(`  ASIN: ${asin}`);
               debugInfo.push(`  Author: "${author}"`);
               debugInfo.push(`  Price: "${price}"`);
+              debugInfo.push(`  Ebook Price: "${ebookPrice}"`);
               debugInfo.push(`  Publish Date: "${publishDate}"`);
               debugInfo.push(`  Cover URL: ${coverUrl ? 'Found' : 'Not found'}`);
 
@@ -517,6 +522,7 @@ export class KdpScraperService {
                 seriesName: seriesName ? seriesName.substring(0, 200) : null,
                 format: 'Paperback',  // Always Paperback since we filtered for it
                 price: price ? price.substring(0, 50) : null,
+                ebookPrice: ebookPrice ? ebookPrice.substring(0, 50) : null,
                 publishDate: publishDate || null,
                 coverUrl: coverUrl || null
               });
@@ -843,6 +849,7 @@ export class KdpScraperService {
           existing.seriesName = bookData.seriesName || existing.seriesName;
           existing.format = bookData.format || existing.format;
           existing.price = bookData.price || existing.price;
+          if (bookData.ebookPrice) existing.ebookPrice = bookData.ebookPrice;
           existing.publishDate = bookData.publishDate || existing.publishDate;
           existing.coverUrl = bookData.coverUrl || existing.coverUrl;
           await bookRepository.save(existing);
@@ -856,6 +863,7 @@ export class KdpScraperService {
             marketplace: bookData.marketplace,
             format: bookData.format || null,
             price: bookData.price || null,
+            ebookPrice: bookData.ebookPrice || null,
             publishDate: bookData.publishDate || null,
             coverUrl: bookData.coverUrl || null
           });

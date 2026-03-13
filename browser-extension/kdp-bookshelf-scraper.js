@@ -194,6 +194,10 @@
         const priceElement = row.querySelector(`a[id*="print-price-list-price-${rowId}"]`);
         const price = priceElement ? cleanText(priceElement.innerText || priceElement.textContent) : '';
 
+        // Extract EBOOK PRICE
+        const ebookPriceElement = row.querySelector(`a[id*="digital-price-list-price-${rowId}"]`);
+        const ebookPrice = ebookPriceElement ? cleanText(ebookPriceElement.innerText || ebookPriceElement.textContent) : '';
+
         // Extract PUBLISH DATE
         const dateElement = row.querySelector(`span[id*="print-status-release-date-${rowId}"]`);
         let publishDate = '';
@@ -220,6 +224,7 @@
           seriesName: seriesName ? seriesName.substring(0, 200) : null,
           format: 'Paperback',
           price: price ? price.substring(0, 50) : null,
+          ebookPrice: ebookPrice ? ebookPrice.substring(0, 50) : null,
           publishDate: publishDate || null,
           coverUrl: coverUrl || null
         });

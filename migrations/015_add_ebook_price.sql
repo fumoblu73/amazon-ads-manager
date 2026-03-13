@@ -1,0 +1,1 @@
+ALTER TABLE kdp_books ADD COLUMN IF NOT EXISTS ebook_price VARCHAR(50);

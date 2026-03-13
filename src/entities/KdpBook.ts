@@ -44,6 +44,9 @@ export class KdpBook {
   @Column({ type: 'varchar', length: 50, nullable: true })
   price: string;
 
+  @Column({ type: 'varchar', length: 50, nullable: true, name: 'ebook_price' })
+  ebookPrice: string;
+
   @Column({ type: 'text', nullable: true, name: 'cover_url' })
   coverUrl: string;
 

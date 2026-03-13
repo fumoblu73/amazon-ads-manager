@@ -557,27 +557,25 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       where: { userId, format: 'Paperback' }
     });
 
-    // Gross sales estimate: US price × print orders
+    // Gross sales estimate: (printPrice × printOrders) + (ebookPrice × digitalOrders)
     let grossSalesEstimate = 0;
-    if (currentMonthStats.printOrders > 0) {
-      const paperbackBooks = await bookRepository.find({ where: { userId, format: 'Paperback' } });
-      let usPrice = 0;
-      for (const book of paperbackBooks) {
-        if (book.price?.includes('$')) {
-          usPrice = parseFloat(book.price.replace(/[^0-9.]/g, ''));
-          if (usPrice > 0) break;
-        }
+    const paperbackBooks = await bookRepository.find({ where: { userId, format: 'Paperback' } });
+    let printPrice = 0;
+    let ebookPrice = 0;
+    for (const book of paperbackBooks) {
+      if (printPrice === 0 && book.price) {
+        const p = parseFloat(book.price.replace(/[^0-9.]/g, ''));
+        if (p > 0) printPrice = p;
       }
-      if (usPrice === 0) {
-        for (const book of paperbackBooks) {
-          if (book.price) {
-            usPrice = parseFloat(book.price.replace(/[^0-9.]/g, ''));
-            if (usPrice > 0) break;
-          }
-        }
+      if (ebookPrice === 0 && book.ebookPrice) {
+        const p = parseFloat(book.ebookPrice.replace(/[^0-9.]/g, ''));
+        if (p > 0) ebookPrice = p;
       }
-      grossSalesEstimate = usPrice * currentMonthStats.printOrders;
+      if (printPrice > 0 && ebookPrice > 0) break;
     }
+    grossSalesEstimate =
+      (printPrice * (currentMonthStats.printOrders || 0)) +
+      (ebookPrice * (currentMonthStats.digitalOrders || 0));
 
     // Calculate days in current month so far
     const daysInCurrentMonth = Math.ceil(
