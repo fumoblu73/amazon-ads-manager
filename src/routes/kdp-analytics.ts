@@ -276,9 +276,8 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       return ((royalties - vatAdjustedSpend) / vatAdjustedSpend) * 100;
     };
 
-    // Gross sales per period: (printPrice × printOrders) + (ebookPrice × digitalOrders)
-    const calcGrossSales = (pOrders: number, dOrders: number) =>
-      (printPrice * pOrders) + (ebookPrice * dOrders);
+    // calcGrossSales placeholder — replaced by per-book async queries below
+    const calcGrossSales = (_p: number, _d: number) => null as number | null;
 
     // Calculate ROI/ACOS for current month
     const currentROI = currentMonthSpend > 0
@@ -586,25 +585,62 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       where: { userId, format: 'Paperback' }
     });
 
-    // Gross sales estimate: (printPrice × printOrders) + (ebookPrice × digitalOrders)
-    let grossSalesEstimate = 0;
+    // Parse price string handling both "." and "," as decimal separator
+    const parsePrice = (priceStr: string | null | undefined): number => {
+      if (!priceStr) return 0;
+      // Remove currency symbols/text, replace comma decimal separator with dot
+      const cleaned = priceStr.replace(/[^0-9.,]/g, '').replace(',', '.');
+      return parseFloat(cleaned) || 0;
+    };
+
+    // Per-book gross sales for a date range using kdp_daily_stats JOIN kdp_books
+    // Returns null if no per-book data found for the period (→ show "ND" in UI)
+    const calcPerBookGrossSales = async (start: string, end: string): Promise<number | null> => {
+      const perBookRepo = AppDataSource.getRepository(KdpDailyStatsEntity);
+      const rows = await perBookRepo
+        .createQueryBuilder('ds')
+        .innerJoin('kdp_books', 'b', 'b.id = ds.book_id AND b.user_id = :userId', { userId })
+        .select('SUM(ds.paperback_sales + ds.hardcover_sales)', 'printSales')
+        .addSelect('SUM(ds.ebook_sales)', 'ebookSales')
+        .addSelect('b.price', 'printPrice')
+        .addSelect('b.ebook_price', 'ebookPrice')
+        .where('ds.date BETWEEN :start AND :end', { start, end })
+        .groupBy('b.id')
+        .addGroupBy('b.price')
+        .addGroupBy('b.ebook_price')
+        .getRawMany();
+
+      if (!rows || rows.length === 0) return null;
+
+      let total = 0;
+      for (const row of rows) {
+        const pp = parsePrice(row.printPrice);
+        const ep = parsePrice(row.ebookPrice);
+        total += (parseInt(row.printSales || 0) * pp) + (parseInt(row.ebookSales || 0) * ep);
+      }
+      return total;
+    };
+
+    // Compute gross sales for current month, previous month, today, yesterday
+    const [currentMonthGrossSales, previousMonthGrossSales, todayGrossSales, yesterdayGrossSales] =
+      await Promise.all([
+        calcPerBookGrossSales(currentMonth.startDate, currentMonth.endDate),
+        calcPerBookGrossSales(previousMonth.startDate, previousMonth.endDate),
+        calcPerBookGrossSales(today, today),
+        calcPerBookGrossSales(yesterday, yesterday),
+      ]);
+
+    // Legacy: used only for widgets card (kept for backward compat)
     const paperbackBooks = await bookRepository.find({ where: { userId, format: 'Paperback' } });
     let printPrice = 0;
     let ebookPrice = 0;
     for (const book of paperbackBooks) {
-      if (printPrice === 0 && book.price) {
-        const p = parseFloat(book.price.replace(/[^0-9.]/g, ''));
-        if (p > 0) printPrice = p;
-      }
-      if (ebookPrice === 0 && book.ebookPrice) {
-        const p = parseFloat(book.ebookPrice.replace(/[^0-9.]/g, ''));
-        if (p > 0) ebookPrice = p;
-      }
+      if (printPrice === 0 && book.price) { const p = parsePrice(book.price); if (p > 0) printPrice = p; }
+      if (ebookPrice === 0 && book.ebookPrice) { const p = parsePrice(book.ebookPrice); if (p > 0) ebookPrice = p; }
       if (printPrice > 0 && ebookPrice > 0) break;
     }
-    grossSalesEstimate =
-      (printPrice * (currentMonthStats.printOrders || 0)) +
-      (ebookPrice * (currentMonthStats.digitalOrders || 0));
+    const grossSalesEstimate = currentMonthGrossSales ??
+      ((printPrice * (currentMonthStats.printOrders || 0)) + (ebookPrice * (currentMonthStats.digitalOrders || 0)));
 
     // Calculate days in current month so far
     const daysInCurrentMonth = Math.ceil(
@@ -642,7 +678,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
             paperbacks: previousMonthStats.printOrders || 0,
             digitalOrders: previousMonthStats.digitalOrders || 0,
             reads: previousMonthStats.kenpReads || 0,
-            grossSales: calcGrossSales(previousMonthStats.printOrders || 0, previousMonthStats.digitalOrders || 0),
+            grossSales: previousMonthGrossSales,
             grossRoyalties: previousMonthStats.grossRoyalties,
             spending: previousMonthSpend,
             netRoyalties: previousMonthStats.netRoyalties,
@@ -657,7 +693,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
             paperbacks: currentMonthStats.printOrders || 0,
             digitalOrders: currentMonthStats.digitalOrders || 0,
             reads: currentMonthStats.kenpReads || 0,
-            grossSales: calcGrossSales(currentMonthStats.printOrders || 0, currentMonthStats.digitalOrders || 0),
+            grossSales: currentMonthGrossSales,
             grossRoyalties: currentMonthStats.grossRoyalties,
             spending: currentMonthSpend,
             netRoyalties: currentMonthStats.netRoyalties,
@@ -671,7 +707,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
             paperbacks: calculatePercentChange(currentMonthStats.printOrders || 0, previousMonthStats.printOrders || 0),
             digitalOrders: calculatePercentChange(currentMonthStats.digitalOrders || 0, previousMonthStats.digitalOrders || 0),
             reads: calculatePercentChange(currentMonthStats.kenpReads || 0, previousMonthStats.kenpReads || 0),
-            grossSales: calculatePercentChange(calcGrossSales(currentMonthStats.printOrders || 0, currentMonthStats.digitalOrders || 0), calcGrossSales(previousMonthStats.printOrders || 0, previousMonthStats.digitalOrders || 0)),
+            grossSales: (currentMonthGrossSales !== null && previousMonthGrossSales !== null) ? calculatePercentChange(currentMonthGrossSales, previousMonthGrossSales) : null,
             grossRoyalties: calculatePercentChange(currentMonthStats.grossRoyalties, previousMonthStats.grossRoyalties),
             spending: calculatePercentChange(currentMonthSpend, previousMonthSpend),
             netRoyalties: calculatePercentChange(currentMonthStats.netRoyalties, previousMonthStats.netRoyalties)
@@ -686,7 +722,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
             paperbacks: yesterdayStats.printOrders || 0,
             digitalOrders: yesterdayStats.digitalOrders || 0,
             reads: yesterdayStats.kenpReads || 0,
-            grossSales: calcGrossSales(yesterdayStats.printOrders || 0, yesterdayStats.digitalOrders || 0),
+            grossSales: yesterdayGrossSales,
             grossRoyalties: yesterdayStats.grossRoyalties,
             spending: yesterdayStats.spending,
             netRoyalties: yesterdayStats.netRoyalties,
@@ -701,7 +737,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
             paperbacks: todayStats.printOrders || 0,
             digitalOrders: todayStats.digitalOrders || 0,
             reads: todayStats.kenpReads || 0,
-            grossSales: calcGrossSales(todayStats.printOrders || 0, todayStats.digitalOrders || 0),
+            grossSales: todayGrossSales,
             grossRoyalties: todayStats.grossRoyalties,
             spending: todayStats.spending,
             netRoyalties: todayStats.netRoyalties,
@@ -715,7 +751,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
             paperbacks: calculatePercentChange(todayStats.printOrders || 0, yesterdayStats.printOrders || 0),
             digitalOrders: calculatePercentChange(todayStats.digitalOrders || 0, yesterdayStats.digitalOrders || 0),
             reads: calculatePercentChange(todayStats.kenpReads || 0, yesterdayStats.kenpReads || 0),
-            grossSales: calculatePercentChange(calcGrossSales(todayStats.printOrders || 0, todayStats.digitalOrders || 0), calcGrossSales(yesterdayStats.printOrders || 0, yesterdayStats.digitalOrders || 0)),
+            grossSales: (todayGrossSales !== null && yesterdayGrossSales !== null) ? calculatePercentChange(todayGrossSales, yesterdayGrossSales) : null,
             grossRoyalties: calculatePercentChange(todayStats.grossRoyalties, yesterdayStats.grossRoyalties),
             spending: calculatePercentChange(todayStats.spending, yesterdayStats.spending),
             netRoyalties: calculatePercentChange(todayStats.netRoyalties, yesterdayStats.netRoyalties)

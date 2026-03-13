@@ -265,6 +265,7 @@ export default function KdpDashboard() {
   if (!summary) return null;
 
   const formatCurrency = (value: number | undefined | null) => value != null ? `$${value.toFixed(2)}` : '$0.00';
+  const formatSales = (value: number | undefined | null) => value != null ? `$${value.toFixed(2)}` : 'ND';
   const formatPercentage = (value: number | null | undefined) => value != null ? `${value.toFixed(1)}%` : '-';
 
   const formatChange = (value: number | null | undefined) => {
@@ -403,8 +404,8 @@ export default function KdpDashboard() {
                 </tr>
                 <tr className="border-b border-gray-700/50">
                   <td className="py-3 text-gray-400">Sales</td>
-                  <td className="py-3 text-center">{formatCurrency((monthlyStats.previousMonth as any).grossSales || 0)}</td>
-                  <td className="py-3 text-center font-medium">{formatCurrency((monthlyStats.currentMonth as any).grossSales || 0)}</td>
+                  <td className="py-3 text-center">{formatSales((monthlyStats.previousMonth as any).grossSales ?? null)}</td>
+                  <td className="py-3 text-center font-medium">{formatSales((monthlyStats.currentMonth as any).grossSales ?? null)}</td>
                   <td className={`py-3 text-center ${formatChange((monthlyStats.change as any).grossSales).color}`}>
                     {formatChange((monthlyStats.change as any).grossSales).text}
                   </td>
@@ -493,8 +494,8 @@ export default function KdpDashboard() {
                 </tr>
                 <tr className="border-b border-gray-700/50">
                   <td className="py-3 text-gray-400">Sales</td>
-                  <td className="py-3 text-center">{formatCurrency((dailyStats.yesterday as any).grossSales || 0)}</td>
-                  <td className="py-3 text-center font-medium">{formatCurrency((dailyStats.today as any).grossSales || 0)}</td>
+                  <td className="py-3 text-center">{formatSales((dailyStats.yesterday as any).grossSales ?? null)}</td>
+                  <td className="py-3 text-center font-medium">{formatSales((dailyStats.today as any).grossSales ?? null)}</td>
                   <td className={`py-3 text-center ${formatChange((dailyStats.change as any).grossSales).color}`}>
                     {formatChange((dailyStats.change as any).grossSales).text}
                   </td>
