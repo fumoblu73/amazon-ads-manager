@@ -21,14 +21,16 @@ export default function Bookshelf() {
     status: 'all',
     page: 1,
     limit: 25,
-    format: 'all',
-    sort: 'title_asc'
+    format: 'all'
   });
 
   useEffect(() => {
     loadBooks();
-    checkCookieStatus();
   }, [filters]);
+
+  useEffect(() => {
+    checkCookieStatus();
+  }, []);
 
   // Ricarica libri quando il sync BSR si completa (triggerato da KdpDashboard "Sync ora")
   useEffect(() => {
@@ -283,21 +285,6 @@ export default function Bookshelf() {
               placeholder="Search title or ASIN..."
               className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none"
             />
-          </div>
-
-          {/* Sort */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Sort</label>
-            <select
-              value={filters.sort || 'title_asc'}
-              onChange={(e) => setFilters({ ...filters, sort: e.target.value as any })}
-              className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none"
-            >
-              <option value="title_asc">Title A→Z</option>
-              <option value="title_desc">Title Z→A</option>
-              <option value="price_asc">Price ↑</option>
-              <option value="price_desc">Price ↓</option>
-            </select>
           </div>
         </div>
 
