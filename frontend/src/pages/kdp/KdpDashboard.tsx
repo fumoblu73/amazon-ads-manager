@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
 import { kdpAnalyticsApi, amazonAdsApi, kdpBooksApi } from '../../services/api';
-import StatsCard from '../../components/kdp/StatsCard';
 import type { KdpDashboardSummary, BookStatsData } from '../../types';
 import {
   XAxis,
