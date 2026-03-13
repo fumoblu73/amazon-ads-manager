@@ -222,7 +222,7 @@ export default function Bookshelf() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={loadBooks}
+            onClick={() => loadBooks()}
             disabled={loading}
             className="px-4 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors font-medium disabled:opacity-50 flex items-center gap-2"
           >
