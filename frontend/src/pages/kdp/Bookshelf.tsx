@@ -12,6 +12,24 @@ interface CookieStatus {
   daysUntilExpiration: number;
 }
 
+const IT_MONTHS: Record<string, string> = {
+  gennaio:'01', febbraio:'02', marzo:'03', aprile:'04', maggio:'05', giugno:'06',
+  luglio:'07', agosto:'08', settembre:'09', ottobre:'10', novembre:'11', dicembre:'12'
+};
+
+const parseDateToISO = (d: string | null | undefined): string => {
+  if (!d) return '';
+  // già ISO YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+  // formato italiano "25 maggio 2021"
+  const m = d.match(/^(\d{1,2})\s+(\w+)\s+(\d{4})$/i);
+  if (m) {
+    const month = IT_MONTHS[m[2].toLowerCase()];
+    if (month) return `${m[3]}-${month}-${m[1].padStart(2, '0')}`;
+  }
+  return d;
+};
+
 export default function Bookshelf() {
   const [books, setBooks] = useState<KdpBook[]>([]);
   const [loading, setLoading] = useState(true);
@@ -147,7 +165,7 @@ export default function Bookshelf() {
     {
       key: 'publishDate',
       header: 'Publication Date',
-      sortValue: (book) => book.publishDate || '',
+      sortValue: (book) => parseDateToISO(book.publishDate),
       accessor: (book) => {
         if (!book.publishDate) return 'N/A';
 
