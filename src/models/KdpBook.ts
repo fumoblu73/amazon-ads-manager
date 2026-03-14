@@ -117,6 +117,7 @@ export interface BookshelfFilters {
   marketplace?: string;
   page?: number;
   limit?: number;
+  format?: string;
 }
 
 export const KdpBookModel = {
