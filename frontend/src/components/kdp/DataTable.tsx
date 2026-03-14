@@ -5,6 +5,7 @@ export interface Column<T> {
   key: string;
   header: string;
   accessor: (row: T) => any;
+  sortValue?: (row: T) => string | number | null;
   sortable?: boolean;
   render?: (value: any, row: T) => React.ReactNode;
   className?: string;
@@ -61,8 +62,8 @@ export default function DataTable<T extends Record<string, any>>({
       const column = columns.find(col => col.key === sortConfig.key);
       if (!column) return 0;
 
-      const aValue = column.accessor(a);
-      const bValue = column.accessor(b);
+      const aValue = column.sortValue ? column.sortValue(a) : column.accessor(a);
+      const bValue = column.sortValue ? column.sortValue(b) : column.accessor(b);
 
       if (aValue === bValue) return 0;
 

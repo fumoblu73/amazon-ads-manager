@@ -44,7 +44,8 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       search: req.query.search as string,
       marketplace: req.query.marketplace as string,
       page: parseInt(req.query.page as string) || 1,
-      limit: parseInt(req.query.limit as string) || 25
+      limit: parseInt(req.query.limit as string) || 25,
+      format: req.query.format as string
     };
 
     const bookRepository = AppDataSource.getRepository(KdpBook);
@@ -60,6 +61,10 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       whereConditions.marketplace = filters.marketplace;
     }
 
+    if (filters.format && filters.format !== 'all') {
+      whereConditions.format = filters.format;
+    }
+
     if (filters.search) {
       // Search in title or ASIN
       const searchResults = await bookRepository
@@ -68,6 +73,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         .andWhere('(book.title LIKE :search OR book.asin LIKE :search)', {
           search: `%${filters.search}%`
         })
+        .andWhere(filters.format && filters.format !== 'all' ? 'book.format = :format' : '1=1', { format: filters.format })
         .skip(skip)
         .take(filters.limit!)
         .orderBy('book.createdAt', 'DESC')

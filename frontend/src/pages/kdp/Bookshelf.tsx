@@ -147,6 +147,7 @@ export default function Bookshelf() {
     {
       key: 'publishDate',
       header: 'Publication Date',
+      sortValue: (book) => book.publishDate || '',
       accessor: (book) => {
         if (!book.publishDate) return 'N/A';
 
@@ -167,6 +168,7 @@ export default function Bookshelf() {
       key: 'price',
       header: 'Price',
       accessor: (book) => book.price || 'N/A',
+      sortValue: (book) => parseFloat((book.price || '0').replace(/[^0-9.,]/g, '').replace(',', '.')) || 0,
       sortable: true,
       render: (value) => (
         <span className="font-semibold text-orange-500">{value}</span>
