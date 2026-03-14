@@ -29,9 +29,13 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
       queryBuilder.andWhere('book.marketplace = :marketplace', { marketplace });
     }
 
-    // Filtra per formato se specificato
+    // Filtra per formato se specificato (NULL trattato come Paperback per libri pre-migrazione)
     if (format && typeof format === 'string' && format !== 'all') {
-      queryBuilder.andWhere('book.format = :format', { format });
+      if (format === 'Paperback') {
+        queryBuilder.andWhere('(book.format = :format OR book.format IS NULL)', { format });
+      } else {
+        queryBuilder.andWhere('book.format = :format', { format });
+      }
     }
 
     // Ricerca case-insensitive (ILIKE) su titolo e ASIN

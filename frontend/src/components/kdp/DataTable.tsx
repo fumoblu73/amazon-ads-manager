@@ -212,9 +212,11 @@ export default function DataTable<T extends Record<string, any>>({
                   >
                     <div className="flex items-center gap-2">
                       {col.header}
-                      {col.sortable && sortConfig?.key === col.key && (
-                        <span className="text-orange-500">
-                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                      {col.sortable && (
+                        <span className={sortConfig?.key === col.key ? 'text-orange-500' : 'text-gray-600'}>
+                          {sortConfig?.key === col.key
+                            ? (sortConfig.direction === 'asc' ? '↑' : '↓')
+                            : '⇅'}
                         </span>
                       )}
                     </div>
