@@ -98,7 +98,7 @@ export default function Layout() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-hidden bg-black relative">
+      <main className="flex-1 overflow-y-auto bg-black relative">
         <Outlet />
 
         {/* Sync Notifications Toast */}
