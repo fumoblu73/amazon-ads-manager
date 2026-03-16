@@ -214,11 +214,20 @@ export const automationApi = {
   },
 
   // Test automation functions (F1-F5)
-  testFunction: async (asin: string, functionNumber: number, marketplace: string) => {
+  testFunction: async (asin: string, functionNumber: number, marketplace: string, dryRun: boolean = true) => {
     const response = await apiClient.post<any>('/api/automation/test-function', {
       asin,
       functionNumber,
       marketplace,
+      dryRun,
+    });
+    return response.data;
+  },
+
+  // Check Amazon report status for submitted reportIds
+  getReportStatus: async (reportIds: string[], marketplace: string) => {
+    const response = await apiClient.get<any>('/api/automation/report-status', {
+      params: { reportIds: reportIds.join(','), marketplace }
     });
     return response.data;
   },

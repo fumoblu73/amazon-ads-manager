@@ -156,7 +156,7 @@ async function submitReportsGlobal(): Promise<{ reportsSubmitted: number; errors
           const submitted = await submitReportsForCampaign(
             'global', marketplace, campaign, apiService
           );
-          stats.reportsSubmitted += submitted;
+          stats.reportsSubmitted += submitted.count;
         } catch (error: any) {
           stats.errors++;
           console.error(`❌ [${marketplace}] Error campaign ${campaign.name}: ${error.message}`);
@@ -204,7 +204,7 @@ export async function submitReportsForUser(userId: string): Promise<{ reportsSub
           const submitted = await submitReportsForCampaign(
             userId, marketplace, campaign, apiService
           );
-          stats.reportsSubmitted += submitted;
+          stats.reportsSubmitted += submitted.count;
         } catch (error: any) {
           stats.errors++;
           console.error(`❌ [${marketplace}] Error campaign ${campaign.name}: ${error.message}`);
@@ -231,16 +231,17 @@ export async function submitReportsForCampaign(
   marketplace: string,
   campaign: any,
   apiService: any
-): Promise<number> {
+): Promise<{ count: number; reportIds: string[] }> {
   const campaignId = campaign.campaignId;
   const campaignName = campaign.name;
   const campaignType = determineCampaignType(campaign);
   const createdAt = getCampaignCreatedAt(campaign);
   let submitted = 0;
+  const reportIds: string[] = [];
 
   // Skip warmup
   if (isInWarmupPeriod(createdAt)) {
-    return 0;
+    return { count: 0, reportIds: [] };
   }
 
   const reportRepo = AppDataSource.getRepository(PendingReport);
@@ -255,7 +256,7 @@ export async function submitReportsForCampaign(
   if (shouldExecuteFunc4(campaignType)) functionsToRun.push(4);
   if (shouldExecuteFunc5(campaignType)) functionsToRun.push(5);
 
-  if (functionsToRun.length === 0) return 0;
+  if (functionsToRun.length === 0) return { count: 0, reportIds: [] };
 
   console.log(`   📢 ${campaignName} (tipo ${campaignType}): funzioni ${functionsToRun.join(',')}`);
 
@@ -306,6 +307,7 @@ export async function submitReportsForCampaign(
         });
         await reportRepo.save(pendingReport);
         submitted++;
+        reportIds.push(reportId);
         console.log(`     ✅ spTargeting report submitted: ${reportId}`);
       }
     } catch (error: any) {
@@ -358,6 +360,7 @@ export async function submitReportsForCampaign(
         });
         await reportRepo.save(pendingReport);
         submitted++;
+        reportIds.push(reportId);
         console.log(`     ✅ spTargeting 65d report submitted: ${reportId}`);
       }
     } catch (error: any) {
@@ -408,6 +411,7 @@ export async function submitReportsForCampaign(
         });
         await reportRepo.save(pendingReport);
         submitted++;
+        reportIds.push(reportId);
         console.log(`     ✅ spSearchTerm report submitted: ${reportId}`);
       }
     } catch (error: any) {
@@ -415,7 +419,7 @@ export async function submitReportsForCampaign(
     }
   }
 
-  return submitted;
+  return { count: submitted, reportIds };
 }
 
 /**

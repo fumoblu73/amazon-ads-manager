@@ -599,7 +599,7 @@ router.post('/test-bid-increase', authMiddleware, requireAmazonAuth, async (req:
 router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
-    const { asin, functionNumber, marketplace, diagnosticsOnly } = req.body;
+    const { asin, functionNumber, marketplace, diagnosticsOnly, dryRun } = req.body;
 
     if (!asin || !functionNumber || !marketplace) {
       return res.status(400).json({ error: 'asin, functionNumber (1-5), and marketplace are required' });
@@ -893,69 +893,45 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
       console.log(`📚 [TEST] Book: "${kdpBook.title}" | price=${price} | fastAcos=${fastAcosValue}%`);
     }
 
-    // Per F3: submit report alla pipeline produzione (pending_reports → process-reports)
     if (functionNumber === 3) {
       console.log(`🎯 [TEST] F3 config: clicksPause=${userConfig.func3_clicksPause}, clicks65days=${userConfig.func3_clicks65days}`);
-      let totalSubmitted = 0;
-      for (const campaign of campaigns) {
-        try {
-          const amazonCamp = { campaignId: campaign.amazonCampaignId, name: campaign.name, state: campaign.state, createdAt: campaign.createdAt };
-          const n = await submitReportsForCampaign(userId, marketplace, amazonCamp, apiService);
-          totalSubmitted += n;
-        } catch (err: any) {
-          console.error(`❌ [TEST] submitReportsForCampaign failed for ${campaign.name}: ${err.message}`);
-        }
-      }
+    }
+
+    // Dry run: mostra solo campagne trovate senza sottomettere report
+    if (dryRun) {
       return res.json({
         success: true,
+        dryRun: true,
         asin,
         marketplace,
         campaignsFound: campaigns.length,
-        reportsSubmitted: totalSubmitted,
+        campaigns: campaigns.map((c: any) => ({ name: c.name, id: c.amazonCampaignId })),
         book: kdpBook ? { title: kdpBook.title, fastAcos: fastAcosValue } : null,
-        message: `${totalSubmitted} report submitted in pending_reports. Chiama POST /process-reports tra 15-30 min per eseguire le automazioni.`
+        message: `DRY RUN: ${campaigns.length} campagne trovate. Nessun report sottomesso.`
       });
     }
 
-    // Per F1: submit report alla pipeline produzione (pending_reports → process-reports)
-    if (functionNumber === 1) {
-      let totalSubmitted = 0;
-      for (const campaign of campaigns) {
-        try {
-          const amazonCamp = { campaignId: campaign.amazonCampaignId, name: campaign.name, state: campaign.state, createdAt: campaign.createdAt };
-          const n = await submitReportsForCampaign(userId, marketplace, amazonCamp, apiService);
-          totalSubmitted += n;
-        } catch (err: any) {
-          console.error(`❌ [TEST] submitReportsForCampaign failed for ${campaign.name}: ${err.message}`);
-        }
-      }
-      return res.json({
-        success: true,
-        asin,
-        marketplace,
-        campaignsFound: campaigns.length,
-        reportsSubmitted: totalSubmitted,
-        message: `${totalSubmitted} report submitted in pending_reports. Chiama POST /process-reports tra 15-30 min per eseguire le automazioni.`
-      });
-    }
-
-    // F2, F4, F5: submit report alla pipeline produzione (pending_reports → process-reports)
+    // Submit report alla pipeline produzione (pending_reports → process-reports)
     let totalSubmitted = 0;
+    const allReportIds: string[] = [];
     for (const campaign of campaigns) {
       try {
         const amazonCamp = { campaignId: campaign.amazonCampaignId, name: campaign.name, state: campaign.state, createdAt: campaign.createdAt };
-        const n = await submitReportsForCampaign(userId, marketplace, amazonCamp, apiService);
-        totalSubmitted += n;
+        const result = await submitReportsForCampaign(userId, marketplace, amazonCamp, apiService);
+        totalSubmitted += result.count;
+        allReportIds.push(...result.reportIds);
       } catch (err: any) {
         console.error(`❌ [TEST] submitReportsForCampaign failed for ${campaign.name}: ${err.message}`);
       }
     }
     return res.json({
       success: true,
+      dryRun: false,
       asin,
       marketplace,
       campaignsFound: campaigns.length,
       reportsSubmitted: totalSubmitted,
+      reportIds: allReportIds,
       book: kdpBook ? { title: kdpBook.title, fastAcos: fastAcosValue } : null,
       message: `${totalSubmitted} report submitted in pending_reports. Chiama POST /process-reports tra 15-30 min per eseguire le automazioni.`
     });
@@ -989,6 +965,39 @@ router.post('/diag-state', async (req: Request, res: Response) => {
     res.json({ success: true, amazonResponse: rawResponse });
   } catch (error: any) {
     res.json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/automation/report-status?reportIds=id1,id2&marketplace=US
+// Controlla lo stato Amazon dei report sottomessi dal test endpoint
+router.get('/report-status', authMiddleware, requireAmazonAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    const reportIds = (req.query.reportIds as string)?.split(',').filter(Boolean) || [];
+    const marketplace = (req.query.marketplace as string) || 'US';
+
+    if (reportIds.length === 0) {
+      return res.json({ statuses: [] });
+    }
+
+    const { createUserAmazonApiService } = await import('../services/UserAmazonApiFactory');
+    const apiService = createUserAmazonApiService(userId, marketplace);
+
+    const statuses = await Promise.all(reportIds.map(async (reportId) => {
+      try {
+        const s = await apiService.getReportStatus(reportId);
+        return { reportId, status: s.status };
+      } catch {
+        return { reportId, status: 'UNKNOWN' };
+      }
+    }));
+
+    const allCompleted = statuses.every(s => s.status === 'COMPLETED');
+    const anyFailed = statuses.some(s => s.status === 'FAILURE' || s.status === 'FAILED');
+
+    return res.json({ statuses, allCompleted, anyFailed });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 
