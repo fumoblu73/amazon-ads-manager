@@ -599,7 +599,7 @@ router.post('/test-bid-increase', authMiddleware, requireAmazonAuth, async (req:
 router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
-    const { asin, functionNumber, marketplace, diagnosticsOnly, dryRun, configOverrides } = req.body;
+    const { asin, functionNumber, marketplace, diagnosticsOnly } = req.body;
 
     if (!asin || !functionNumber || !marketplace) {
       return res.status(400).json({ error: 'asin, functionNumber (1-5), and marketplace are required' });
@@ -617,11 +617,6 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
     const { Campaign } = await import('../models/Campaign');
     const { KdpBook } = await import('../entities/KdpBook');
     const { getUserAutomationSettings } = await import('../automation/rules');
-    const { executeFunc1 } = await import('../automation/functions/func1');
-    const { executeFunc2 } = await import('../automation/functions/func2');
-    const { executeFunc3 } = await import('../automation/functions/func3');
-    const { executeFunc4 } = await import('../automation/functions/func4');
-    const { executeFunc5 } = await import('../automation/functions/func5');
     const { parseKdpPrice, calculateBookFastAcos } = await import('../utils/printingCost');
 
     // 1. Crea API service usando i token OAuth dell'utente + endpoint corretto per marketplace
@@ -944,278 +939,25 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
       });
     }
 
-    // Per F4: risposta immediata + esecuzione in background (report Amazon ~3-7 min)
-    if (functionNumber === 4) {
-      res.json({
-        success: true,
-        async: true,
-        message: `F4 avviato in background su ${campaigns.length} campagna/e. Controlla Render logs per i risultati.`,
-        asin,
-        marketplace,
-        campaignsFound: campaigns.length,
-        dryRun: !!dryRun,
-        campaigns: campaigns.map((c: any) => ({ name: c.name, id: c.amazonCampaignId })),
-        book: kdpBook ? { title: kdpBook.title, fastAcos: fastAcosValue } : null
-      });
-
-      (async () => {
-        console.log(`\n🧪 [TEST-ASYNC] F4 starting in background...`);
-        const { executeFunc4 } = await import('../automation/functions/func4');
-
-        const adGroupIdMap: Record<string, string> = {};
-        for (const c of campaigns) {
-          try {
-            const adGroups = await apiService.getAdGroups?.(c.amazonCampaignId);
-            if (adGroups && adGroups.length > 0) {
-              adGroupIdMap[c.amazonCampaignId] = adGroups[0].adGroupId;
-            } else {
-              const targets = await apiService.getTargets(c.amazonCampaignId);
-              if (targets.length > 0 && targets[0].adGroupId) {
-                adGroupIdMap[c.amazonCampaignId] = targets[0].adGroupId;
-              }
-            }
-          } catch {}
-        }
-
-        for (const campaign of campaigns) {
-          const cId = campaign.amazonCampaignId;
-          const cName = campaign.name;
-          const l = cName.toLowerCase();
-          if (!l.includes('auto') && !l.includes('automatic')) {
-            console.log(`⏩ [TEST-ASYNC] Skip ${cName}: F4 only applies to auto campaigns`);
-            continue;
-          }
-          const adGroupId = adGroupIdMap[cId] || 'unknown';
-          try {
-            const r = await executeFunc4(cId, cName, marketplace, adGroupId, book, 50000, apiService, {
-              frequency: configOverrides?.frequency ?? userConfig.func4_frequency,
-              timeframeA: configOverrides?.timeframeA ?? userConfig.func4_timeframeA,
-              timeframeB: configOverrides?.timeframeB ?? userConfig.func4_timeframeB,
-              timeframeC: configOverrides?.timeframeC ?? userConfig.func4_timeframeC,
-              clicksNegative: configOverrides?.clicksNegative ?? userConfig.func4_clicksNegative,
-              spendNegative: configOverrides?.spendNegative ?? userConfig.func4_spendNegative,
-              dryRun: !!dryRun,
-              skipPart1: !!configOverrides?.skipPart1
-            });
-            console.log(`✅ [TEST-ASYNC] ${cName}: negKw=${r.negativeKeywordsAdded}, negTarget=${r.negativeTargetsAdded}, bidUpdated=${r.targetingGroupsBidUpdated}`);
-          } catch (err: any) {
-            console.error(`❌ [TEST-ASYNC] ${cName}: ${err.message}`);
-          }
-        }
-        console.log(`\n✅ [TEST-ASYNC] F4 background execution completed.`);
-      })().catch(err => console.error('❌ [TEST-ASYNC] Fatal error:', err));
-
-      return;
-    }
-
-    // Per F5: risposta immediata + esecuzione in background (report search terms ~3-7 min)
-    if (functionNumber === 5) {
-      res.json({
-        success: true,
-        async: true,
-        message: `F5 avviato in background su ${campaigns.length} campagna/e. Controlla Render logs per i risultati.`,
-        asin,
-        marketplace,
-        campaignsFound: campaigns.length,
-        dryRun: !!dryRun,
-        campaigns: campaigns.map((c: any) => ({ name: c.name, id: c.amazonCampaignId })),
-        book: kdpBook ? { title: kdpBook.title, fastAcos: fastAcosValue } : null
-      });
-
-      (async () => {
-        console.log(`\n🧪 [TEST-ASYNC] F5 starting in background...`);
-        const { executeFunc5 } = await import('../automation/functions/func5');
-
-        const detectType = (name: string): 1|2|3|4|5 => {
-          const l = name.toLowerCase();
-          if (l.includes('auto') || l.includes('automatic')) return 5;
-          if (l.includes('product')) return 2;
-          if (l.includes('super')) return 3;
-          return 1;
-        };
-
-        const adGroupIdMap: Record<string, string> = {};
-        for (const c of campaigns) {
-          try {
-            const adGroups = await apiService.getAdGroups?.(c.amazonCampaignId);
-            if (adGroups && adGroups.length > 0) {
-              adGroupIdMap[c.amazonCampaignId] = adGroups[0].adGroupId;
-            } else {
-              const targets = await apiService.getTargets(c.amazonCampaignId);
-              if (targets.length > 0 && targets[0].adGroupId) {
-                adGroupIdMap[c.amazonCampaignId] = targets[0].adGroupId;
-              }
-            }
-          } catch {}
-        }
-
-        const campaignMapping: any = {};
-        for (const c of campaigns) {
-          const cType = detectType(c.name);
-          campaignMapping[`campaign${cType}Id`] = c.amazonCampaignId;
-          campaignMapping[`campaign${cType}AdGroupId`] = adGroupIdMap[c.amazonCampaignId] || null;
-        }
-
-        for (const campaign of campaigns) {
-          const cId = campaign.amazonCampaignId;
-          const cName = campaign.name;
-          try {
-            const r = await executeFunc5(cId, detectType(cName) as any, marketplace, campaignMapping, apiService, {
-              frequency: userConfig.func5_frequency,
-              minOrders: userConfig.func5_minOrders,
-              bidBroad: userConfig.func5_bidBroad,
-              bidExact: userConfig.func5_bidExact,
-              bidPhrase: userConfig.func5_bidPhrase,
-              bidExpanded: userConfig.func5_bidExpanded,
-              dryRun: !!dryRun
-            });
-            console.log(`✅ [TEST-ASYNC] ${cName}: searchTerms=${r.searchTermsProcessed}, kwAdded=${r.keywordsAdded}, targetsAdded=${r.targetsAdded}`);
-          } catch (err: any) {
-            console.error(`❌ [TEST-ASYNC] ${cName}: ${err.message}`);
-          }
-        }
-        console.log(`\n✅ [TEST-ASYNC] F5 background execution completed.`);
-      })().catch(err => console.error('❌ [TEST-ASYNC] Fatal error:', err));
-
-      return;
-    }
-
-    // 6. Esegui la funzione su ogni campagna compatibile (F2, F4, F5 — F1/F3 gestiti sopra)
-    const results: any[] = [];
-    const funcNames = ['', 'Progressive Bidding', 'Placement Optimization', 'Targeting Optimization', 'Auto Ad Optimization', 'Campaign Feeding'];
-
-    // 5b. Recupera adGroupId per ogni campagna dall'API Amazon (necessario per func4 e func5)
-    const adGroupIdMap: Record<string, string> = {};
-    if (functionNumber === 4 || functionNumber === 5) {
-      console.log(`📊 [TEST] Fetching adGroupIds for func${functionNumber}...`);
-      for (const c of campaigns) {
-        try {
-          const adGroups = await apiService.getAdGroups?.(c.amazonCampaignId);
-          if (adGroups && adGroups.length > 0) {
-            adGroupIdMap[c.amazonCampaignId] = adGroups[0].adGroupId;
-            console.log(`   ✅ Campaign "${c.name}": adGroupId=${adGroups[0].adGroupId}`);
-          } else {
-            // Fallback: prova a ottenere da keywords/targets
-            const items = await apiService.getKeywords(c.amazonCampaignId);
-            if (items.length > 0 && items[0].adGroupId) {
-              adGroupIdMap[c.amazonCampaignId] = items[0].adGroupId;
-              console.log(`   ✅ Campaign "${c.name}": adGroupId=${items[0].adGroupId} (from keywords)`);
-            } else {
-              const targets = await apiService.getTargets(c.amazonCampaignId);
-              if (targets.length > 0 && targets[0].adGroupId) {
-                adGroupIdMap[c.amazonCampaignId] = targets[0].adGroupId;
-                console.log(`   ✅ Campaign "${c.name}": adGroupId=${targets[0].adGroupId} (from targets)`);
-              } else {
-                console.log(`   ⚠️ Campaign "${c.name}": no adGroupId found`);
-              }
-            }
-          }
-        } catch (err: any) {
-          console.log(`   ⚠️ Campaign "${c.name}": adGroupId fetch failed: ${err.message}`);
-        }
-      }
-    }
-
-    // Per func5: costruisci mapping di tutte le campagne del libro con adGroupIds
-    let campaignMapping: any = {};
-    if (functionNumber === 5) {
-      for (const c of campaigns) {
-        const cType = _detectCampaignType(c.name);
-        campaignMapping[`campaign${cType}Id`] = c.amazonCampaignId;
-        campaignMapping[`campaign${cType}AdGroupId`] = adGroupIdMap[c.amazonCampaignId] || null;
-      }
-      console.log(`📊 [TEST] Campaign mapping:`, JSON.stringify(campaignMapping, null, 2));
-    }
-
+    // F2, F4, F5: submit report alla pipeline produzione (pending_reports → process-reports)
+    let totalSubmitted = 0;
     for (const campaign of campaigns) {
-      const campaignId = campaign.amazonCampaignId;
-      const campaignName = campaign.name;
-      const campaignType = _detectCampaignType(campaignName);
-
-      // Verifica compatibilita' funzione-tipo campagna
-      if (!_isFuncCompatible(functionNumber, campaignType)) {
-        const reason = `Func${functionNumber} not applicable to type ${campaignType} (${campaignName})`;
-        console.log(`⏩ [TEST] Skip: ${reason}`);
-        results.push({ campaignName, campaignId, campaignType, status: 'skipped', reason });
-        continue;
-      }
-
       try {
-        let result: any;
-
-        switch (functionNumber) {
-          case 2: {
-            // Recupera placement attuali dalla campagna Amazon
-            let placements = { topOfSearch: 0, restOfSearch: 0, productPages: 0 };
-            try {
-              const campaignData = await apiService.getCampaign(campaignId);
-              if (campaignData?.dynamicBidding?.placementBidding) {
-                for (const pb of campaignData.dynamicBidding.placementBidding) {
-                  if (pb.placement === 'PLACEMENT_TOP') placements.topOfSearch = pb.percentage || 0;
-                  else if (pb.placement === 'PLACEMENT_REST_OF_SEARCH') placements.restOfSearch = pb.percentage || 0;
-                  else if (pb.placement === 'PLACEMENT_PRODUCT_PAGE') placements.productPages = pb.percentage || 0;
-                }
-              }
-              console.log(`📍 [TEST] Current placements for ${campaignName}: TOS=${placements.topOfSearch}%, ROS=${placements.restOfSearch}%, PP=${placements.productPages}%`);
-            } catch (err: any) {
-              console.log(`⚠️ [TEST] Could not fetch placements for ${campaignName}: ${err.message}`);
-            }
-            result = await executeFunc2(campaignId, campaignName, marketplace, book, placements, apiService, {
-              frequency: userConfig.func2_frequency,
-              placementTimeframeWeeks: userConfig.func2_timeframeWeeks,
-              dryRun: !!dryRun
-            });
-            break;
-          }
-
-          case 4: {
-            const adGroupId = adGroupIdMap[campaignId] || 'unknown';
-            result = await executeFunc4(campaignId, campaignName, marketplace, adGroupId, book, 50000, apiService, {
-              frequency: configOverrides?.frequency ?? userConfig.func4_frequency,
-              timeframeA: configOverrides?.timeframeA ?? userConfig.func4_timeframeA,
-              timeframeB: configOverrides?.timeframeB ?? userConfig.func4_timeframeB,
-              timeframeC: configOverrides?.timeframeC ?? userConfig.func4_timeframeC,
-              clicksNegative: configOverrides?.clicksNegative ?? userConfig.func4_clicksNegative,
-              spendNegative: configOverrides?.spendNegative ?? userConfig.func4_spendNegative,
-              dryRun: !!dryRun,
-              skipPart1: !!configOverrides?.skipPart1
-            });
-            break;
-          }
-
-          case 5:
-            result = await executeFunc5(campaignId, campaignType as any, marketplace, campaignMapping, apiService, {
-              frequency: userConfig.func5_frequency,
-              minOrders: userConfig.func5_minOrders,
-              bidBroad: userConfig.func5_bidBroad,
-              bidExact: userConfig.func5_bidExact,
-              bidPhrase: userConfig.func5_bidPhrase,
-              bidExpanded: userConfig.func5_bidExpanded,
-              dryRun: !!dryRun
-            });
-            break;
-        }
-
-        results.push({ campaignName, campaignId, campaignType, status: 'executed', result });
-        console.log(`✅ [TEST] Func${functionNumber} completed on ${campaignName}`);
-      } catch (error: any) {
-        results.push({ campaignName, campaignId, campaignType, status: 'error', error: error.message });
-        console.error(`❌ [TEST] Func${functionNumber} failed on ${campaignName}: ${error.message}`);
+        const amazonCamp = { campaignId: campaign.amazonCampaignId, name: campaign.name, state: campaign.state, createdAt: campaign.createdAt };
+        const n = await submitReportsForCampaign(userId, marketplace, amazonCamp, apiService);
+        totalSubmitted += n;
+      } catch (err: any) {
+        console.error(`❌ [TEST] submitReportsForCampaign failed for ${campaign.name}: ${err.message}`);
       }
     }
-
-    res.json({
+    return res.json({
       success: true,
-      testOnly: true,
-      dryRun: !!dryRun,
-      functionNumber,
-      functionName: funcNames[functionNumber],
       asin,
       marketplace,
-      auth: directAuthResult,
-      ...(kdpBook ? { book: { title: kdpBook.title, price: book?.price, fastAcos: fastAcosValue } } : {}),
       campaignsFound: campaigns.length,
-      results
+      reportsSubmitted: totalSubmitted,
+      book: kdpBook ? { title: kdpBook.title, fastAcos: fastAcosValue } : null,
+      message: `${totalSubmitted} report submitted in pending_reports. Chiama POST /process-reports tra 15-30 min per eseguire le automazioni.`
     });
 
   } catch (error: any) {
@@ -1249,25 +991,5 @@ router.post('/diag-state', async (req: Request, res: Response) => {
     res.json({ success: false, error: error.message });
   }
 });
-
-// Helper interni SOLO per test-function (prefisso _ per evitare conflitti)
-function _detectCampaignType(name: string): 1 | 2 | 3 | 4 | 5 {
-  const lower = name.toLowerCase();
-  if (lower.includes('auto') || lower.includes('automatic')) return 5;
-  if (lower.includes('product')) return 2;
-  if (lower.includes('super')) return 3;
-  return 1;
-}
-
-function _isFuncCompatible(funcNum: number, campaignType: 1 | 2 | 3 | 4 | 5): boolean {
-  switch (funcNum) {
-    case 1: return campaignType !== 5;
-    case 2: return true;
-    case 3: return campaignType !== 5;
-    case 4: return campaignType === 5;
-    case 5: return true;
-    default: return false;
-  }
-}
 
 export default router;
