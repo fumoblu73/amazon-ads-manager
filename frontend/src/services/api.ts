@@ -214,13 +214,11 @@ export const automationApi = {
   },
 
   // Test automation functions (F1-F5)
-  testFunction: async (asin: string, functionNumber: number, marketplace: string, dryRun: boolean = true, configOverrides?: any) => {
+  testFunction: async (asin: string, functionNumber: number, marketplace: string) => {
     const response = await apiClient.post<any>('/api/automation/test-function', {
       asin,
       functionNumber,
       marketplace,
-      dryRun,
-      configOverrides
     });
     return response.data;
   },
