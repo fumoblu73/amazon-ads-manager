@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { settingsApi } from '../services/api';
 
 export default function Settings() {
@@ -48,8 +48,9 @@ export default function Settings() {
     },
   });
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const isFirstLoad = useRef(true);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Carica settings all'avvio
   useEffect(() => {
@@ -68,24 +69,27 @@ export default function Settings() {
     loadSettings();
   }, []);
 
-  // Salva settings
-  const handleSave = async () => {
-    setSaving(true);
-    setMessage('');
-    try {
-      const response = await settingsApi.update(settings);
-      if (response.success) {
-        setMessage('Impostazioni salvate con successo!');
-        setTimeout(() => setMessage(''), 3000);
-      }
-    } catch (error) {
-      console.error('Error saving settings:', error);
-      setMessage('Errore nel salvataggio delle impostazioni');
-      setTimeout(() => setMessage(''), 3000);
-    } finally {
-      setSaving(false);
+  // Auto-save con debounce 1.5s dopo ogni modifica
+  useEffect(() => {
+    if (loading) return;
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false;
+      return;
     }
-  };
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    setSaveStatus('saving');
+    debounceTimer.current = setTimeout(async () => {
+      try {
+        await settingsApi.update(settings);
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
+      } catch (error) {
+        console.error('Error saving settings:', error);
+        setSaveStatus('error');
+        setTimeout(() => setSaveStatus('idle'), 3000);
+      }
+    }, 1500);
+  }, [settings]);
 
   const updateSetting = (func: string, key: string, value: any) => {
     setSettings(prev => ({
@@ -110,19 +114,11 @@ export default function Settings() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-white uppercase">Impostazioni</h1>
-        <div className="flex items-center gap-4">
-          {message && (
-            <span className={`text-sm ${message.includes('successo') ? 'text-green-500' : 'text-red-500'}`}>
-              {message}
-            </span>
-          )}
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {saving ? 'Salvataggio...' : 'Salva Modifiche'}
-          </button>
+        <div className="flex items-center gap-2 text-sm">
+          {saveStatus === 'saving' && <span className="text-gray-400">Salvataggio...</span>}
+          {saveStatus === 'saved' && <span className="text-green-500">✓ Salvato</span>}
+          {saveStatus === 'error' && <span className="text-red-500">Errore salvataggio</span>}
+          {saveStatus === 'idle' && <span className="text-gray-600 text-xs">Salvataggio automatico</span>}
         </div>
       </div>
 
