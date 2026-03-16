@@ -918,6 +918,7 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
         const { getUserAutomationSettings } = await import('../automation/rules');
         const { calculateTimeframeFunc3, formatDateForAmazon } = await import('../utils/timeframe');
         const userCfg = await getUserAutomationSettings(req.userId!);
+        console.log(`🎯 [TEST-ASYNC] F3 config: clicksPause=${userCfg.func3_clicksPause}, clicks65days=${userCfg.func3_clicks65days}`);
         const PRELOAD_MAX_ATTEMPTS = 60;
         let reportData: any[] = [];
         let reportData65: any[] = [];
