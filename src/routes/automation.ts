@@ -500,6 +500,17 @@ router.post('/process-reports', async (req: Request, res: Response) => {
 // ================================================
 // ENDPOINT: TEST EMAIL NOTIFICATION
 // ================================================
+// ================================================
+// POST /api/automation/run-process-reports — esegui Phase 2 dall'UI (autenticato via JWT)
+// ================================================
+router.post('/run-process-reports', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const userId = req.userId!;
+  res.json({ success: true, message: 'Processing avviato', timestamp: new Date().toISOString() });
+  processCompletedReportsForUser(userId)
+    .then(stats => console.log(`✅ [UI] run-process-reports user=${userId}: processed=${stats.processed}, pending=${stats.stillPending}`))
+    .catch(err => console.error(`❌ [UI] run-process-reports user=${userId}:`, err.message));
+});
+
 router.post('/test-email', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { sendTestEmail } = await import('../services/emailService');

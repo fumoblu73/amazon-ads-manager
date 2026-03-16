@@ -13,6 +13,8 @@ interface ReadyNotification {
   marketplace: string;
   reportIds: string[];
   readyAt: Date;
+  processing?: boolean;
+  processed?: boolean;
 }
 
 const FUNCTION_NAMES: Record<number, { name: string; description: string }> = {
@@ -146,6 +148,17 @@ export default function TestFunctions() {
     setNotifications(prev => prev.filter((_, i) => i !== idx));
   };
 
+  const runProcessReports = async (idx: number) => {
+    setNotifications(prev => prev.map((n, i) => i === idx ? { ...n, processing: true } : n));
+    try {
+      await automationApi.runProcessReports();
+      setNotifications(prev => prev.map((n, i) => i === idx ? { ...n, processing: false, processed: true } : n));
+    } catch (err: any) {
+      setError('Errore process-reports: ' + (err.response?.data?.error || err.message));
+      setNotifications(prev => prev.map((n, i) => i === idx ? { ...n, processing: false } : n));
+    }
+  };
+
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailResult, setEmailResult] = useState<any>(null);
 
@@ -176,25 +189,38 @@ export default function TestFunctions() {
 
       {/* Notifiche persistenti */}
       {notifications.map((n, idx) => (
-        <div key={idx} className="mb-4 bg-green-900/40 border border-green-500 rounded-lg p-4 flex items-start justify-between gap-4">
-          <div>
-            <div className="text-green-400 font-bold text-sm mb-1">
-              Report pronti — {FUNCTION_NAMES[n.functionNumber]?.name}
+        <div key={idx} className={`mb-4 border rounded-lg p-4 flex items-start justify-between gap-4 ${n.processed ? 'bg-blue-900/30 border-blue-600' : 'bg-green-900/40 border-green-500'}`}>
+          <div className="flex-1">
+            <div className={`font-bold text-sm mb-1 ${n.processed ? 'text-blue-400' : 'text-green-400'}`}>
+              {n.processed ? '✅ Automazioni eseguite — ' : '🟢 Report pronti — '}{FUNCTION_NAMES[n.functionNumber]?.name}
             </div>
-            <div className="text-green-300 text-sm">
-              I report Amazon sono COMPLETED. Puoi ora chiamare <strong>POST /process-reports</strong> per eseguire le automazioni.
+            <div className={`text-sm mb-2 ${n.processed ? 'text-blue-300' : 'text-green-300'}`}>
+              {n.processed
+                ? 'Il processing è avviato in background. Controlla i log automazioni per i risultati.'
+                : 'I report Amazon sono COMPLETED. Clicca per eseguire le automazioni ora.'}
             </div>
-            <div className="text-gray-400 text-xs mt-1">
+            <div className="text-gray-400 text-xs">
               {n.asin} · {n.marketplace} · {n.reportIds.length} report · {n.readyAt.toLocaleTimeString()}
             </div>
           </div>
-          <button
-            onClick={() => dismissNotification(idx)}
-            className="text-gray-400 hover:text-white text-lg font-bold leading-none flex-shrink-0"
-            title="Chiudi"
-          >
-            ✕
-          </button>
+          <div className="flex flex-col items-end gap-2 flex-shrink-0">
+            {!n.processed && (
+              <button
+                onClick={() => runProcessReports(idx)}
+                disabled={n.processing}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded font-semibold disabled:opacity-50 whitespace-nowrap"
+              >
+                {n.processing ? 'Avvio...' : 'Esegui Automazioni'}
+              </button>
+            )}
+            <button
+              onClick={() => dismissNotification(idx)}
+              className="text-gray-400 hover:text-white text-sm"
+              title="Chiudi"
+            >
+              ✕ Chiudi
+            </button>
+          </div>
         </div>
       ))}
 
