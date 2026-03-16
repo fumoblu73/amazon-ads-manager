@@ -36,7 +36,6 @@ export default function TestFunctions() {
 
   // Polling state
   const [pollingReportIds, setPollingReportIds] = useState<string[]>([]);
-  const [pollingMarketplace, setPollingMarketplace] = useState('US');
   const [pollingFunc, setPollingFunc] = useState<number | null>(null);
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
