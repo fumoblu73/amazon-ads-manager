@@ -63,7 +63,6 @@ export default function TestFunctions() {
   const startPolling = (reportIds: string[], mkt: string, funcNum: number) => {
     if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
     setPollingReportIds(reportIds);
-    setPollingMarketplace(mkt);
     setPollingFunc(funcNum);
 
     pollingIntervalRef.current = setInterval(async () => {
