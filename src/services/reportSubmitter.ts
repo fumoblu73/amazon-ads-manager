@@ -226,7 +226,7 @@ export async function submitReportsForUser(userId: string): Promise<{ reportsSub
  * Submit needed reports for a single campaign
  * Returns number of reports submitted
  */
-async function submitReportsForCampaign(
+export async function submitReportsForCampaign(
   userId: string,
   marketplace: string,
   campaign: any,

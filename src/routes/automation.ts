@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { automationScheduler } from '../automation/scheduler';
 import { authMiddleware } from '../middleware/auth';
 import { requireAmazonAuth, AuthRequest } from '../middleware/requireAmazonAuth';
-import { submitReportsForAllUsers, submitReportsForUser } from '../services/reportSubmitter';
+import { submitReportsForAllUsers, submitReportsForUser, submitReportsForCampaign } from '../services/reportSubmitter';
 import { processCompletedReports, processCompletedReportsForUser } from '../services/reportProcessor';
 import { submitSpendCacheReports } from '../services/spendCacheService';
 import { syncAllMarketplacesForUser } from './campaigns';
@@ -898,183 +898,50 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
       console.log(`📚 [TEST] Book: "${kdpBook.title}" | price=${price} | fastAcos=${fastAcosValue}%`);
     }
 
-    // Per F3: risposta immediata + esecuzione in background (report Amazon ~3-7 min)
+    // Per F3: submit report alla pipeline produzione (pending_reports → process-reports)
     if (functionNumber === 3) {
-      res.json({
+      console.log(`🎯 [TEST] F3 config: clicksPause=${userConfig.func3_clicksPause}, clicks65days=${userConfig.func3_clicks65days}`);
+      let totalSubmitted = 0;
+      for (const campaign of campaigns) {
+        try {
+          const amazonCamp = { campaignId: campaign.amazonCampaignId, name: campaign.name, state: campaign.state, createdAt: campaign.createdAt };
+          const n = await submitReportsForCampaign(userId, marketplace, amazonCamp, apiService);
+          totalSubmitted += n;
+        } catch (err: any) {
+          console.error(`❌ [TEST] submitReportsForCampaign failed for ${campaign.name}: ${err.message}`);
+        }
+      }
+      return res.json({
         success: true,
-        async: true,
-        message: `F3 avviato in background su ${campaigns.length} campagna/e. Controlla Render logs per i risultati.`,
         asin,
         marketplace,
         campaignsFound: campaigns.length,
-        dryRun: !!dryRun,
-        campaigns: campaigns.map((c: any) => ({ name: c.name, id: c.amazonCampaignId })),
-        book: kdpBook ? { title: kdpBook.title, fastAcos: fastAcosValue } : null
+        reportsSubmitted: totalSubmitted,
+        book: kdpBook ? { title: kdpBook.title, fastAcos: fastAcosValue } : null,
+        message: `${totalSubmitted} report submitted in pending_reports. Chiama POST /process-reports tra 15-30 min per eseguire le automazioni.`
       });
-
-      (async () => {
-        console.log(`\n🧪 [TEST-ASYNC] F3 starting in background...`);
-        const { executeFunc3 } = await import('../automation/functions/func3');
-        const { getUserAutomationSettings } = await import('../automation/rules');
-        const { calculateTimeframeFunc3, formatDateForAmazon } = await import('../utils/timeframe');
-        const userCfg = await getUserAutomationSettings(req.userId!);
-        console.log(`🎯 [TEST-ASYNC] F3 config: clicksPause=${userCfg.func3_clicksPause}, clicks65days=${userCfg.func3_clicks65days}`);
-        const PRELOAD_MAX_ATTEMPTS = 60;
-        let reportData: any[] = [];
-        let reportData65: any[] = [];
-
-        try {
-          const tf = calculateTimeframeFunc3(50000, {
-            timeframeA: userCfg.func3_timeframeA,
-            timeframeB: userCfg.func3_timeframeB,
-            timeframeC: userCfg.func3_timeframeC
-          });
-          const startDate = new Date();
-          startDate.setDate(startDate.getDate() - tf.timeframeDays);
-          const start65b = new Date(); start65b.setDate(start65b.getDate() - 61);
-          const end65b = new Date(); end65b.setDate(end65b.getDate() - 31);
-
-          console.log(`📊 [TEST-ASYNC] Requesting 2 F3 reports in parallel...`);
-          const [mainId, chunk65bId] = await Promise.all([
-            apiService.requestReport(formatDateForAmazon(startDate), ['impressions', 'clicks', 'cost', 'sales', 'orders']),
-            apiService.requestReport(formatDateForAmazon(start65b), ['clicks', 'orders'], formatDateForAmazon(end65b))
-          ]);
-
-          const results2 = await Promise.allSettled([
-            apiService.waitAndDownloadReport(mainId, PRELOAD_MAX_ATTEMPTS),
-            apiService.waitAndDownloadReport(chunk65bId, PRELOAD_MAX_ATTEMPTS)
-          ]);
-
-          if (results2[0].status === 'fulfilled') {
-            reportData = results2[0].value;
-            console.log(`✅ [TEST-ASYNC] Main report: ${reportData.length} rows`);
-          }
-          if (results2[1].status === 'fulfilled') {
-            const data65b = results2[1].value;
-            const mergedMap: Record<string, { clicks: number; orders: number }> = {};
-            for (const row of [...reportData, ...data65b]) {
-              const key = row.targeting || row.keywordId || row.targetId || '';
-              if (!key) continue;
-              if (!mergedMap[key]) mergedMap[key] = { clicks: 0, orders: 0 };
-              mergedMap[key].clicks += (row.clicks || 0);
-              mergedMap[key].orders += (row.purchases14d || row.orders || 0);
-            }
-            reportData65 = Object.entries(mergedMap).map(([targeting, d]) => ({ targeting, clicks: d.clicks, purchases14d: d.orders }));
-            console.log(`✅ [TEST-ASYNC] Report 65gg: ${reportData65.length} rows`);
-          }
-        } catch (err: any) {
-          console.error(`❌ [TEST-ASYNC] Report pre-loading failed: ${err.message}`);
-        }
-
-        const preloaded = { reportData, reportData65 };
-        const detectType = (name: string): 1|2|3|4|5 => {
-          const l = name.toLowerCase();
-          if (l.includes('auto') || l.includes('automatic')) return 5;
-          if (l.includes('product')) return 2;
-          if (l.includes('super')) return 3;
-          return 1;
-        };
-
-        for (const campaign of campaigns) {
-          const cId = campaign.amazonCampaignId;
-          const cName = campaign.name;
-          const cType = detectType(cName);
-          if (cType === 5) {
-            console.log(`⏩ [TEST-ASYNC] Skip ${cName}: F3 not applicable to auto campaigns`);
-            continue;
-          }
-          try {
-            const r = await executeFunc3(cId, cType as any, cName, marketplace, book, 50000, apiService, {
-              frequency: userCfg.func3_frequency,
-              timeframeA: userCfg.func3_timeframeA,
-              timeframeB: userCfg.func3_timeframeB,
-              timeframeC: userCfg.func3_timeframeC,
-              clicksPause: userCfg.func3_clicksPause,
-              clicks65days: userCfg.func3_clicks65days,
-              dryRun: !!dryRun
-            }, preloaded);
-            console.log(`✅ [TEST-ASYNC] ${cName}: processed=${r.itemsProcessed}, paused=${r.itemsPaused}, bidUp=${r.itemsBidIncreased}, bidDown=${r.itemsBidDecreased}`);
-            r.details?.forEach((d: any) => {
-              if (d.action !== 'no_data') console.log(`   → ${d.itemName}: clicks=${d.clicks}, orders=${d.orders}, action=${d.action}${d.newBid ? `, newBid=${d.newBid}` : ''}`);
-            });
-          } catch (err: any) {
-            console.error(`❌ [TEST-ASYNC] ${cName}: ${err.message}`);
-          }
-        }
-        console.log(`\n✅ [TEST-ASYNC] F3 background execution completed.`);
-      })().catch(err => console.error('❌ [TEST-ASYNC] Fatal error:', err));
-
-      return;
     }
 
-    // Per F1: risposta immediata + esecuzione in background (report Amazon ~3-7 min)
+    // Per F1: submit report alla pipeline produzione (pending_reports → process-reports)
     if (functionNumber === 1) {
-      res.json({
+      let totalSubmitted = 0;
+      for (const campaign of campaigns) {
+        try {
+          const amazonCamp = { campaignId: campaign.amazonCampaignId, name: campaign.name, state: campaign.state, createdAt: campaign.createdAt };
+          const n = await submitReportsForCampaign(userId, marketplace, amazonCamp, apiService);
+          totalSubmitted += n;
+        } catch (err: any) {
+          console.error(`❌ [TEST] submitReportsForCampaign failed for ${campaign.name}: ${err.message}`);
+        }
+      }
+      return res.json({
         success: true,
-        async: true,
-        message: `F1 avviato in background su ${campaigns.length} campagna/e. Controlla Render logs per i risultati.`,
         asin,
         marketplace,
         campaignsFound: campaigns.length,
-        dryRun: !!dryRun,
-        campaigns: campaigns.map((c: any) => ({ name: c.name, id: c.amazonCampaignId })),
-        book: kdpBook ? { title: kdpBook.title, fastAcos: fastAcosValue } : null
+        reportsSubmitted: totalSubmitted,
+        message: `${totalSubmitted} report submitted in pending_reports. Chiama POST /process-reports tra 15-30 min per eseguire le automazioni.`
       });
-
-      (async () => {
-        console.log(`\n🧪 [TEST-ASYNC] F1 starting in background...`);
-        const { executeFunc1 } = await import('../automation/functions/func1');
-        const { formatDateForAmazon } = await import('../utils/timeframe');
-
-        let preloadedReportData: any[] | undefined;
-        try {
-          const reportStartDate = new Date();
-          reportStartDate.setDate(reportStartDate.getDate() - (userConfig.func1_frequency || 3));
-          const startStr = formatDateForAmazon(reportStartDate);
-          console.log(`📊 [TEST-ASYNC] Pre-loading F1 report (${startStr} → oggi)...`);
-          const reportId = await apiService.requestReport(startStr, ['impressions', 'clicks', 'cost', 'sales14d']);
-          preloadedReportData = await apiService.waitAndDownloadReport(reportId);
-          console.log(`✅ [TEST-ASYNC] Report pre-scaricato: ${preloadedReportData.length} righe`);
-        } catch (err: any) {
-          console.error(`❌ [TEST-ASYNC] Errore pre-loading report: ${err.message}`);
-        }
-
-        const detectType = (name: string): 1|2|3|4|5 => {
-          const l = name.toLowerCase();
-          if (l.includes('auto') || l.includes('automatic')) return 5;
-          if (l.includes('product')) return 2;
-          if (l.includes('super')) return 3;
-          return 1;
-        };
-
-        for (const campaign of campaigns) {
-          const cId = campaign.amazonCampaignId;
-          const cName = campaign.name;
-          const cType = detectType(cName);
-          if (cType === 5) {
-            console.log(`⏩ [TEST-ASYNC] Skip ${cName}: F1 not applicable to auto campaigns`);
-            continue;
-          }
-          try {
-            const r = await executeFunc1(cId, cType as any, cName, marketplace, apiService, {
-              bidIncrease: userConfig.func1_bidIncrease,
-              frequency: userConfig.func1_frequency,
-              maxImpressions: userConfig.func1_impressions,
-              maxClicks: userConfig.func1_clicks,
-              dryRun: !!dryRun
-            }, preloadedReportData);
-            console.log(`✅ [TEST-ASYNC] ${cName}: processed=${r.itemsProcessed}, bidUp=${r.itemsIncreased}`);
-            r.details?.forEach((d: any) => {
-              if (d.action !== 'no_bid' && d.action !== 'no_data') console.log(`   → ${d.itemName || d.itemId}: imp=${d.impressions}, clicks=${d.clicks}, action=${d.action}${d.newBid ? `, newBid=${d.newBid}` : ''}`);
-            });
-          } catch (err: any) {
-            console.error(`❌ [TEST-ASYNC] ${cName}: ${err.message}`);
-          }
-        }
-        console.log(`\n✅ [TEST-ASYNC] F1 background execution completed.`);
-      })().catch(err => console.error('❌ [TEST-ASYNC] Fatal error:', err));
-
-      return;
     }
 
     // Per F4: risposta immediata + esecuzione in background (report Amazon ~3-7 min)
@@ -1213,147 +1080,7 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
       return;
     }
 
-    // 5. Pre-scarica il report una volta sola (condiviso tra campagne)
-    let preloadedReportData: any[] | undefined;
-    let preloadedFunc3Reports: { reportData: any[]; reportData65: any[] } | undefined;
-    if (functionNumber === 1) {
-      try {
-        const { formatDateForAmazon } = await import('../utils/timeframe');
-        const reportStartDate = new Date();
-        reportStartDate.setDate(reportStartDate.getDate() - (userConfig.func1_frequency || 3));
-        const startStr = formatDateForAmazon(reportStartDate);
-        console.log(`📊 [TEST] Pre-loading report (${startStr} → oggi)...`);
-        const reportId = await apiService.requestReport(startStr, ['impressions', 'clicks', 'spend', 'sales']);
-        preloadedReportData = await apiService.waitAndDownloadReport(reportId);
-        console.log(`✅ [TEST] Report pre-scaricato: ${preloadedReportData.length} righe`);
-      } catch (reportErr: any) {
-        console.error(`❌ [TEST] Errore pre-loading report:`, reportErr.message);
-      }
-    }
-    if (functionNumber === 3) {
-      // STRATEGIA: 2 report (non 3!) richiesti in PARALLELO
-      // - Report principale (30gg): impressions, clicks, cost, sales, orders
-      // - Report 65gg chunk B (da -61gg a -31gg): clicks, orders
-      // Il main report copre già gli ultimi 30gg, quindi lo riusiamo per il chunk A dei 65gg
-      const PRELOAD_MAX_ATTEMPTS = 60; // ~5 minuti max per report
-      let reportData: any[] = [];
-      let reportData65: any[] = [];
-      const reportDiag: any = { strategy: '2-reports-parallel' };
-
-      try {
-        const { formatDateForAmazon, calculateTimeframeFunc3 } = await import('../utils/timeframe');
-        const tf = calculateTimeframeFunc3(50000, {
-          timeframeA: userConfig.func3_timeframeA,
-          timeframeB: userConfig.func3_timeframeB,
-          timeframeC: userConfig.func3_timeframeC
-        });
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - tf.timeframeDays);
-        const startStr = formatDateForAmazon(startDate);
-
-        // Chunk B: da -61gg a -31gg (30 giorni)
-        const start65b = new Date(); start65b.setDate(start65b.getDate() - 61);
-        const end65b = new Date(); end65b.setDate(end65b.getDate() - 31);
-        const start65bStr = formatDateForAmazon(start65b);
-        const end65bStr = formatDateForAmazon(end65b);
-
-        console.log(`📊 [TEST] Requesting 2 reports in PARALLEL...`);
-        reportDiag.mainDateRange = `${startStr} → today`;
-        reportDiag.chunk65bRange = `${start65bStr} → ${end65bStr}`;
-
-        // 1. Richiedi ENTRAMBI i report subito (Amazon inizia a generarli in parallelo)
-        const [mainReportId, chunk65bReportId] = await Promise.all([
-          apiService.requestReport(startStr, ['impressions', 'clicks', 'cost', 'sales', 'orders']),
-          apiService.requestReport(start65bStr, ['clicks', 'orders'], end65bStr)
-        ]);
-        reportDiag.mainReportId = mainReportId;
-        reportDiag.chunk65bReportId = chunk65bReportId;
-        console.log(`📊 [TEST] Both reports requested. Polling in parallel...`);
-
-        // 2. Attendi ENTRAMBI i report in parallelo (max ~5 min totali, non 10)
-        const results = await Promise.allSettled([
-          apiService.waitAndDownloadReport(mainReportId, PRELOAD_MAX_ATTEMPTS),
-          apiService.waitAndDownloadReport(chunk65bReportId, PRELOAD_MAX_ATTEMPTS)
-        ]);
-
-        // 3. Gestisci risultato report principale
-        if (results[0].status === 'fulfilled') {
-          reportData = results[0].value;
-          reportDiag.mainResult = 'OK';
-          reportDiag.mainRows = reportData.length;
-          console.log(`✅ [TEST] Report principale: ${reportData.length} righe`);
-        } else {
-          reportDiag.mainResult = 'FAILED';
-          reportDiag.mainError = results[0].reason?.message;
-          console.error(`⚠️ [TEST] Report principale fallito: ${results[0].reason?.message}`);
-        }
-
-        // 4. Gestisci risultato chunk B e merge con dati dal main report
-        if (results[1].status === 'fulfilled') {
-          const data65b = results[1].value;
-          reportDiag.chunk65bResult = 'OK';
-          reportDiag.chunk65bRows = data65b.length;
-          console.log(`✅ [TEST] Report chunk B (61-31gg): ${data65b.length} righe`);
-
-          // Merge: main report (ultimi 30gg = chunk A) + chunk B (31-61gg)
-          const mergedMap: Record<string, { clicks: number; orders: number }> = {};
-          // Chunk A = dati dal main report (clicks + orders degli ultimi 30gg)
-          for (const row of reportData) {
-            const key = row.targeting || row.keywordId || row.targetId || '';
-            if (!key) continue;
-            if (!mergedMap[key]) mergedMap[key] = { clicks: 0, orders: 0 };
-            mergedMap[key].clicks += (row.clicks || 0);
-            mergedMap[key].orders += (row.purchases14d || row.orders || 0);
-          }
-          // Chunk B = report separato (31-61gg)
-          for (const row of data65b) {
-            const key = row.targeting || row.keywordId || row.targetId || '';
-            if (!key) continue;
-            if (!mergedMap[key]) mergedMap[key] = { clicks: 0, orders: 0 };
-            mergedMap[key].clicks += (row.clicks || 0);
-            mergedMap[key].orders += (row.purchases14d || row.orders || 0);
-          }
-          reportData65 = Object.entries(mergedMap).map(([targeting, data]) => ({
-            targeting, clicks: data.clicks, purchases14d: data.orders
-          }));
-          reportDiag.report65Result = 'OK';
-          reportDiag.report65MergedRows = reportData65.length;
-          console.log(`✅ [TEST] Report 65gg merged: ${reportData65.length} righe`);
-        } else {
-          // Chunk B fallito, ma possiamo ancora usare il main report come 65gg parziale (solo ultimi 30gg)
-          reportDiag.chunk65bResult = 'FAILED';
-          reportDiag.chunk65bError = results[1].reason?.message;
-          console.error(`⚠️ [TEST] Chunk B fallito: ${results[1].reason?.message}`);
-
-          if (reportData.length > 0) {
-            const mergedMap: Record<string, { clicks: number; orders: number }> = {};
-            for (const row of reportData) {
-              const key = row.targeting || row.keywordId || row.targetId || '';
-              if (!key) continue;
-              if (!mergedMap[key]) mergedMap[key] = { clicks: 0, orders: 0 };
-              mergedMap[key].clicks += (row.clicks || 0);
-              mergedMap[key].orders += (row.purchases14d || row.orders || 0);
-            }
-            reportData65 = Object.entries(mergedMap).map(([targeting, data]) => ({
-              targeting, clicks: data.clicks, purchases14d: data.orders
-            }));
-            reportDiag.report65Result = 'PARTIAL (main report only, ~30gg)';
-            reportDiag.report65MergedRows = reportData65.length;
-            console.log(`⚠️ [TEST] Report 65gg parziale (solo 30gg dal main): ${reportData65.length} righe`);
-          }
-        }
-      } catch (err: any) {
-        reportDiag.fatalError = err.message;
-        console.error(`❌ [TEST] Errore fatale pre-loading: ${err.message}`);
-      }
-
-      // Passa SEMPRE preloadedFunc3Reports (anche con array vuoti)
-      preloadedFunc3Reports = { reportData, reportData65 };
-      (preloadedFunc3Reports as any)._diagnostics = reportDiag;
-      console.log(`📊 [TEST] Pre-loading completato: ${reportData.length} righe principali, ${reportData65.length} righe 65gg`);
-    }
-
-    // 6. Esegui la funzione su ogni campagna compatibile
+    // 6. Esegui la funzione su ogni campagna compatibile (F2, F4, F5 — F1/F3 gestiti sopra)
     const results: any[] = [];
     const funcNames = ['', 'Progressive Bidding', 'Placement Optimization', 'Targeting Optimization', 'Auto Ad Optimization', 'Campaign Feeding'];
 
@@ -1417,16 +1144,6 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
         let result: any;
 
         switch (functionNumber) {
-          case 1:
-            result = await executeFunc1(campaignId, campaignType as any, campaignName, marketplace, apiService, {
-              bidIncrease: userConfig.func1_bidIncrease,
-              frequency: userConfig.func1_frequency,
-              maxImpressions: userConfig.func1_impressions,
-              maxClicks: userConfig.func1_clicks,
-              dryRun: !!dryRun
-            }, preloadedReportData);
-            break;
-
           case 2: {
             // Recupera placement attuali dalla campagna Amazon
             let placements = { topOfSearch: 0, restOfSearch: 0, productPages: 0 };
@@ -1450,18 +1167,6 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
             });
             break;
           }
-
-          case 3:
-            result = await executeFunc3(campaignId, campaignType as any, campaignName, marketplace, book, 50000, apiService, {
-              frequency: userConfig.func3_frequency,
-              timeframeA: userConfig.func3_timeframeA,
-              timeframeB: userConfig.func3_timeframeB,
-              timeframeC: userConfig.func3_timeframeC,
-              clicksPause: userConfig.func3_clicksPause,
-              clicks65days: userConfig.func3_clicks65days,
-              dryRun: !!dryRun
-            }, preloadedFunc3Reports);
-            break;
 
           case 4: {
             const adGroupId = adGroupIdMap[campaignId] || 'unknown';
@@ -1499,19 +1204,6 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
       }
     }
 
-    // Diagnostica pre-loading per func3 (visibile nel JSON di risposta)
-    const preloadDiagnostics = preloadedFunc3Reports ? {
-      mainReportRows: preloadedFunc3Reports.reportData.length,
-      report65Rows: preloadedFunc3Reports.reportData65.length,
-      sampleTargeting: preloadedFunc3Reports.reportData.slice(0, 5).map((r: any) => ({
-        targeting: r.targeting, clicks: r.clicks, impressions: r.impressions, cost: r.cost
-      })),
-      sampleTargeting65: preloadedFunc3Reports.reportData65.slice(0, 3).map((r: any) => ({
-        targeting: r.targeting, clicks: r.clicks
-      })),
-      reportDetails: (preloadedFunc3Reports as any)?._diagnostics || null
-    } : undefined;
-
     res.json({
       success: true,
       testOnly: true,
@@ -1522,7 +1214,6 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
       marketplace,
       auth: directAuthResult,
       ...(kdpBook ? { book: { title: kdpBook.title, price: book?.price, fastAcos: fastAcosValue } } : {}),
-      ...(preloadDiagnostics ? { preloadDiagnostics } : {}),
       campaignsFound: campaigns.length,
       results
     });
