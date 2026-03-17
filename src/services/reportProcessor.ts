@@ -614,10 +614,11 @@ async function executeAutomationFunctions(
               bidIncrease: config.func1_bidIncrease,
               frequency: config.func1_frequency,
               maxImpressions: config.func1_impressions,
-              maxClicks: config.func1_clicks
+              maxClicks: config.func1_clicks,
+              dryRun: report.dryRun
             }
           );
-          parts.push(`Bid modificati: ${r1.itemsIncreased}/${r1.itemsProcessed}`);
+          parts.push(`${report.dryRun ? '[DRY RUN] ' : ''}Bid modificati: ${r1.itemsIncreased}/${r1.itemsProcessed}`);
           break;
         }
 
@@ -631,15 +632,16 @@ async function executeAutomationFunctions(
             cachedApiService,
             {
               frequency: config.func2_frequency,
-              placementTimeframeWeeks: config.func2_timeframeWeeks
+              placementTimeframeWeeks: config.func2_timeframeWeeks,
+              dryRun: report.dryRun
             }
           );
           if (r2.band === 3) {
-            parts.push(`Performance accettabile — nessuna modifica`);
+            parts.push(`${report.dryRun ? '[DRY RUN] ' : ''}Performance accettabile — nessuna modifica`);
           } else {
             const suffix = r2.campaignAcos === 999 ? ' (no vendite)' : '';
             parts.push(
-              `Performance ${bandNames[r2.band] || r2.band}${suffix} | ` +
+              `${report.dryRun ? '[DRY RUN] ' : ''}Performance ${bandNames[r2.band] || r2.band}${suffix} | ` +
               `Top: ${r2.oldPlacements.topOfSearch}%→${r2.newPlacements.topOfSearch}% | ` +
               `Rest: ${r2.oldPlacements.restOfSearch}%→${r2.newPlacements.restOfSearch}% | ` +
               `PP: ${r2.oldPlacements.productPages}%→${r2.newPlacements.productPages}%`
@@ -663,10 +665,11 @@ async function executeAutomationFunctions(
               timeframeB: config.func3_timeframeB,
               timeframeC: config.func3_timeframeC,
               clicksPause: config.func3_clicksPause,
-              clicks65days: config.func3_clicks65days
+              clicks65days: config.func3_clicks65days,
+              dryRun: report.dryRun
             }
           );
-          parts.push(`ASIN/kw spenti: ${r3.itemsPaused}/${r3.itemsProcessed}`);
+          parts.push(`${report.dryRun ? '[DRY RUN] ' : ''}ASIN/kw spenti: ${r3.itemsPaused}/${r3.itemsProcessed}`);
           break;
         }
 
@@ -685,10 +688,11 @@ async function executeAutomationFunctions(
               timeframeB: config.func4_timeframeB,
               timeframeC: config.func4_timeframeC,
               clicksNegative: config.func4_clicksNegative,
-              spendNegative: config.func4_spendNegative
+              spendNegative: config.func4_spendNegative,
+              dryRun: report.dryRun
             }
           );
-          parts.push(`Neg. aggiunti: ${r4.negativeTargetsAdded} ASIN, ${r4.negativeKeywordsAdded} kw | Bid aggiornati: ${r4.targetingGroupsBidUpdated} | Spenti: ${r4.targetingGroupsPaused}`);
+          parts.push(`${report.dryRun ? '[DRY RUN] ' : ''}Neg. aggiunti: ${r4.negativeTargetsAdded} ASIN, ${r4.negativeKeywordsAdded} kw | Bid aggiornati: ${r4.targetingGroupsBidUpdated} | Spenti: ${r4.targetingGroupsPaused}`);
           break;
         }
 
@@ -705,10 +709,11 @@ async function executeAutomationFunctions(
               bidBroad: config.func5_bidBroad,
               bidExact: config.func5_bidExact,
               bidPhrase: config.func5_bidPhrase,
-              bidExpanded: config.func5_bidExpanded
+              bidExpanded: config.func5_bidExpanded,
+              dryRun: report.dryRun
             }
           );
-          parts.push(`Promossi: ${r5.keywordsAdded} kw, ${r5.targetsAdded} ASIN`);
+          parts.push(`${report.dryRun ? '[DRY RUN] ' : ''}Promossi: ${r5.keywordsAdded} kw, ${r5.targetsAdded} ASIN`);
           break;
         }
       }

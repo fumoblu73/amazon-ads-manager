@@ -103,6 +103,9 @@ export const initializeDatabase = async () => {
       await AppDataSource.query(`ALTER TABLE automation_settings ADD COLUMN IF NOT EXISTS use_vat_in_fast_acos BOOLEAN DEFAULT true`);
       await AppDataSource.query(`ALTER TABLE automation_settings ADD COLUMN IF NOT EXISTS vat_percentage DECIMAL(5,2) DEFAULT 22`);
 
+      // pending_reports: dry_run flag (added v2.5.2)
+      await AppDataSource.query(`ALTER TABLE pending_reports ADD COLUMN IF NOT EXISTS dry_run BOOLEAN DEFAULT false`);
+
       // book_spend_cache table
       await AppDataSource.query(`
         CREATE TABLE IF NOT EXISTS book_spend_cache (

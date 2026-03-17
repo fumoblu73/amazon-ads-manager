@@ -230,7 +230,8 @@ export async function submitReportsForCampaign(
   userId: string,
   marketplace: string,
   campaign: any,
-  apiService: any
+  apiService: any,
+  dryRun: boolean = false
 ): Promise<{ count: number; reportIds: string[] }> {
   const campaignId = campaign.campaignId;
   const campaignName = campaign.name;
@@ -303,7 +304,8 @@ export async function submitReportsForCampaign(
           status: 'submitted',
           functionNumbers: JSON.stringify(functionsToRun.filter(f => [1, 2, 3, 4].includes(f))),
           attempts: 0,
-          maxAttempts: 20
+          maxAttempts: 20,
+          dryRun
         });
         await reportRepo.save(pendingReport);
         submitted++;
@@ -356,7 +358,8 @@ export async function submitReportsForCampaign(
           status: 'submitted',
           functionNumbers: JSON.stringify([3]),
           attempts: 0,
-          maxAttempts: 20
+          maxAttempts: 20,
+          dryRun
         });
         await reportRepo.save(pendingReport);
         submitted++;
@@ -407,7 +410,8 @@ export async function submitReportsForCampaign(
           status: 'submitted',
           functionNumbers: JSON.stringify(functionsToRun.filter(f => [4, 5].includes(f))),
           attempts: 0,
-          maxAttempts: 20
+          maxAttempts: 20,
+          dryRun
         });
         await reportRepo.save(pendingReport);
         submitted++;

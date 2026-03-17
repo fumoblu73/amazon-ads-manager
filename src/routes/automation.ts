@@ -908,27 +908,14 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
       console.log(`🎯 [TEST] F3 config: clicksPause=${userConfig.func3_clicksPause}, clicks65days=${userConfig.func3_clicks65days}`);
     }
 
-    // Dry run: mostra solo campagne trovate senza sottomettere report
-    if (dryRun) {
-      return res.json({
-        success: true,
-        dryRun: true,
-        asin,
-        marketplace,
-        campaignsFound: campaigns.length,
-        campaigns: campaigns.map((c: any) => ({ name: c.name, id: c.amazonCampaignId })),
-        book: kdpBook ? { title: kdpBook.title, fastAcos: fastAcosValue } : null,
-        message: `DRY RUN: ${campaigns.length} campagne trovate. Nessun report sottomesso.`
-      });
-    }
-
     // Submit report alla pipeline produzione (pending_reports → process-reports)
+    // dryRun=true: report reali sottomessi ad Amazon, ma le funzioni girano in modalità simulazione (nessuna modifica)
     let totalSubmitted = 0;
     const allReportIds: string[] = [];
     for (const campaign of campaigns) {
       try {
         const amazonCamp = { campaignId: campaign.amazonCampaignId, name: campaign.name, state: campaign.state, createdAt: campaign.createdAt };
-        const result = await submitReportsForCampaign(userId, marketplace, amazonCamp, apiService);
+        const result = await submitReportsForCampaign(userId, marketplace, amazonCamp, apiService, dryRun ?? false);
         totalSubmitted += result.count;
         allReportIds.push(...result.reportIds);
       } catch (err: any) {
@@ -937,14 +924,16 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
     }
     return res.json({
       success: true,
-      dryRun: false,
+      dryRun: dryRun ?? false,
       asin,
       marketplace,
       campaignsFound: campaigns.length,
       reportsSubmitted: totalSubmitted,
       reportIds: allReportIds,
       book: kdpBook ? { title: kdpBook.title, fastAcos: fastAcosValue } : null,
-      message: `${totalSubmitted} report submitted in pending_reports. Chiama POST /process-reports tra 15-30 min per eseguire le automazioni.`
+      message: dryRun
+        ? `DRY RUN: ${totalSubmitted} report sottomessi ad Amazon. Quando pronti, /process-reports simulerà le automazioni senza modifiche reali.`
+        : `${totalSubmitted} report submitted in pending_reports. Chiama POST /process-reports tra 15-30 min per eseguire le automazioni.`
     });
 
   } catch (error: any) {

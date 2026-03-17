@@ -382,17 +382,13 @@ export default function TestFunctions() {
               <div className="text-gray-400 text-xs">Campagne trovate</div>
               <div className="text-white font-semibold">{result.campaignsFound}</div>
             </div>
-            {result.dryRun ? (
-              <div className="bg-yellow-900/30 rounded p-3 border border-yellow-700">
-                <div className="text-gray-400 text-xs">Modalità</div>
-                <div className="text-yellow-400 font-semibold">Dry Run</div>
+            <div className={`rounded p-3 border ${result.dryRun ? 'bg-yellow-900/30 border-yellow-700' : 'bg-gray-800 border-transparent'}`}>
+              <div className="text-gray-400 text-xs">Report sottomessi</div>
+              <div className={`font-bold text-lg ${result.dryRun ? 'text-yellow-400' : 'text-green-400'}`}>
+                {result.reportsSubmitted ?? 0}
+                {result.dryRun && <span className="text-xs font-normal ml-2">DRY RUN</span>}
               </div>
-            ) : (
-              <div className="bg-gray-800 rounded p-3">
-                <div className="text-gray-400 text-xs">Report sottomessi</div>
-                <div className="text-green-400 font-bold text-lg">{result.reportsSubmitted}</div>
-              </div>
-            )}
+            </div>
           </div>
 
           {result.book && (
@@ -401,17 +397,6 @@ export default function TestFunctions() {
               {result.book.fastAcos && (
                 <span className="ml-3">FAST ACoS: <span className="text-orange-400">{result.book.fastAcos}%</span></span>
               )}
-            </div>
-          )}
-
-          {/* Dry run: lista campagne */}
-          {result.dryRun && result.campaigns && (
-            <div className="space-y-1">
-              {result.campaigns.map((c: any, i: number) => (
-                <div key={i} className="text-sm text-gray-300 bg-gray-800 rounded px-3 py-1">
-                  {c.name} <span className="text-gray-500 text-xs ml-2">{c.id}</span>
-                </div>
-              ))}
             </div>
           )}
 

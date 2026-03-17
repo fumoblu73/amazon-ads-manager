@@ -41,6 +41,9 @@ export class PendingReport {
   @Column({ type: 'text', name: 'function_numbers' })
   functionNumbers: string; // JSON array e.g. "[1,3]"
 
+  @Column({ type: 'boolean', name: 'dry_run', default: false })
+  dryRun: boolean;
+
   @Column({ type: 'text', name: 'report_url', nullable: true })
   reportUrl: string | null;
 
