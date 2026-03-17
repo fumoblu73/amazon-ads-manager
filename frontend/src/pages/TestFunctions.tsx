@@ -77,9 +77,10 @@ export default function TestFunctions() {
     setPollingReportIds(reportIds);
     setPollingFunc(funcNum);
 
-    pollingIntervalRef.current = setInterval(async () => {
+    const checkStatus = async () => {
       try {
         const data = await automationApi.getReportStatus(reportIds, mkt);
+        console.log('[Polling] report-status:', data);
         if (data.allCompleted) {
           clearInterval(pollingIntervalRef.current!);
           pollingIntervalRef.current = null;
@@ -100,10 +101,14 @@ export default function TestFunctions() {
           setPollingFunc(null);
           setError('Uno o più report Amazon sono falliti. Riprova.');
         }
-      } catch {
-        // silently ignore polling errors
+      } catch (err) {
+        console.error('[Polling] errore report-status:', err);
       }
-    }, 60_000);
+    };
+
+    // Prima poll immediata, poi ogni 60s
+    checkStatus();
+    pollingIntervalRef.current = setInterval(checkStatus, 60_000);
   };
 
   const stopPolling = () => {
