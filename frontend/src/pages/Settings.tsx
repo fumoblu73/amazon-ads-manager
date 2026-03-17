@@ -48,7 +48,7 @@ export default function Settings() {
     },
   });
   const [loading, setLoading] = useState(true);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle');
   const isFirstLoad = useRef(true);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -77,19 +77,23 @@ export default function Settings() {
       return;
     }
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    setSaveStatus('saving');
-    debounceTimer.current = setTimeout(async () => {
-      try {
-        await settingsApi.update(settings);
-        setSaveStatus('saved');
-        setTimeout(() => setSaveStatus('idle'), 2000);
-      } catch (error) {
-        console.error('Error saving settings:', error);
-        setSaveStatus('error');
-        setTimeout(() => setSaveStatus('idle'), 3000);
-      }
-    }, 1500);
+    setSaveStatus('pending');
+    debounceTimer.current = setTimeout(() => doSave(), 1500);
   }, [settings]);
+
+  const doSave = async () => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    setSaveStatus('saving');
+    try {
+      await settingsApi.update(settings);
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    }
+  };
 
   const updateSetting = (func: string, key: string, value: any) => {
     setSettings(prev => ({
@@ -114,11 +118,19 @@ export default function Settings() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-white uppercase">Impostazioni</h1>
-        <div className="flex items-center gap-2 text-sm">
+        <div className="flex items-center gap-3 text-sm">
           {saveStatus === 'saving' && <span className="text-gray-400">Salvataggio...</span>}
           {saveStatus === 'saved' && <span className="text-green-500">✓ Salvato</span>}
-          {saveStatus === 'error' && <span className="text-red-500">Errore salvataggio</span>}
+          {saveStatus === 'error' && <span className="text-red-500">✗ Errore salvataggio</span>}
           {saveStatus === 'idle' && <span className="text-gray-600 text-xs">Salvataggio automatico</span>}
+          {saveStatus === 'pending' && (
+            <button
+              onClick={doSave}
+              className="px-4 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded font-semibold text-sm animate-pulse"
+            >
+              Salva ora
+            </button>
+          )}
         </div>
       </div>
 
