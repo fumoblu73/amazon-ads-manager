@@ -1003,28 +1003,64 @@ router.post('/diag-state', async (req: Request, res: Response) => {
 });
 
 // GET /api/automation/report-status?reportIds=id1,id2&marketplace=US
-// Controlla lo stato Amazon dei report sottomessi dal test endpoint
-router.get('/report-status', authMiddleware, requireAmazonAuth, async (req: AuthRequest, res: Response) => {
+// Controlla stato: prima DB (se già processato), poi Amazon API per i report ancora 'submitted'
+router.get('/report-status', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
     const reportIds = (req.query.reportIds as string)?.split(',').filter(Boolean) || [];
     const marketplace = (req.query.marketplace as string) || 'US';
+    const uniqueIds = [...new Set(reportIds)];
 
-    if (reportIds.length === 0) {
-      return res.json({ statuses: [] });
+    if (uniqueIds.length === 0) {
+      return res.json({ statuses: [], allCompleted: false, anyFailed: false });
     }
 
-    const { createUserAmazonApiService } = await import('../services/UserAmazonApiFactory');
-    const apiService = createUserAmazonApiService(userId, marketplace);
-
-    const statuses = await Promise.all(reportIds.map(async (reportId) => {
-      try {
-        const s = await apiService.getReportStatus(reportId);
-        return { reportId, status: s.status };
-      } catch {
-        return { reportId, status: 'UNKNOWN' };
+    // 1. Controlla DB per report già completati/processati
+    const { PendingReport } = await import('../entities/PendingReport');
+    const { In } = await import('typeorm');
+    const rows = await AppDataSource.getRepository(PendingReport).find({
+      where: { userId, reportId: In(uniqueIds) } as any,
+    });
+    const dbStatusMap = new Map<string, string>();
+    for (const row of rows) {
+      const prev = dbStatusMap.get(row.reportId);
+      const priority: Record<string, number> = { processed: 3, completed: 2, submitted: 1, failed: 0 };
+      if (!prev || (priority[row.status] ?? -1) > (priority[prev] ?? -1)) {
+        dbStatusMap.set(row.reportId, row.status);
       }
-    }));
+    }
+
+    // 2. Per i report ancora 'submitted', chiedi ad Amazon
+    const stillSubmitted = uniqueIds.filter(id => {
+      const s = dbStatusMap.get(id) || 'submitted';
+      return s === 'submitted';
+    });
+
+    const amazonStatusMap = new Map<string, string>();
+    if (stillSubmitted.length > 0) {
+      try {
+        const { createUserAmazonApiService } = await import('../services/UserAmazonApiFactory');
+        const apiService = createUserAmazonApiService(userId, marketplace);
+        await Promise.all(stillSubmitted.map(async (reportId) => {
+          try {
+            const s = await apiService.getReportStatus(reportId);
+            amazonStatusMap.set(reportId, s.status); // COMPLETED | IN_PROGRESS | FAILURE
+          } catch {
+            amazonStatusMap.set(reportId, 'IN_PROGRESS');
+          }
+        }));
+      } catch {
+        // Se Amazon API non disponibile, mantieni submitted
+      }
+    }
+
+    const statuses = uniqueIds.map(id => {
+      const dbStatus = dbStatusMap.get(id) || 'submitted';
+      if (dbStatus === 'completed' || dbStatus === 'processed') return { reportId: id, status: 'COMPLETED' };
+      if (dbStatus === 'failed') return { reportId: id, status: 'FAILURE' };
+      const amzStatus = amazonStatusMap.get(id) || 'IN_PROGRESS';
+      return { reportId: id, status: amzStatus };
+    });
 
     const allCompleted = statuses.every(s => s.status === 'COMPLETED');
     const anyFailed = statuses.some(s => s.status === 'FAILURE' || s.status === 'FAILED');
