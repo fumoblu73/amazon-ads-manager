@@ -289,6 +289,7 @@ export async function submitReportsForCampaign(
 
       if (await pendingReportExists(reportRepo, reportId, campaignId, 'spTargeting')) {
         console.log(`     ⏭️ spTargeting already pending, skipping: ${reportId}`);
+        if (!reportIds.includes(reportId)) reportIds.push(reportId);
       } else {
         const pendingReport = reportRepo.create({
           userId,
@@ -343,6 +344,7 @@ export async function submitReportsForCampaign(
 
       if (await pendingReportExists(reportRepo, reportId, campaignId, 'spTargeting_65d')) {
         console.log(`     ⏭️ spTargeting_65d already pending, skipping: ${reportId}`);
+        if (!reportIds.includes(reportId)) reportIds.push(reportId);
       } else {
         const pendingReport = reportRepo.create({
           userId,
@@ -395,6 +397,7 @@ export async function submitReportsForCampaign(
 
       if (await pendingReportExists(reportRepo, reportId, campaignId, 'spSearchTerm')) {
         console.log(`     ⏭️ spSearchTerm already pending, skipping: ${reportId}`);
+        if (!reportIds.includes(reportId)) reportIds.push(reportId);
       } else {
         const pendingReport = reportRepo.create({
           userId,
