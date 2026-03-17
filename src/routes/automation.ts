@@ -511,6 +511,39 @@ router.post('/run-process-reports', authMiddleware, async (req: AuthRequest, res
     .catch(err => console.error(`❌ [UI] run-process-reports user=${userId}:`, err.message));
 });
 
+// ================================================
+// POST /api/automation/run-process-reports-sync — versione sincrona per dry run (restituisce risultati)
+// ================================================
+router.post('/run-process-reports-sync', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const userId = req.userId!;
+  try {
+    const since = new Date();
+    const stats = await processCompletedReportsForUser(userId);
+
+    // Leggi i log creati durante questo run
+    const { AutomationLog } = await import('../models/AutomationLog');
+    const { MoreThanOrEqual } = await import('typeorm');
+    const logs = await AppDataSource.getRepository(AutomationLog).find({
+      where: { createdAt: MoreThanOrEqual(since) } as any,
+      order: { createdAt: 'ASC' } as any,
+    });
+
+    res.json({
+      success: true,
+      stats,
+      logs: logs.map((l: any) => ({
+        campaignName: l.targetName,
+        ruleName: l.ruleName,
+        status: l.status,
+        summary: l.reason,
+        bookTitle: l.bookTitle,
+      }))
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.post('/test-email', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { sendTestEmail } = await import('../services/emailService');

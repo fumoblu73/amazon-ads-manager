@@ -232,9 +232,15 @@ export const automationApi = {
     return response.data;
   },
 
-  // Esegui Phase 2 (process-reports) dall'UI
+  // Esegui Phase 2 (process-reports) dall'UI — fire and forget
   runProcessReports: async () => {
     const response = await apiClient.post<any>('/api/automation/run-process-reports', {});
+    return response.data;
+  },
+
+  // Esegui Phase 2 sincrono — aspetta i risultati (usato per dry run)
+  runProcessReportsSync: async () => {
+    const response = await apiClient.post<any>('/api/automation/run-process-reports-sync', {});
     return response.data;
   },
 

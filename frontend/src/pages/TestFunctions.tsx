@@ -7,14 +7,24 @@ interface BookOption {
   marketplace: string;
 }
 
+interface SimLog {
+  campaignName: string;
+  ruleName: string;
+  status: string;
+  summary: string;
+  bookTitle?: string;
+}
+
 interface ReadyNotification {
   functionNumber: number;
   asin: string;
   marketplace: string;
   reportIds: string[];
   readyAt: Date;
+  isDryRun?: boolean;
   processing?: boolean;
   processed?: boolean;
+  simLogs?: SimLog[];
 }
 
 const FUNCTION_NAMES: Record<number, { name: string; description: string }> = {
@@ -62,7 +72,7 @@ export default function TestFunctions() {
   }, [loading]);
 
   // Polling: check Amazon report status every 60s
-  const startPolling = (reportIds: string[], mkt: string, funcNum: number) => {
+  const startPolling = (reportIds: string[], mkt: string, funcNum: number, isDryRun?: boolean) => {
     if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
     setPollingReportIds(reportIds);
     setPollingFunc(funcNum);
@@ -81,6 +91,7 @@ export default function TestFunctions() {
             marketplace: mkt,
             reportIds,
             readyAt: new Date(),
+            isDryRun,
           }]);
         } else if (data.anyFailed) {
           clearInterval(pollingIntervalRef.current!);
@@ -132,9 +143,9 @@ export default function TestFunctions() {
       const data = await automationApi.testFunction(selectedAsin, funcNumber, marketplace, dryRun);
       setResult({ ...data, functionNumber: funcNumber });
 
-      // Se non dry run e ci sono reportIds, avvia polling
-      if (!dryRun && data.reportIds?.length > 0) {
-        startPolling(data.reportIds, marketplace, funcNumber);
+      // Avvia polling se ci sono reportIds (sia dry run che real)
+      if (data.reportIds?.length > 0) {
+        startPolling(data.reportIds, marketplace, funcNumber, dryRun);
       }
     } catch (err: any) {
       setError(err.response?.data?.error || err.message || 'Errore sconosciuto');
@@ -149,13 +160,19 @@ export default function TestFunctions() {
   };
 
   const runProcessReports = async (idx: number) => {
-    setNotifications(prev => prev.map((n, i) => i === idx ? { ...n, processing: true } : n));
+    const n = notifications[idx];
+    setNotifications(prev => prev.map((item, i) => i === idx ? { ...item, processing: true } : item));
     try {
-      await automationApi.runProcessReports();
-      setNotifications(prev => prev.map((n, i) => i === idx ? { ...n, processing: false, processed: true } : n));
+      if (n.isDryRun) {
+        const data = await automationApi.runProcessReportsSync();
+        setNotifications(prev => prev.map((item, i) => i === idx ? { ...item, processing: false, processed: true, simLogs: data.logs } : item));
+      } else {
+        await automationApi.runProcessReports();
+        setNotifications(prev => prev.map((item, i) => i === idx ? { ...item, processing: false, processed: true } : item));
+      }
     } catch (err: any) {
       setError('Errore process-reports: ' + (err.response?.data?.error || err.message));
-      setNotifications(prev => prev.map((n, i) => i === idx ? { ...n, processing: false } : n));
+      setNotifications(prev => prev.map((item, i) => i === idx ? { ...item, processing: false } : item));
     }
   };
 
@@ -190,16 +207,35 @@ export default function TestFunctions() {
       {/* Notifiche persistenti */}
       {notifications.map((n, idx) => (
         <div key={idx} className={`mb-4 border rounded-lg p-4 flex items-start justify-between gap-4 ${n.processed ? 'bg-blue-900/30 border-blue-600' : 'bg-green-900/40 border-green-500'}`}>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <div className={`font-bold text-sm mb-1 ${n.processed ? 'text-blue-400' : 'text-green-400'}`}>
-              {n.processed ? '✅ Automazioni eseguite — ' : '🟢 Report pronti — '}{FUNCTION_NAMES[n.functionNumber]?.name}
+              {n.processed ? (n.isDryRun ? '🔬 Simulazione completata — ' : '✅ Automazioni eseguite — ') : '🟢 Report pronti — '}
+              {FUNCTION_NAMES[n.functionNumber]?.name}
+              {n.isDryRun && <span className="ml-2 text-xs text-yellow-400 font-normal">DRY RUN</span>}
             </div>
-            <div className={`text-sm mb-2 ${n.processed ? 'text-blue-300' : 'text-green-300'}`}>
-              {n.processed
-                ? 'Il processing è avviato in background. Controlla i log automazioni per i risultati.'
-                : 'I report Amazon sono COMPLETED. Clicca per eseguire le automazioni ora.'}
-            </div>
-            <div className="text-gray-400 text-xs">
+            {!n.processed && (
+              <div className="text-green-300 text-sm mb-2">
+                I report Amazon sono COMPLETED. Clicca per {n.isDryRun ? 'simulare le automazioni' : 'eseguire le automazioni'}.
+              </div>
+            )}
+            {n.processed && !n.isDryRun && (
+              <div className="text-blue-300 text-sm mb-2">Processing avviato in background. Controlla i log automazioni per i risultati.</div>
+            )}
+            {n.processed && n.isDryRun && n.simLogs && n.simLogs.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {n.simLogs.map((log, li) => (
+                  <div key={li} className={`text-xs rounded px-3 py-1.5 border ${log.status === 'success' ? 'bg-gray-800 border-gray-700' : 'bg-red-900/20 border-red-700'}`}>
+                    <span className="text-white font-medium">{log.campaignName}</span>
+                    <span className="text-gray-500 ml-2">{log.ruleName}</span>
+                    <div className="text-yellow-300 mt-0.5">{log.summary}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {n.processed && n.isDryRun && (!n.simLogs || n.simLogs.length === 0) && (
+              <div className="text-gray-400 text-sm mt-1">Nessuna campagna processata (forse i report non erano ancora in stato completed).</div>
+            )}
+            <div className="text-gray-400 text-xs mt-2">
               {n.asin} · {n.marketplace} · {n.reportIds.length} report · {n.readyAt.toLocaleTimeString()}
             </div>
           </div>
@@ -210,7 +246,7 @@ export default function TestFunctions() {
                 disabled={n.processing}
                 className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded font-semibold disabled:opacity-50 whitespace-nowrap"
               >
-                {n.processing ? 'Avvio...' : 'Esegui Automazioni'}
+                {n.processing ? (n.isDryRun ? 'Simulazione...' : 'Avvio...') : (n.isDryRun ? 'Simula Automazioni' : 'Esegui Automazioni')}
               </button>
             )}
             <button
