@@ -421,10 +421,11 @@ export async function processCompletedReportsForUser(userId: string): Promise<{
                 await reportRepo.save(report);
                 stats.processed++;
               } else {
-                await executeAutomationFunctions(report, reportData, apiService, marketplace, preloaded);
+                const opSummary = await executeAutomationFunctions(report, reportData, apiService, marketplace, preloaded);
                 report.status = 'processed';
                 await reportRepo.save(report);
                 stats.processed++;
+                await saveAutomationLog(report, 'success', undefined, preloaded, opSummary);
               }
 
             } catch (error: any) {
@@ -432,6 +433,7 @@ export async function processCompletedReportsForUser(userId: string): Promise<{
               report.errorMessage = `Function execution error: ${error.message}`;
               await reportRepo.save(report);
               stats.failed++;
+              await saveAutomationLog(report, 'failed', error.message, preloaded);
             }
 
           } else if (statusResponse.status === 'FAILURE' || statusResponse.status === 'FAILED') {
