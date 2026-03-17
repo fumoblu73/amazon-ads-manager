@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { AppDataSource } from '../config/database';
 import { automationScheduler } from '../automation/scheduler';
 import { authMiddleware } from '../middleware/auth';
 import { requireAmazonAuth, AuthRequest } from '../middleware/requireAmazonAuth';
