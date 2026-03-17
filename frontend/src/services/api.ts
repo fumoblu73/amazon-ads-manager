@@ -240,7 +240,7 @@ export const automationApi = {
 
   // Esegui Phase 2 sincrono — aspetta i risultati (usato per dry run)
   runProcessReportsSync: async () => {
-    const response = await apiClient.post<any>('/api/automation/run-process-reports-sync', {});
+    const response = await apiClient.post<any>('/api/automation/run-process-reports-sync', {}, { timeout: 300_000 });
     return response.data;
   },
 
