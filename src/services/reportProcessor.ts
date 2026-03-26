@@ -24,6 +24,7 @@ import { executeFunc4 } from '../automation/functions/func4';
 import { executeFunc5, CampaignMapping } from '../automation/functions/func5';
 import { getUserAutomationSettings, AutomationConfig } from '../automation/rules';
 import { updateSpendCacheFromReportData, SPEND_CACHE_REPORT_TYPE } from './spendCacheService';
+import { formatDateForAmazon } from '../utils/timeframe';
 
 /**
  * Pre-loaded data to avoid N+1 queries in report processing loops
@@ -597,6 +598,44 @@ async function executeAutomationFunctions(
     }
   }
 
+  // Pre-carica i report 65gg per func3 usando il real apiService (non il cache)
+  let preloadedFunc3Reports: { reportData: any[]; reportData65: any[] } | undefined;
+  if (functionNumbers.includes(3)) {
+    try {
+      const startDate65a = new Date();
+      startDate65a.setDate(startDate65a.getDate() - 30);
+      const startDate65b = new Date();
+      startDate65b.setDate(startDate65b.getDate() - 65);
+      const endDate65b = new Date();
+      endDate65b.setDate(endDate65b.getDate() - 31);
+
+      const reportId65a = await apiService.requestReport(formatDateForAmazon(startDate65a), ['clicks', 'orders']);
+      const reportData65a = await apiService.waitAndDownloadReport(reportId65a);
+
+      const reportId65b = await apiService.requestReport(
+        formatDateForAmazon(startDate65b), ['clicks', 'orders'], formatDateForAmazon(endDate65b)
+      );
+      const reportData65b = await apiService.waitAndDownloadReport(reportId65b);
+
+      const mergedMap: Record<string, { clicks: number; orders: number }> = {};
+      for (const row of [...reportData65a, ...reportData65b]) {
+        const key = row.targeting || row.keywordId || row.targetId || '';
+        if (!mergedMap[key]) mergedMap[key] = { clicks: 0, orders: 0 };
+        mergedMap[key].clicks += (row.clicks || 0);
+        mergedMap[key].orders += (row.purchases14d || row.orders || 0);
+      }
+      const reportData65 = Object.entries(mergedMap).map(([targeting, d]) => ({
+        targeting, clicks: d.clicks, purchases14d: d.orders
+      }));
+
+      preloadedFunc3Reports = { reportData, reportData65 };
+      console.log(`     📊 [F3] Report 65gg pre-caricati: ${reportData65.length} righe`);
+    } catch (e: any) {
+      console.warn(`     ⚠️ [F3] Impossibile caricare report 65gg: ${e.message}. La condizione 65gg sarà disabilitata.`);
+      preloadedFunc3Reports = { reportData, reportData65: [] };
+    }
+  }
+
   const parts: string[] = [];
   const bandNames: Record<number, string> = { 1: 'Ottima', 2: 'Buona', 3: 'Accettabile', 4: 'Scarsa', 5: 'Pessima' };
 
@@ -669,7 +708,8 @@ async function executeAutomationFunctions(
               clicksPause: config.func3_clicksPause,
               clicks65days: config.func3_clicks65days,
               dryRun: report.dryRun
-            }
+            },
+            preloadedFunc3Reports
           );
           parts.push(`${report.dryRun ? '[DRY RUN] ' : ''}ASIN/kw spenti: ${r3.itemsPaused}/${r3.itemsProcessed}`);
           break;

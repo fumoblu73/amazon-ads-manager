@@ -223,13 +223,33 @@ export class KdpReportsScraperService {
             const dataKeys = Array.isArray(data) ? `[array:${data.length}]` : Object.keys(data).slice(0, 8).join(',');
             console.log(`📡 KDP JSON response: ${url} → keys: ${dataKeys}`);
 
-            // Store by endpoint type
+            // Store by endpoint type — accumulate (don't overwrite) to handle pagination
             if (url.includes('orders') || url.includes('sales')) {
-              this.interceptedApiData.set('sales', data);
-              console.log('✅ Intercepted Sales API data');
+              const existing = this.interceptedApiData.get('sales');
+              if (existing) {
+                const existingOrders = existing.orders || existing.data?.orders || existing.results || (Array.isArray(existing) ? existing : []);
+                const newOrders = data.orders || data.data?.orders || data.results || (Array.isArray(data) ? data : []);
+                const merged = Array.isArray(existingOrders)
+                  ? { ...existing, orders: [...existingOrders, ...newOrders] }
+                  : data;
+                this.interceptedApiData.set('sales', merged);
+              } else {
+                this.interceptedApiData.set('sales', data);
+              }
+              console.log('✅ Intercepted Sales API data (accumulated)');
             } else if (url.includes('royalties') || url.includes('payments')) {
-              this.interceptedApiData.set('royalties', data);
-              console.log('✅ Intercepted Royalties API data');
+              const existing = this.interceptedApiData.get('royalties');
+              if (existing) {
+                const existingList = existing.royalties || existing.data?.royalties || existing.results || (Array.isArray(existing) ? existing : []);
+                const newList = data.royalties || data.data?.royalties || data.results || (Array.isArray(data) ? data : []);
+                const merged = Array.isArray(existingList)
+                  ? { ...existing, royalties: [...existingList, ...newList] }
+                  : data;
+                this.interceptedApiData.set('royalties', merged);
+              } else {
+                this.interceptedApiData.set('royalties', data);
+              }
+              console.log('✅ Intercepted Royalties API data (accumulated)');
             }
           }
         } catch (error) {
@@ -411,14 +431,29 @@ export class KdpReportsScraperService {
       const orders = apiData.orders || apiData.data?.orders || apiData.results || [];
 
       orders.forEach((order: any) => {
+        // Try all known date field names to avoid defaulting to today
+        const rawDate =
+          order.date || order.orderDate || order.purchaseDate ||
+          order.saleDate || order.transactionDate || order.reportDate ||
+          order.orderPlacedDate || order.salesDate || null;
+
+        if (!rawDate) {
+          // Log unknown fields to help identify the correct date field
+          console.warn(`⚠️ [KDP Sales] Unknown date field in order. Available keys: ${Object.keys(order).join(', ')}`);
+        }
+
+        const date = rawDate
+          ? new Date(rawDate).toISOString().split('T')[0]
+          : new Date().toISOString().split('T')[0];
+
         results.push({
-          date: order.date || order.orderDate || new Date().toISOString().split('T')[0],
-          asin: order.asin || order.productAsin || '',
-          title: order.title || order.productTitle || '',
+          date,
+          asin: order.asin || order.productAsin || order.isbn || '',
+          title: order.title || order.productTitle || order.bookTitle || '',
           marketplace: marketplace,
-          paidUnits: parseInt(order.paidUnits || order.unitsSold || 0),
-          freeUnits: parseInt(order.freeUnits || order.unitsFree || 0),
-          kenpReads: parseInt(order.kenpPages || order.kenpReads || 0)
+          paidUnits: parseInt(order.paidUnits || order.unitsSold || order.quantitySold || order.units || 0),
+          freeUnits: parseInt(order.freeUnits || order.unitsFree || order.freeQuantity || 0),
+          kenpReads: parseInt(order.kenpPages || order.kenpReads || order.kenpPagesRead || 0)
         });
       });
 
@@ -649,7 +684,26 @@ export class KdpReportsScraperService {
     const statsRepository = AppDataSource.getRepository(KdpDailyStats);
     let saved = 0;
 
+    // Aggrega per (date, asin) prima di salvare: evita che ordini multipli
+    // con stesso date/asin si sovrascrivano a vicenda per il unique constraint
+    const aggregated = new Map<string, any>();
     for (const record of data) {
+      const key = `${record.date}-${record.asin}`;
+      const existing = aggregated.get(key);
+      if (existing) {
+        existing.paidUnits += record.paidUnits || 0;
+        existing.freeUnits += record.freeUnits || 0;
+        existing.kenpReads += record.kenpReads || 0;
+        existing.grossRoyalties += record.grossRoyalties || 0;
+        existing.netRoyalties += record.netRoyalties || 0;
+        // spending non si somma: è già un totale per periodo
+        existing.spending = Math.max(existing.spending || 0, record.spending || 0);
+      } else {
+        aggregated.set(key, { ...record });
+      }
+    }
+
+    for (const record of aggregated.values()) {
       try {
         // Check if record already exists (by userId, date, and asin)
         const existing = await statsRepository.findOne({
