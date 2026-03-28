@@ -451,10 +451,7 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
       spending: parseFloat(row.spending || 0)
     }));
 
-    // Get ADS spend per marketplace:
-    // - Historical months: from monthly_ads_spend table
-    // - Current month: from book_spend_cache (7d rolling, more accurate)
-    const currentYm2 = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+    // Get ADS spend per marketplace from monthly_ads_spend (dal 1° del mese, tutti i mesi)
     const spendByMarketplace: Record<string, Array<{ yearMonth: string; spend: number }>> = {};
     try {
       // Historical spend from monthly_ads_spend
@@ -472,31 +469,13 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
           spendByMarketplace[mp].push({ yearMonth: ym, spend: parseFloat(row.spend || '0') });
         }
       }
-      // Current month spend from book_spend_cache (overrides monthly_ads_spend for current month)
-      const cacheRows: Array<{ marketplace: string; spend: string }> = await AppDataSource.query(`
-        SELECT marketplace, SUM(spend_7d)::float AS spend
-        FROM book_spend_cache
-        WHERE user_id = $1 AND spend_7d > 0
-        GROUP BY marketplace
-      `, [userId]);
-      for (const row of cacheRows) {
-        const mp = (row.marketplace || '').toUpperCase();
-        if (mp) {
-          if (!spendByMarketplace[mp]) spendByMarketplace[mp] = [];
-          // Replace current month entry if exists, otherwise push
-          const idx = spendByMarketplace[mp].findIndex(e => e.yearMonth === currentYm2);
-          const entry = { yearMonth: currentYm2, spend: parseFloat(row.spend || '0') };
-          if (idx >= 0) spendByMarketplace[mp][idx] = entry;
-          else spendByMarketplace[mp].push(entry);
-        }
-      }
     } catch (e) {
       console.warn('[Dashboard] spend query failed:', e);
     }
 
     // Build per-marketplace monthly chart:
     // - Net royalties estimated via historicalMonths total × marketplace % (from latest snapshot.marketplaceData)
-    // - ADS spend from book_spend_cache (7d rolling, mapped to current month; historical months show spend=0)
+    // - ADS spend from monthly_ads_spend (dal 1° del mese, tutti i mesi incluso corrente)
     // - 'ALL' view: exact net royalties (historicalMonths total - combined spend) + combined spend
     const chartByMarketplace: Record<string, Array<{ yearMonth: string; label: string; royalties: number; spend: number }>> = {};
 

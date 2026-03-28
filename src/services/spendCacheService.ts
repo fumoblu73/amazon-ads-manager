@@ -12,6 +12,7 @@ import { User } from '../entities/User';
 import { createMarketplaceApiService, isMarketplaceConfigured } from './MarketplaceApiFactory';
 
 export const SPEND_CACHE_REPORT_TYPE = 'spSpendCache';
+export const MONTHLY_SPEND_REPORT_TYPE = 'spMonthlySpend';
 const SPEND_CACHE_COLUMNS = ['campaignId', 'cost', 'sales14d', 'impressions', 'clicks'];
 const MARKETPLACES = ['US', 'CA', 'UK', 'DE', 'FR', 'IT', 'ES', 'AU'];
 
@@ -32,17 +33,23 @@ export async function submitSpendCacheReports(): Promise<{ submitted: number; er
   let submitted = 0;
   let errors = 0;
 
+  // Date per report mensile (dal 1° del mese a oggi)
+  const today = new Date();
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+  const yearMonth = end.slice(0, 7); // 'YYYY-MM'
+
   for (const marketplace of MARKETPLACES) {
     if (!isMarketplaceConfigured(marketplace)) continue;
 
     try {
       const apiService = createMarketplaceApiService(marketplace);
+
+      // Report 7gg → aggiorna book_spend_cache
       const reportId = await apiService.requestReportV3(
         start, end, 'spTargeting', SPEND_CACHE_COLUMNS
       );
 
       for (const user of users) {
-        // Evita duplicati per stesso reportId + user
         const existing = await reportRepo.findOne({
           where: { reportId, userId: user.id, reportType: SPEND_CACHE_REPORT_TYPE }
         });
@@ -67,7 +74,44 @@ export async function submitSpendCacheReports(): Promise<{ submitted: number; er
         await reportRepo.save(pending);
         submitted++;
       }
-      console.log(`   ✅ [Spend Cache] ${marketplace}: report ${reportId} sottomesso`);
+      console.log(`   ✅ [Spend Cache] ${marketplace}: report 7gg ${reportId} sottomesso`);
+
+      // Report mensile (1° del mese → oggi) → aggiorna monthly_ads_spend
+      try {
+        const monthlyReportId = await apiService.requestReportV3(
+          monthStart, end, 'spTargeting', SPEND_CACHE_COLUMNS
+        );
+
+        for (const user of users) {
+          const existing = await reportRepo.findOne({
+            where: { reportId: monthlyReportId, userId: user.id, reportType: MONTHLY_SPEND_REPORT_TYPE }
+          });
+          if (existing) continue;
+
+          const pending = reportRepo.create({
+            userId: user.id,
+            marketplace,
+            campaignId: `MONTHLY_SPEND_${yearMonth}`,
+            campaignName: `Monthly Spend ${yearMonth}`,
+            campaignType: 0,
+            reportId: monthlyReportId,
+            reportType: MONTHLY_SPEND_REPORT_TYPE,
+            columns: JSON.stringify(SPEND_CACHE_COLUMNS),
+            startDate: monthStart,
+            endDate: end,
+            status: 'submitted',
+            functionNumbers: JSON.stringify([]),
+            attempts: 0,
+            maxAttempts: 20
+          });
+          await reportRepo.save(pending);
+          submitted++;
+        }
+        console.log(`   ✅ [Monthly Spend] ${marketplace}: report ${monthStart}→${end} ${monthlyReportId} sottomesso`);
+      } catch (e: any) {
+        console.warn(`   ⚠️ [Monthly Spend] ${marketplace}: submit fallito: ${e.message}`);
+      }
+
     } catch (e: any) {
       console.error(`   ❌ [Spend Cache] ${marketplace}: submit fallito: ${e.message}`);
       errors++;
@@ -85,7 +129,10 @@ export async function submitSpendCacheReports(): Promise<{ submitted: number; er
 export async function collectSpendCacheReports(): Promise<{ processed: number; pending: number; failed: number }> {
   const reportRepo = AppDataSource.getRepository(PendingReport);
   const pendingReports = await reportRepo.find({
-    where: { reportType: SPEND_CACHE_REPORT_TYPE, status: 'submitted' },
+    where: [
+      { reportType: SPEND_CACHE_REPORT_TYPE, status: 'submitted' },
+      { reportType: MONTHLY_SPEND_REPORT_TYPE, status: 'submitted' }
+    ],
     order: { createdAt: 'ASC' }
   });
 
@@ -105,11 +152,19 @@ export async function collectSpendCacheReports(): Promise<{ processed: number; p
 
       if (statusResponse.status === 'COMPLETED') {
         const data = await apiService.downloadReport(report.reportId);
-        await updateSpendCacheFromReportData(data, report.marketplace, report.userId);
         report.status = 'processed';
         report.reportUrl = statusResponse.url || null;
-        stats.processed++;
-        console.log(`   ✅ [Spend Cache] ${report.marketplace}: book_spend_cache aggiornato`);
+
+        if (report.reportType === MONTHLY_SPEND_REPORT_TYPE) {
+          const yearMonth = report.startDate.slice(0, 7);
+          await updateMonthlyAdsSpend(data, report.marketplace, report.userId, yearMonth);
+          stats.processed++;
+          console.log(`   ✅ [Monthly Spend] ${report.marketplace} ${yearMonth}: monthly_ads_spend aggiornato`);
+        } else {
+          await updateSpendCacheFromReportData(data, report.marketplace, report.userId);
+          stats.processed++;
+          console.log(`   ✅ [Spend Cache] ${report.marketplace}: book_spend_cache aggiornato`);
+        }
       } else if (statusResponse.status === 'FAILURE' || statusResponse.status === 'FAILED') {
         report.status = 'failed';
         report.errorMessage = 'Amazon report failed';
@@ -224,4 +279,35 @@ export async function updateSpendCacheFromReportData(
   });
 
   console.log(`   💰 [Spend Cache] ${marketplace}: ${byAsin.size} ASIN aggiornati`);
+}
+
+// ================================================
+// Aggrega reportData per marketplace e aggiorna monthly_ads_spend
+// ================================================
+async function updateMonthlyAdsSpend(
+  reportData: any[],
+  marketplace: string,
+  userId: string,
+  yearMonth: string
+): Promise<void> {
+  if (!reportData.length) return;
+
+  let totalSpend = 0;
+  let totalSales = 0;
+  for (const row of reportData) {
+    totalSpend += parseFloat(row.cost) || 0;
+    totalSales += parseFloat(row.sales14d) || 0;
+  }
+
+  if (totalSpend <= 0) return;
+
+  await AppDataSource.query(
+    `INSERT INTO monthly_ads_spend (user_id, marketplace, year_month, total_spend, total_sales)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (user_id, marketplace, year_month)
+     DO UPDATE SET
+       total_spend = EXCLUDED.total_spend,
+       total_sales = EXCLUDED.total_sales`,
+    [userId, marketplace, yearMonth, totalSpend, totalSales]
+  );
 }
