@@ -24,7 +24,6 @@ import { executeFunc4 } from '../automation/functions/func4';
 import { executeFunc5, CampaignMapping } from '../automation/functions/func5';
 import { getUserAutomationSettings, AutomationConfig } from '../automation/rules';
 import { updateSpendCacheFromReportData, SPEND_CACHE_REPORT_TYPE } from './spendCacheService';
-import { formatDateForAmazon } from '../utils/timeframe';
 
 /**
  * Pre-loaded data to avoid N+1 queries in report processing loops
@@ -242,11 +241,59 @@ export async function processCompletedReports(): Promise<{
             console.log(`   ✅ ${report.reportId}: COMPLETED, downloading...`);
             stats.completed++;
 
+            // Report 65d deprecati: marca come processed senza eseguire funzioni
+            if (report.reportType === 'spTargeting_65d') {
+              report.status = 'processed';
+              await reportRepo.save(report);
+              stats.processed++;
+              console.log(`   ✅ ${report.reportId}: spTargeting_65d (deprecated) marcato processed`);
+              continue;
+            }
+
+            // Se F3 è incluso e i chunk 65gg sono configurati, verifica che siano pronti
+            const functionNumbers = JSON.parse(report.functionNumbers) as number[];
+            if (functionNumbers.includes(3) && report.reportId65a && report.reportId65b) {
+              const status65a = await apiService.getReportStatus(report.reportId65a);
+              const status65b = await apiService.getReportStatus(report.reportId65b);
+
+              if (status65a.status !== 'COMPLETED' || status65b.status !== 'COMPLETED') {
+                report.attempts++;
+                await reportRepo.save(report);
+                stats.stillPending++;
+                console.log(`   ⏳ ${report.reportId}: in attesa dei report 65gg (A=${status65a.status}, B=${status65b.status})`);
+                continue;
+              }
+            }
+
             // Download report data
             const reportData = await apiService.downloadReport(report.reportId);
             report.status = 'completed';
             report.reportUrl = statusResponse.url || null;
             await reportRepo.save(report);
+
+            // Se F3 è incluso e i chunk 65gg sono pronti, scaricali e uniscili
+            let preloadedFunc3Reports: { reportData: any[]; reportData65: any[] } | undefined;
+            if (functionNumbers.includes(3) && report.reportId65a && report.reportId65b) {
+              try {
+                const data65a = await apiService.downloadReport(report.reportId65a);
+                const data65b = await apiService.downloadReport(report.reportId65b);
+                const mergedMap: Record<string, { clicks: number; orders: number }> = {};
+                for (const row of [...data65a, ...data65b]) {
+                  const key = row.targeting || row.keywordId || row.targetId || '';
+                  if (!mergedMap[key]) mergedMap[key] = { clicks: 0, orders: 0 };
+                  mergedMap[key].clicks += (row.clicks || 0);
+                  mergedMap[key].orders += (row.purchases14d || row.orders || 0);
+                }
+                const reportData65 = Object.entries(mergedMap).map(([targeting, d]) => ({
+                  targeting, clicks: d.clicks, purchases14d: d.orders
+                }));
+                preloadedFunc3Reports = { reportData, reportData65 };
+                console.log(`     📊 [F3] 65gg pre-caricati: ${reportData65.length} righe`);
+              } catch (e: any) {
+                console.warn(`     ⚠️ [F3] Download 65gg fallito (F3 continuerà senza dati 65gg): ${e.message}`);
+                preloadedFunc3Reports = { reportData, reportData65: [] };
+              }
+            }
 
             // Execute associated automation functions or enrich data
             try {
@@ -268,7 +315,7 @@ export async function processCompletedReports(): Promise<{
                 console.log(`   ✅ ${report.reportId}: kdp_books enriched successfully`);
               } else {
                 const opSummary = await executeAutomationFunctions(
-                  report, reportData, apiService, marketplace, preloaded
+                  report, reportData, apiService, marketplace, preloaded, preloadedFunc3Reports
                 );
                 report.status = 'processed';
                 await reportRepo.save(report);
@@ -410,10 +457,56 @@ export async function processCompletedReportsForUser(userId: string): Promise<{
 
           if (statusResponse.status === 'COMPLETED') {
             stats.completed++;
+
+            // Report 65d deprecati: marca come processed senza eseguire funzioni
+            if (report.reportType === 'spTargeting_65d') {
+              report.status = 'processed';
+              await reportRepo.save(report);
+              stats.processed++;
+              continue;
+            }
+
+            // Se F3 è incluso e i chunk 65gg sono configurati, verifica che siano pronti
+            const functionNumbers = JSON.parse(report.functionNumbers) as number[];
+            if (functionNumbers.includes(3) && report.reportId65a && report.reportId65b) {
+              const status65a = await apiService.getReportStatus(report.reportId65a);
+              const status65b = await apiService.getReportStatus(report.reportId65b);
+              if (status65a.status !== 'COMPLETED' || status65b.status !== 'COMPLETED') {
+                report.attempts++;
+                await reportRepo.save(report);
+                stats.stillPending++;
+                console.log(`   ⏳ ${report.reportId}: in attesa dei report 65gg (A=${status65a.status}, B=${status65b.status})`);
+                continue;
+              }
+            }
+
             const reportData = await apiService.downloadReport(report.reportId);
             report.status = 'completed';
             report.reportUrl = statusResponse.url || null;
             await reportRepo.save(report);
+
+            // Se F3 è incluso e i chunk 65gg sono pronti, scaricali e uniscili
+            let preloadedFunc3Reports: { reportData: any[]; reportData65: any[] } | undefined;
+            if (functionNumbers.includes(3) && report.reportId65a && report.reportId65b) {
+              try {
+                const data65a = await apiService.downloadReport(report.reportId65a);
+                const data65b = await apiService.downloadReport(report.reportId65b);
+                const mergedMap: Record<string, { clicks: number; orders: number }> = {};
+                for (const row of [...data65a, ...data65b]) {
+                  const key = row.targeting || row.keywordId || row.targetId || '';
+                  if (!mergedMap[key]) mergedMap[key] = { clicks: 0, orders: 0 };
+                  mergedMap[key].clicks += (row.clicks || 0);
+                  mergedMap[key].orders += (row.purchases14d || row.orders || 0);
+                }
+                const reportData65 = Object.entries(mergedMap).map(([targeting, d]) => ({
+                  targeting, clicks: d.clicks, purchases14d: d.orders
+                }));
+                preloadedFunc3Reports = { reportData, reportData65 };
+              } catch (e: any) {
+                console.warn(`     ⚠️ [F3] Download 65gg fallito: ${e.message}`);
+                preloadedFunc3Reports = { reportData, reportData65: [] };
+              }
+            }
 
             try {
               if (report.reportType === 'spAdvertisedProduct') {
@@ -422,7 +515,7 @@ export async function processCompletedReportsForUser(userId: string): Promise<{
                 await reportRepo.save(report);
                 stats.processed++;
               } else {
-                const opSummary = await executeAutomationFunctions(report, reportData, apiService, marketplace, preloaded);
+                const opSummary = await executeAutomationFunctions(report, reportData, apiService, marketplace, preloaded, preloadedFunc3Reports);
                 report.status = 'processed';
                 await reportRepo.save(report);
                 stats.processed++;
@@ -475,7 +568,8 @@ async function executeAutomationFunctions(
   reportData: any[],
   apiService: any,
   marketplace: string,
-  preloaded?: PreloadedData
+  preloaded?: PreloadedData,
+  preloadedFunc3Reports?: { reportData: any[]; reportData65: any[] }
 ): Promise<string> {
   const functionNumbers: number[] = JSON.parse(report.functionNumbers);
   const cachedApiService = createCachedApiService(apiService, reportData);
@@ -598,43 +692,6 @@ async function executeAutomationFunctions(
     }
   }
 
-  // Pre-carica i report 65gg per func3 usando il real apiService (non il cache)
-  let preloadedFunc3Reports: { reportData: any[]; reportData65: any[] } | undefined;
-  if (functionNumbers.includes(3)) {
-    try {
-      const startDate65a = new Date();
-      startDate65a.setDate(startDate65a.getDate() - 30);
-      const startDate65b = new Date();
-      startDate65b.setDate(startDate65b.getDate() - 65);
-      const endDate65b = new Date();
-      endDate65b.setDate(endDate65b.getDate() - 31);
-
-      const reportId65a = await apiService.requestReport(formatDateForAmazon(startDate65a), ['clicks', 'orders']);
-      const reportData65a = await apiService.waitAndDownloadReport(reportId65a);
-
-      const reportId65b = await apiService.requestReport(
-        formatDateForAmazon(startDate65b), ['clicks', 'orders'], formatDateForAmazon(endDate65b)
-      );
-      const reportData65b = await apiService.waitAndDownloadReport(reportId65b);
-
-      const mergedMap: Record<string, { clicks: number; orders: number }> = {};
-      for (const row of [...reportData65a, ...reportData65b]) {
-        const key = row.targeting || row.keywordId || row.targetId || '';
-        if (!mergedMap[key]) mergedMap[key] = { clicks: 0, orders: 0 };
-        mergedMap[key].clicks += (row.clicks || 0);
-        mergedMap[key].orders += (row.purchases14d || row.orders || 0);
-      }
-      const reportData65 = Object.entries(mergedMap).map(([targeting, d]) => ({
-        targeting, clicks: d.clicks, purchases14d: d.orders
-      }));
-
-      preloadedFunc3Reports = { reportData, reportData65 };
-      console.log(`     📊 [F3] Report 65gg pre-caricati: ${reportData65.length} righe`);
-    } catch (e: any) {
-      console.warn(`     ⚠️ [F3] Impossibile caricare report 65gg: ${e.message}. La condizione 65gg sarà disabilitata.`);
-      preloadedFunc3Reports = { reportData, reportData65: [] };
-    }
-  }
 
   const parts: string[] = [];
   const bandNames: Record<number, string> = { 1: 'Ottima', 2: 'Buona', 3: 'Accettabile', 4: 'Scarsa', 5: 'Pessima' };

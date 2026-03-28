@@ -291,6 +291,49 @@ export async function submitReportsForCampaign(
         console.log(`     ⏭️ spTargeting already pending, skipping: ${reportId}`);
         if (!reportIds.includes(reportId)) reportIds.push(reportId);
       } else {
+        // Se F3 è incluso, sottometti subito i 2 chunk 65gg e salvali nel record principale
+        let reportId65a: string | null = null;
+        let reportId65b: string | null = null;
+
+        if (functionsToRun.includes(3)) {
+          try {
+            const cols65 = ['clicks', 'purchases14d'];
+
+            // Chunk A: ultimi 30 giorni
+            const start65a = new Date();
+            start65a.setDate(start65a.getDate() - 30);
+            const start65aStr = start65a.toISOString().split('T')[0];
+            try {
+              reportId65a = await apiService.requestReportV3(start65aStr, endDateStr, 'spTargeting', cols65);
+            } catch (e: any) {
+              const dup = extractReportIdFrom425(e);
+              if (dup) { reportId65a = dup; console.log(`     ♻️ 65d-A duplicate, reusing: ${dup}`); }
+              else throw e;
+            }
+
+            // Chunk B: giorni 31-65
+            const start65b = new Date();
+            start65b.setDate(start65b.getDate() - 65);
+            const end65b = new Date();
+            end65b.setDate(end65b.getDate() - 31);
+            const start65bStr = start65b.toISOString().split('T')[0];
+            const end65bStr = end65b.toISOString().split('T')[0];
+            try {
+              reportId65b = await apiService.requestReportV3(start65bStr, end65bStr, 'spTargeting', cols65);
+            } catch (e: any) {
+              const dup = extractReportIdFrom425(e);
+              if (dup) { reportId65b = dup; console.log(`     ♻️ 65d-B duplicate, reusing: ${dup}`); }
+              else throw e;
+            }
+
+            console.log(`     ✅ 65d chunks submitted: A=${reportId65a} B=${reportId65b}`);
+          } catch (error: any) {
+            console.warn(`     ⚠️ 65d submit failed (F3 continuerà senza dati 65gg): ${error.message}`);
+            reportId65a = null;
+            reportId65b = null;
+          }
+        }
+
         const pendingReport = reportRepo.create({
           userId,
           marketplace,
@@ -306,7 +349,9 @@ export async function submitReportsForCampaign(
           functionNumbers: JSON.stringify(functionsToRun.filter(f => [1, 2, 3, 4].includes(f))),
           attempts: 0,
           maxAttempts: 20,
-          dryRun
+          dryRun,
+          reportId65a,
+          reportId65b
         });
         await reportRepo.save(pendingReport);
         submitted++;
@@ -315,61 +360,6 @@ export async function submitReportsForCampaign(
       }
     } catch (error: any) {
       console.error(`     ❌ spTargeting submit failed: ${error.message}`);
-    }
-  }
-
-  // === REPORT 2: spTargeting 65 days (needed by F3 for pause check) ===
-  if (functionsToRun.includes(3)) {
-    try {
-      const startDate65 = new Date();
-      startDate65.setDate(startDate65.getDate() - 31); // Amazon API v3 max range is 31 days
-      const startDateStr = startDate65.toISOString().split('T')[0];
-      const endDateStr = now.toISOString().split('T')[0];
-
-      const columns = ['clicks', 'purchases14d'];
-      let reportId: string;
-      try {
-        reportId = await apiService.requestReportV3(
-          startDateStr, endDateStr, 'spTargeting', columns
-        );
-      } catch (submitError: any) {
-        const duplicateId = extractReportIdFrom425(submitError);
-        if (duplicateId) {
-          reportId = duplicateId;
-          console.log(`     ♻️ spTargeting_31d duplicate, reusing: ${reportId}`);
-        } else {
-          throw submitError;
-        }
-      }
-
-      if (await pendingReportExists(reportRepo, reportId, campaignId, 'spTargeting_65d')) {
-        console.log(`     ⏭️ spTargeting_65d already pending, skipping: ${reportId}`);
-        if (!reportIds.includes(reportId)) reportIds.push(reportId);
-      } else {
-        const pendingReport = reportRepo.create({
-          userId,
-          marketplace,
-          campaignId,
-          campaignName,
-          campaignType,
-          reportId,
-          reportType: 'spTargeting_65d',
-          columns: JSON.stringify(columns),
-          startDate: startDateStr,
-          endDate: endDateStr,
-          status: 'submitted',
-          functionNumbers: JSON.stringify([3]),
-          attempts: 0,
-          maxAttempts: 20,
-          dryRun
-        });
-        await reportRepo.save(pendingReport);
-        submitted++;
-        reportIds.push(reportId);
-        console.log(`     ✅ spTargeting 65d report submitted: ${reportId}`);
-      }
-    } catch (error: any) {
-      console.error(`     ❌ spTargeting 65d submit failed: ${error.message}`);
     }
   }
 

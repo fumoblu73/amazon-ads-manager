@@ -53,6 +53,12 @@ export class PendingReport {
   @Column({ type: 'integer', name: 'max_attempts', default: 20 })
   maxAttempts: number;
 
+  @Column({ type: 'varchar', length: 255, name: 'report_id_65a', nullable: true })
+  reportId65a: string | null;
+
+  @Column({ type: 'varchar', length: 255, name: 'report_id_65b', nullable: true })
+  reportId65b: string | null;
+
   @Column({ type: 'text', name: 'error_message', nullable: true })
   errorMessage: string | null;
 
