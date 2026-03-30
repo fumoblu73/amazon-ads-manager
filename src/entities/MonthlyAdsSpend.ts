@@ -21,6 +21,9 @@ export class MonthlyAdsSpend {
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0, name: 'total_sales' })
   totalSales: number;
 
+  @Column({ type: 'integer', default: 0, name: 'total_units_sold' })
+  totalUnitsSold: number;
+
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }

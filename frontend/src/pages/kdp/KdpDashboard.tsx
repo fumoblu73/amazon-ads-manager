@@ -402,6 +402,22 @@ export default function KdpDashboard() {
                   </td>
                 </tr>
                 <tr className="border-b border-gray-700/50">
+                  <td className="py-3 text-gray-400">Paperback via ADS</td>
+                  <td className="py-3 text-center">{(monthlyStats.previousMonth as any).adsSoldUnits ?? '-'}</td>
+                  <td className="py-3 text-center font-medium">{(monthlyStats.currentMonth as any).adsSoldUnits ?? '-'}</td>
+                  <td className={`py-3 text-center ${formatChange((monthlyStats.change as any).adsSoldUnits).color}`}>
+                    {formatChange((monthlyStats.change as any).adsSoldUnits).text}
+                  </td>
+                </tr>
+                <tr className="border-b border-gray-700/50">
+                  <td className="py-3 text-gray-400">Paperback Organici</td>
+                  <td className="py-3 text-center">{(monthlyStats.previousMonth as any).organicPaperbacks ?? '-'}</td>
+                  <td className="py-3 text-center font-medium">{(monthlyStats.currentMonth as any).organicPaperbacks ?? '-'}</td>
+                  <td className={`py-3 text-center ${formatChange((monthlyStats.change as any).organicPaperbacks).color}`}>
+                    {formatChange((monthlyStats.change as any).organicPaperbacks).text}
+                  </td>
+                </tr>
+                <tr className="border-b border-gray-700/50">
                   <td className="py-3 text-gray-400">ADS Spend</td>
                   <td className="py-3 text-center">{formatCurrency(monthlyStats.previousMonth.spending)}</td>
                   <td className="py-3 text-center font-medium">{formatCurrency(monthlyStats.currentMonth.spending)}</td>

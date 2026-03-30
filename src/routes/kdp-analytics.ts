@@ -248,17 +248,25 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
     const previousYm = previousMonth.startDate.slice(0, 7);
     let currentMonthSpend = 0;
     let previousMonthSpend = 0;
+    let currentMonthAdsUnits = 0;
+    let previousMonthAdsUnits = 0;
     try {
       // monthly_ads_spend has month-to-date spend (updated by process-reports Mon/Wed/Fri)
-      const spendRows: Array<{ year_month: string; total: string }> = await AppDataSource.query(`
-        SELECT year_month, SUM(total_spend)::float AS total
+      const spendRows: Array<{ year_month: string; total: string; units: string }> = await AppDataSource.query(`
+        SELECT year_month, SUM(total_spend)::float AS total, SUM(total_units_sold)::int AS units
         FROM monthly_ads_spend
         WHERE user_id = $1 AND year_month IN ($2, $3)
         GROUP BY year_month
       `, [userId, currentYm, previousYm]);
       for (const row of spendRows) {
-        if (row.year_month === currentYm) currentMonthSpend = parseFloat(row.total || '0');
-        if (row.year_month === previousYm) previousMonthSpend = parseFloat(row.total || '0');
+        if (row.year_month === currentYm) {
+          currentMonthSpend = parseFloat(row.total || '0');
+          currentMonthAdsUnits = parseInt(row.units || '0');
+        }
+        if (row.year_month === previousYm) {
+          previousMonthSpend = parseFloat(row.total || '0');
+          previousMonthAdsUnits = parseInt(row.units || '0');
+        }
       }
     } catch (e) {
       console.warn('[Dashboard] monthly spend query failed:', e);
@@ -659,6 +667,8 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
             reads: previousMonthStats.kenpReads || 0,
             grossSales: previousMonthGrossSales,
             grossRoyalties: previousMonthStats.grossRoyalties,
+            adsSoldUnits: previousMonthAdsUnits,
+            organicPaperbacks: Math.max(0, (previousMonthStats.printOrders || 0) - previousMonthAdsUnits),
             spending: previousMonthSpend,
             netRoyalties: previousMonthStats.netRoyalties,
             overallROI: previousROI,
@@ -674,6 +684,8 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
             reads: currentMonthStats.kenpReads || 0,
             grossSales: currentMonthGrossSales,
             grossRoyalties: currentMonthStats.grossRoyalties,
+            adsSoldUnits: currentMonthAdsUnits,
+            organicPaperbacks: Math.max(0, (currentMonthStats.printOrders || 0) - currentMonthAdsUnits),
             spending: currentMonthSpend,
             netRoyalties: currentMonthStats.netRoyalties,
             overallROI: currentROI,
@@ -688,6 +700,11 @@ router.get('/dashboard/summary', authMiddleware, async (req: AuthRequest, res: R
             reads: calculatePercentChange(currentMonthStats.kenpReads || 0, previousMonthStats.kenpReads || 0),
             grossSales: (currentMonthGrossSales !== null && previousMonthGrossSales !== null) ? calculatePercentChange(currentMonthGrossSales, previousMonthGrossSales) : null,
             grossRoyalties: calculatePercentChange(currentMonthStats.grossRoyalties, previousMonthStats.grossRoyalties),
+            adsSoldUnits: calculatePercentChange(currentMonthAdsUnits, previousMonthAdsUnits),
+            organicPaperbacks: calculatePercentChange(
+              Math.max(0, (currentMonthStats.printOrders || 0) - currentMonthAdsUnits),
+              Math.max(0, (previousMonthStats.printOrders || 0) - previousMonthAdsUnits)
+            ),
             spending: calculatePercentChange(currentMonthSpend, previousMonthSpend),
             netRoyalties: calculatePercentChange(currentMonthStats.netRoyalties, previousMonthStats.netRoyalties)
           }

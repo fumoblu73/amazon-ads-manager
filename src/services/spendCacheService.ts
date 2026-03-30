@@ -14,6 +14,7 @@ import { createMarketplaceApiService, isMarketplaceConfigured } from './Marketpl
 export const SPEND_CACHE_REPORT_TYPE = 'spSpendCache';
 export const MONTHLY_SPEND_REPORT_TYPE = 'spMonthlySpend';
 const SPEND_CACHE_COLUMNS = ['campaignId', 'cost', 'sales14d', 'impressions', 'clicks'];
+const MONTHLY_SPEND_COLUMNS = ['campaignId', 'cost', 'sales14d', 'purchases14d'];
 const MARKETPLACES = ['US', 'CA', 'UK', 'DE', 'FR', 'IT', 'ES', 'AU'];
 
 // ================================================
@@ -79,7 +80,7 @@ export async function submitSpendCacheReports(): Promise<{ submitted: number; er
       // Report mensile (1° del mese → oggi) → aggiorna monthly_ads_spend
       try {
         const monthlyReportId = await apiService.requestReportV3(
-          monthStart, end, 'spTargeting', SPEND_CACHE_COLUMNS
+          monthStart, end, 'spTargeting', MONTHLY_SPEND_COLUMNS
         );
 
         for (const user of users) {
@@ -294,20 +295,23 @@ async function updateMonthlyAdsSpend(
 
   let totalSpend = 0;
   let totalSales = 0;
+  let totalUnitsSold = 0;
   for (const row of reportData) {
     totalSpend += parseFloat(row.cost) || 0;
     totalSales += parseFloat(row.sales14d) || 0;
+    totalUnitsSold += parseInt(row.purchases14d) || 0;
   }
 
   if (totalSpend <= 0) return;
 
   await AppDataSource.query(
-    `INSERT INTO monthly_ads_spend (user_id, marketplace, year_month, total_spend, total_sales)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO monthly_ads_spend (user_id, marketplace, year_month, total_spend, total_sales, total_units_sold)
+     VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (user_id, marketplace, year_month)
      DO UPDATE SET
        total_spend = EXCLUDED.total_spend,
-       total_sales = EXCLUDED.total_sales`,
-    [userId, marketplace, yearMonth, totalSpend, totalSales]
+       total_sales = EXCLUDED.total_sales,
+       total_units_sold = EXCLUDED.total_units_sold`,
+    [userId, marketplace, yearMonth, totalSpend, totalSales, totalUnitsSold]
   );
 }
