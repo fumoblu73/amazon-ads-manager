@@ -183,8 +183,14 @@ export async function processCompletedReports(): Promise<{
     const reportRepo = AppDataSource.getRepository(PendingReport);
 
     // Get all submitted reports that haven't exceeded max attempts
+    // Escludi i report di spend cache (gestiti da collectSpendCacheReports)
     const pendingReports = await reportRepo.find({
-      where: { status: 'submitted' },
+      where: [
+        { status: 'submitted', reportType: 'spTargeting' },
+        { status: 'submitted', reportType: 'spCampaigns' },
+        { status: 'submitted', reportType: 'spSearchTerm' },
+        { status: 'submitted', reportType: 'spTargeting_65d' },
+      ],
       order: { createdAt: 'ASC' }
     });
 
