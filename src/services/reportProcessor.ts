@@ -10,7 +10,7 @@ import { KdpBook } from '../entities/KdpBook';
 import { Campaign } from '../models/Campaign';
 import { AutomationLog } from '../models/AutomationLog';
 import { createMarketplaceApiService } from './MarketplaceApiFactory';
-import { In, IsNull } from 'typeorm';
+import { In, IsNull, MoreThanOrEqual, Like } from 'typeorm';
 import { parseKdpPrice, calculateBookFastAcos, InkType, TrimSize } from '../utils/printingCost';
 
 // Guard against concurrent executions (single Node.js process on Render)
@@ -567,6 +567,75 @@ export async function processCompletedReportsForUser(userId: string): Promise<{
 }
 
 /**
+ * FIX D1: filtra le funzioni che hanno una soglia di frequency
+ * (F2, F4, F5 → default 7 giorni come da SPECIFICATIONS.md).
+ *
+ * Problema: cron-job.org chiama submit-reports 3 volte/settimana (Lun/Mer/Ven), e il sistema
+ * processava F2/F4/F5 su ogni chiamata, ignorando il loro frequency=7gg.
+ *
+ * Soluzione: prima di eseguire ogni funzione, controlla in automation_logs se è già stata
+ * eseguita su questa campagna entro la finestra di frequency. Se sì → skip.
+ * F1 e F3 hanno frequency=3gg che combacia col cadenza Lun/Mer/Ven, quindi non hanno bisogno di check.
+ *
+ * Ritorna un Set con i numeri di funzione da SKIPPARE (non da eseguire).
+ */
+async function getFunctionsToSkipByFrequency(
+  campaignId: string,
+  functionNumbers: number[],
+  config: AutomationConfig
+): Promise<Set<number>> {
+  const skip = new Set<number>();
+
+  // FIX ii: in modalità test (test-function isola a 1-2 funzioni via restrictToFunctions),
+  // saltiamo il frequency check. Significato: "se l'utente sta testando esplicitamente
+  // questa funzione adesso, esegui adesso indipendentemente dall'ultima esecuzione".
+  // I cron ciclo normale sottomettono sempre tutte le funzioni applicabili al campaignType
+  // (tipicamente 3-5 funzioni), quindi questo check è affidabile per distinguere i due casi.
+  if (functionNumbers.length < 3) {
+    console.log(`     🧪 [TEST MODE] frequency check skipped (functionNumbers=${JSON.stringify(functionNumbers)})`);
+    return skip;
+  }
+
+  const logRepo = AppDataSource.getRepository(AutomationLog);
+
+  // Mappa funzione → (frequency in giorni, label come appare in ruleName)
+  const checks: Array<{ funcNum: number; frequency: number; ruleLabel: string }> = [
+    { funcNum: 2, frequency: config.func2_frequency || 7, ruleLabel: 'F2' },
+    { funcNum: 4, frequency: config.func4_frequency || 7, ruleLabel: 'F4' },
+    { funcNum: 5, frequency: config.func5_frequency || 7, ruleLabel: 'F5' },
+  ];
+
+  for (const check of checks) {
+    if (!functionNumbers.includes(check.funcNum)) continue;
+
+    // Finestra: ultime (frequency - 1) giorni — il -1 lascia margine per boundary
+    // (es. frequency=7 → cerca log degli ultimi 6 giorni)
+    const since = new Date();
+    since.setDate(since.getDate() - (check.frequency - 1));
+
+    try {
+      const lastLog = await logRepo.findOne({
+        where: {
+          targetId: campaignId,
+          ruleName: Like(`%${check.ruleLabel}%`),
+          createdAt: MoreThanOrEqual(since),
+        },
+        order: { createdAt: 'DESC' },
+      });
+      if (lastLog) {
+        const ageHours = Math.round((Date.now() - lastLog.createdAt.getTime()) / (1000 * 60 * 60));
+        console.log(`     ⏭️ Skip ${check.ruleLabel} on ${campaignId}: ultima esecuzione ${ageHours}h fa (freq=${check.frequency}gg)`);
+        skip.add(check.funcNum);
+      }
+    } catch (e: any) {
+      console.warn(`     ⚠️ Frequency check fallito per ${check.ruleLabel}: ${e.message} — eseguo per sicurezza`);
+    }
+  }
+
+  return skip;
+}
+
+/**
  * Execute the automation functions associated with a completed report
  */
 async function executeAutomationFunctions(
@@ -626,7 +695,12 @@ async function executeAutomationFunctions(
   const mockTotalImpressions = 50000;
 
   // Recupera placement reali per func2
-  let realPlacements = { topOfSearch: 0, restOfSearch: 0, productPages: 0 };
+  // FIX bug 10: se NON riusciamo a leggere i placement correnti, NON usiamo default {0,0,0}.
+  // Quel default causava F2 a "scoprire" placement a 0%, calcolare fascia 5, e poi
+  // sovrascrivere i veri placement (es. 10% impostati manualmente) a 0%.
+  // Ora: realPlacements = null → F2 viene skippata con motivazione esplicita nei log/email.
+  let realPlacements: { topOfSearch: number; restOfSearch: number; productPages: number } | null = null;
+  let placementsFetchError: string | null = null;
   const needsPlacements = functionNumbers.some(f => f === 2);
   if (needsPlacements) {
     try {
@@ -638,10 +712,19 @@ async function executeAutomationFunctions(
           restOfSearch: pb.find((p: any) => p.placement === 'PLACEMENT_REST_OF_SEARCH')?.percentage ?? 0,
           productPages: pb.find((p: any) => p.placement === 'PLACEMENT_PRODUCT_PAGE')?.percentage ?? 0,
         };
+        console.log(`     📋 Placements reali: Top=${realPlacements.topOfSearch}%, Rest=${realPlacements.restOfSearch}%, PP=${realPlacements.productPages}%`);
+      } else if (campaignData) {
+        // La campagna esiste ma non ha placementBidding configurato (es. campagna nuova senza adjustment)
+        // In questo caso i placement sono effettivamente {0,0,0}, è sicuro procedere.
+        realPlacements = { topOfSearch: 0, restOfSearch: 0, productPages: 0 };
+        console.log(`     📋 Placements reali: nessun placementBidding configurato → {0,0,0}`);
+      } else {
+        placementsFetchError = 'getCampaign ha restituito null';
+        console.warn(`     ⚠️ ${placementsFetchError} — F2 verrà skippata`);
       }
-      console.log(`     📋 Placements reali: Top=${realPlacements.topOfSearch}%, Rest=${realPlacements.restOfSearch}%, PP=${realPlacements.productPages}%`);
     } catch (e: any) {
-      console.warn(`     ⚠️ Could not fetch placements: ${e.message}`);
+      placementsFetchError = e.message || 'errore sconosciuto';
+      console.warn(`     ⚠️ Could not fetch placements: ${placementsFetchError} — F2 verrà skippata`);
     }
   }
 
@@ -702,7 +785,16 @@ async function executeAutomationFunctions(
   const parts: string[] = [];
   const bandNames: Record<number, string> = { 1: 'Ottima', 2: 'Buona', 3: 'Accettabile', 4: 'Scarsa', 5: 'Pessima' };
 
+  // FIX D1: filtra F2/F4/F5 se sono state eseguite di recente (default 7gg).
+  // F1 e F3 hanno frequency=3gg che combacia con la cadenza Lun/Mer/Ven dei cron.
+  const skipByFrequency = await getFunctionsToSkipByFrequency(report.campaignId, functionNumbers, config);
+  if (skipByFrequency.size > 0) {
+    const skipped = Array.from(skipByFrequency).map(n => `F${n}`).join(', ');
+    parts.push(`${report.dryRun ? '[DRY RUN] ' : ''}⏭️ Skipped (frequency): ${skipped}`);
+  }
+
   for (const funcNum of functionNumbers) {
+    if (skipByFrequency.has(funcNum)) continue;
     try {
       console.log(`     🔧 Executing Function ${funcNum} for campaign ${report.campaignName}...`);
 
@@ -722,11 +814,19 @@ async function executeAutomationFunctions(
               dryRun: report.dryRun
             }
           );
-          parts.push(`${report.dryRun ? '[DRY RUN] ' : ''}Bid modificati: ${r1.itemsIncreased}/${r1.itemsProcessed}`);
+          // Mostra anche itemsWithoutMetrics per validare il fix del matching (bug 9):
+          // se "missed" è molto alto (es. quasi quanto itemsProcessed), il fix non sta funzionando.
+          const missedNote = r1.itemsWithoutMetrics > 0 ? ` | missed: ${r1.itemsWithoutMetrics}` : '';
+          parts.push(`${report.dryRun ? '[DRY RUN] ' : ''}Bid modificati: ${r1.itemsIncreased}/${r1.itemsProcessed}${missedNote}`);
           break;
         }
 
         case 2: {
+          // FIX bug 10: skip F2 se non abbiamo letto i placement correnti
+          if (realPlacements === null) {
+            parts.push(`${report.dryRun ? '[DRY RUN] ' : ''}⚠️ F2 SKIPPED: placements non leggibili (${placementsFetchError})`);
+            break;
+          }
           const r2 = await executeFunc2(
             report.campaignId,
             report.campaignName,
@@ -740,7 +840,11 @@ async function executeAutomationFunctions(
               dryRun: report.dryRun
             }
           );
-          if (r2.band === 3) {
+          // FIX bug 3: se F2 ha errori, segnalalo invece di dire "Performance accettabile"
+          // (il band di default è 3 anche su crash, quindi serve check sugli errori)
+          if (r2.errors && r2.errors.length > 0) {
+            parts.push(`${report.dryRun ? '[DRY RUN] ' : ''}⚠️ F2 ERROR: ${r2.errors[0]}`);
+          } else if (r2.band === 3) {
             parts.push(`${report.dryRun ? '[DRY RUN] ' : ''}Performance accettabile — nessuna modifica`);
           } else {
             const suffix = r2.campaignAcos === 999 ? ' (no vendite)' : '';
@@ -774,7 +878,9 @@ async function executeAutomationFunctions(
             },
             preloadedFunc3Reports
           );
-          parts.push(`${report.dryRun ? '[DRY RUN] ' : ''}ASIN/kw spenti: ${r3.itemsPaused}/${r3.itemsProcessed}`);
+          // FIX bug 11: il summary mostrava solo pause, mancavano gli aumenti/diminuzioni bid
+          // (le 3 modifiche bid "fantasma" su Amazon erano F3 invisibili nei log/email).
+          parts.push(`${report.dryRun ? '[DRY RUN] ' : ''}ASIN/kw spenti: ${r3.itemsPaused}/${r3.itemsProcessed} | Bid +: ${r3.itemsBidIncreased} | Bid -: ${r3.itemsBidDecreased}`);
           break;
         }
 

@@ -10,6 +10,7 @@
 
 import { UserAmazonApiService } from '../../services/UserAmazonApiService';
 import { formatDateForAmazon } from '../../utils/timeframe';
+import { findMetricsForItem } from './_reportMatching';
 
 export interface Func1Config {
   bidIncrease: number;      // Default: 0.02
@@ -24,6 +25,7 @@ export interface Func1Result {
   campaignName: string;
   itemsProcessed: number;
   itemsIncreased: number;
+  itemsWithoutMetrics: number;  // diagnostico: items non trovati nel report
   dryRun: boolean;
   reportSample?: any;
   errors: string[];
@@ -88,6 +90,7 @@ export async function executeFunc1(
     campaignName,
     itemsProcessed: 0,
     itemsIncreased: 0,
+    itemsWithoutMetrics: 0,
     dryRun: cfg.dryRun!,
     errors: [],
     details: []
@@ -143,13 +146,12 @@ export async function executeFunc1(
         const currentBid = item.bid;
 
         // Trova le metriche del report per questo item
-        // Matching robusto: confronta come stringa e supporta campo 'targeting' del v3
-        const itemIdStr = String(itemId);
-        const metrics = reportData.find((r: any) =>
-          (r.keywordId && String(r.keywordId) === itemIdStr) ||
-          (r.targetId && String(r.targetId) === itemIdStr) ||
-          (r.targeting && String(r.targeting) === itemIdStr)
-        );
+        // FIX bug 9: il report v3 spTargeting non contiene keywordId/targetId,
+        // serve match via keywordText/expression usando l'helper condiviso.
+        const metrics = findMetricsForItem(reportData, item);
+        if (!metrics) {
+          result.itemsWithoutMetrics++;
+        }
 
         // Se non ci sono dati nel report, la keyword ha 0 impressioni e 0 click
         // (Amazon include nel report solo items con almeno qualche attivita')
@@ -194,6 +196,7 @@ export async function executeFunc1(
     console.log('────────────────────────────────────────');
     console.log(`✅ Funzione 1 completata${cfg.dryRun ? ' (DRY RUN)' : ''}`);
     console.log(`   Items analizzati: ${result.itemsProcessed}`);
+    console.log(`   Items senza match nel report: ${result.itemsWithoutMetrics}/${result.itemsProcessed}`);
     console.log(`   Bid ${cfg.dryRun ? 'da aumentare' : 'aumentati'}: ${result.itemsIncreased}`);
     console.log(`   Errori: ${result.errors.length}`);
     console.log('════════════════════════════════════════\n');

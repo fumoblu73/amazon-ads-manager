@@ -225,13 +225,18 @@ export async function submitReportsForUser(userId: string): Promise<{ reportsSub
 /**
  * Submit needed reports for a single campaign
  * Returns number of reports submitted
+ *
+ * @param restrictToFunctions - se passato, limita le funzioni considerate a questo subset.
+ *   Usato da /test-function per testare una singola funzione isolata (es. [1] = solo F1).
+ *   In modalità test, il frequency check viene anche saltato (perché c'è una sola funzione).
  */
 export async function submitReportsForCampaign(
   userId: string,
   marketplace: string,
   campaign: any,
   apiService: any,
-  dryRun: boolean = false
+  dryRun: boolean = false,
+  restrictToFunctions?: number[]
 ): Promise<{ count: number; reportIds: string[] }> {
   const campaignId = campaign.campaignId;
   const campaignName = campaign.name;
@@ -249,13 +254,19 @@ export async function submitReportsForCampaign(
   const now = new Date();
 
   // Determine which functions should run for this campaign
-  const functionsToRun: number[] = [];
+  let functionsToRun: number[] = [];
 
   if (shouldExecuteFunc1(campaignType)) functionsToRun.push(1);
   if (shouldExecuteFunc3(campaignType)) functionsToRun.push(3);
   if (shouldExecuteFunc2(campaignType)) functionsToRun.push(2);
   if (shouldExecuteFunc4(campaignType)) functionsToRun.push(4);
   if (shouldExecuteFunc5(campaignType)) functionsToRun.push(5);
+
+  // FIX ii: se siamo in modalità test (restrictToFunctions passato), riduci alle sole funzioni richieste
+  if (restrictToFunctions && restrictToFunctions.length > 0) {
+    functionsToRun = functionsToRun.filter(f => restrictToFunctions.includes(f));
+    console.log(`   🧪 [TEST MODE] Funzioni ristrette a: ${functionsToRun.join(',')}`);
+  }
 
   if (functionsToRun.length === 0) return { count: 0, reportIds: [] };
 
@@ -271,7 +282,9 @@ export async function submitReportsForCampaign(
       const startDateStr = startDate.toISOString().split('T')[0];
       const endDateStr = now.toISOString().split('T')[0];
 
-      const columns = ['impressions', 'clicks', 'cost', 'purchases14d'];
+      // FIX bug 2: include 'sales14d' (mapped via 'sales' alias) so F2/F3/F4 read real ACoS
+      // instead of always seeing 0 sales → fascia 5 → wrong placement/bid decisions
+      const columns = ['impressions', 'clicks', 'cost', 'purchases14d', 'sales14d'];
       let reportId: string;
       try {
         reportId = await apiService.requestReportV3(
