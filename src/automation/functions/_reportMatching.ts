@@ -35,18 +35,42 @@ export function extractMatchTarget(item: any): string {
 }
 
 /**
- * Trova le metriche per un item nel report. Prova prima il match per ID
- * (per backward compat se mai un report contenesse keywordId/targetId),
- * poi fallback su matching testuale via 'targeting'.
+ * Trova le metriche per un item nel report.
+ *
+ * Il report v3 spTargeting NON è filtrato per campagna (Amazon non supporta
+ * campaignIdFilter su questi report) — restituisce TUTTE le righe dell'account
+ * con almeno qualche impression negli ultimi 28gg.
+ *
+ * Quindi è OBBLIGATORIO filtrare prima per campaignId (e quando possibile
+ * adGroupId) per evitare falsi positivi tra campagne diverse che usano
+ * la stessa keyword o targeting expression.
+ *
+ * @param reportData - tutte le righe del report (potenzialmente di più campagne)
+ * @param item - keyword o target da matchare
+ * @param campaignId - campagna corrente; obbligatorio per evitare cross-campaign match
  */
-export function findMetricsForItem(reportData: any[], item: any): any | undefined {
+export function findMetricsForItem(reportData: any[], item: any, campaignId?: string): any | undefined {
   const itemId = item.keywordId || item.targetId;
   const itemIdStr = itemId !== undefined && itemId !== null ? String(itemId) : '';
   const matchTarget = extractMatchTarget(item);
+  const itemAdGroupId = item.adGroupId !== undefined && item.adGroupId !== null
+    ? String(item.adGroupId)
+    : '';
 
-  return reportData.find((r: any) =>
+  // Filtro 1: restringe alle righe della campagna corrente (se passata)
+  const scoped = campaignId
+    ? reportData.filter((r: any) => String(r.campaignId) === String(campaignId))
+    : reportData;
+
+  return scoped.find((r: any) =>
+    // Match per ID (improbabile ma manteniamo per backward compat)
     (itemIdStr && r.keywordId && String(r.keywordId) === itemIdStr) ||
     (itemIdStr && r.targetId && String(r.targetId) === itemIdStr) ||
-    matchTargeting(r.targeting, matchTarget)
+    // Match per testo, ma SOLO se adGroupId combacia (riduce falsi positivi
+    // di keywords/target con stesso testo in ad group diversi della stessa campagna)
+    (itemAdGroupId && r.adGroupId && String(r.adGroupId) === itemAdGroupId &&
+      matchTargeting(r.targeting, matchTarget)) ||
+    // Fallback: match solo testuale se item non ha adGroupId
+    (!itemAdGroupId && matchTargeting(r.targeting, matchTarget))
   );
 }

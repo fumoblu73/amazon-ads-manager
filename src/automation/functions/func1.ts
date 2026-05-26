@@ -137,10 +137,11 @@ export async function executeFunc1(
     }
 
     // DIAGNOSTIC LOGS (temporanei, per investigare bug 9 residuo su Product Targeting)
-    console.log(`🔬 [DIAG] Report totale: ${reportData.length} righe | Items API: ${items.length}`);
+    const reportScoped = reportData.filter((r: any) => String(r.campaignId) === String(campaignId));
+    console.log(`🔬 [DIAG] Report totale: ${reportData.length} righe | Report SCOPED a questa campagna: ${reportScoped.length} righe | Items API: ${items.length}`);
     if (items.length > 0) {
       const sampleItem = items[0];
-      console.log(`🔬 [DIAG] Sample item structure:`, JSON.stringify({
+      console.log(`🔬 [DIAG] Sample item: ` + JSON.stringify({
         keywordId: sampleItem.keywordId,
         targetId: sampleItem.targetId,
         keywordText: sampleItem.keywordText,
@@ -150,16 +151,24 @@ export async function executeFunc1(
         expressionType: sampleItem.expressionType,
         expression: sampleItem.expression,
         resolvedExpression: sampleItem.resolvedExpression,
-      }, null, 2));
+      }));
     }
-    if (reportData.length > 0) {
-      const sampleRow = reportData[0];
-      console.log(`🔬 [DIAG] Sample report row:`, JSON.stringify({
-        targeting: sampleRow.targeting,
+    if (reportScoped.length > 0) {
+      const sampleRow = reportScoped[0];
+      console.log(`🔬 [DIAG] Sample report row (scoped): ` + JSON.stringify({
+        campaignId: sampleRow.campaignId,
         adGroupId: sampleRow.adGroupId,
+        targeting: sampleRow.targeting,
         impressions: sampleRow.impressions,
         clicks: sampleRow.clicks,
-      }, null, 2));
+      }));
+    } else if (reportData.length > 0) {
+      const sampleRow = reportData[0];
+      console.log(`🔬 [DIAG] No scoped rows. Sample row from unscoped report: ` + JSON.stringify({
+        campaignId: sampleRow.campaignId,
+        adGroupId: sampleRow.adGroupId,
+        targeting: sampleRow.targeting,
+      }));
     }
     // Conta gli state degli items (enabled vs paused vs archived)
     const stateCounts: Record<string, number> = {};
@@ -167,7 +176,7 @@ export async function executeFunc1(
       const s = it.state || 'unknown';
       stateCounts[s] = (stateCounts[s] || 0) + 1;
     }
-    console.log(`🔬 [DIAG] Items per state:`, JSON.stringify(stateCounts));
+    console.log(`🔬 [DIAG] Items per state: ` + JSON.stringify(stateCounts));
 
     // 5. Processa ogni item
     // Diagnostico: raccogli fino a 3 "missed" per dump dettagliato
@@ -184,7 +193,7 @@ export async function executeFunc1(
         // Trova le metriche del report per questo item
         // FIX bug 9: il report v3 spTargeting non contiene keywordId/targetId,
         // serve match via keywordText/expression usando l'helper condiviso.
-        const metrics = findMetricsForItem(reportData, item);
+        const metrics = findMetricsForItem(reportData, item, campaignId);
         if (!metrics) {
           result.itemsWithoutMetrics++;
           // DIAGNOSTIC: cattura i primi 3 missed per dump dettagliato
@@ -254,16 +263,16 @@ export async function executeFunc1(
     if (missedSamples.length > 0) {
       console.log(`🔬 [DIAG] Sample missed items (max 3):`);
       missedSamples.forEach((s, i) => {
-        console.log(`   [${i + 1}]`, JSON.stringify(s));
+        console.log(`   [${i + 1}] ` + JSON.stringify(s));
       });
-      // Cerca per il PRIMO missed sample tutte le righe del report con stesso adGroupId
+      // Cerca nel report SCOPED a campagna (non in tutto il report)
       const firstMissed = missedSamples[0];
-      const sameAdGroupRows = reportData.filter((r: any) =>
+      const sameAdGroupRowsScoped = reportScoped.filter((r: any) =>
         firstMissed.adGroupId && String(r.adGroupId) === String(firstMissed.adGroupId)
       );
-      console.log(`🔬 [DIAG] Righe report con stesso adGroupId del primo missed (${firstMissed.adGroupId}): ${sameAdGroupRows.length}`);
-      if (sameAdGroupRows.length > 0 && sameAdGroupRows.length <= 5) {
-        sameAdGroupRows.forEach((r: any, i: number) => {
+      console.log(`🔬 [DIAG] Righe report scoped con stesso adGroupId del primo missed (${firstMissed.adGroupId}): ${sameAdGroupRowsScoped.length}`);
+      if (sameAdGroupRowsScoped.length > 0 && sameAdGroupRowsScoped.length <= 5) {
+        sameAdGroupRowsScoped.forEach((r: any, i: number) => {
           console.log(`     [${i + 1}] targeting="${r.targeting}", imp=${r.impressions}, clicks=${r.clicks}`);
         });
       }
