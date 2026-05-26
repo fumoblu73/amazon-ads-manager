@@ -944,12 +944,14 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
 
     // Submit report alla pipeline produzione (pending_reports → process-reports)
     // dryRun=true: report reali sottomessi ad Amazon, ma le funzioni girano in modalità simulazione (nessuna modifica)
+    // FIX ii: restrictToFunctions=[functionNumber] isola la funzione richiesta dall'utente
+    // (così non si processano automaticamente F2,F3,F4,F5 anche se si è cliccato solo F1)
     let totalSubmitted = 0;
     const allReportIds: string[] = [];
     for (const campaign of campaigns) {
       try {
         const amazonCamp = { campaignId: campaign.amazonCampaignId, name: campaign.name, state: campaign.state, createdAt: campaign.createdAt };
-        const result = await submitReportsForCampaign(userId, marketplace, amazonCamp, apiService, dryRun ?? false);
+        const result = await submitReportsForCampaign(userId, marketplace, amazonCamp, apiService, dryRun ?? false, [functionNumber]);
         totalSubmitted += result.count;
         allReportIds.push(...result.reportIds);
       } catch (err: any) {

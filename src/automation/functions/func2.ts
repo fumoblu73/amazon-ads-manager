@@ -175,10 +175,20 @@ export async function executeFunc2(
     console.log(`   Rest of Search: ${currentPlacements.restOfSearch}% → ${result.newPlacements.restOfSearch}%`);
     console.log(`   Product Pages: ${currentPlacements.productPages}% → ${result.newPlacements.productPages}%`);
 
-    // 8. Aggiorna i placement su Amazon (solo se NON dryRun)
-    if (!cfg.dryRun) {
+    // 8. Aggiorna i placement su Amazon (solo se NON dryRun e se sono effettivamente cambiati)
+    // FIX bug 10 (rinforzo): evita chiamata API inutile se i nuovi placement coincidono con
+    // quelli attuali. Riduce rumore nella cronologia Amazon e protegge da bug di calcolo che
+    // dovessero "ricalcolare" gli stessi valori senza un vero motivo.
+    const samePlacements =
+      result.newPlacements.topOfSearch === currentPlacements.topOfSearch &&
+      result.newPlacements.restOfSearch === currentPlacements.restOfSearch &&
+      result.newPlacements.productPages === currentPlacements.productPages;
+
+    if (!cfg.dryRun && !samePlacements) {
       await apiService.updateCampaignPlacements(campaignId, result.newPlacements);
       result.placementsUpdated = true;
+    } else if (samePlacements) {
+      console.log(`   ℹ️ Placements invariati — nessuna chiamata API`);
     }
 
     console.log('────────────────────────────────────────');
