@@ -181,8 +181,18 @@ class AmazonApiService {
   // Recupera i dettagli di una singola campagna
   async getCampaign(campaignId: string): Promise<any> {
     try {
-      const response = await this.client.get(`/v2/sp/campaigns/${campaignId}`);
-      return response.data;
+      // FIX: l'endpoint legacy v2 GET /v2/sp/campaigns/{id} è stato deprecato
+      // da Amazon (404). Usare API v3 con campaignIdFilter come per getCampaigns.
+      const response = await this.client.post('/sp/campaigns/list', {
+        campaignIdFilter: { include: [campaignId] }
+      }, {
+        headers: {
+          'Content-Type': 'application/vnd.spcampaign.v3+json',
+          'Accept': 'application/vnd.spcampaign.v3+json'
+        }
+      });
+      const campaigns = response.data.campaigns || [];
+      return campaigns[0] || null;
     } catch (error) {
       console.error(`❌ Errore recupero campagna ${campaignId}:`, error);
       throw error;
