@@ -35,7 +35,7 @@ export interface Func1Result {
     currentBid: number;
     impressions: number;
     clicks: number;
-    action: 'increased' | 'skipped' | 'no_bid';
+    action: 'increased' | 'skipped' | 'no_bid' | 'no_data';
     newBid?: number;
   }>;
 }
@@ -195,25 +195,36 @@ export async function executeFunc1(
         // serve match via keywordText/expression usando l'helper condiviso.
         const metrics = findMetricsForItem(reportData, item, campaignId);
         if (!metrics) {
+          // STRATEGIA FAST ACOS: se metrics undefined, l'item è quasi sempre un
+          // target dormiente (0 impression in 28gg, escluso da Amazon dal report).
+          // Verificato in console: su Product, dei 280 "missed" 288 hanno davvero
+          // 0 impression. Strategia: alzare il bid è gratuito (paghi a click), e
+          // F3 metterà eventualmente in pausa quelli che dopo i click non vendono.
+          // Il fix A (match esatto) elimina i falsi positivi del vecchio includes
+          // bidirezionale, quindi questo default è ora sicuro.
           result.itemsWithoutMetrics++;
-          // DIAGNOSTIC: cattura i primi 3 missed per dump dettagliato
+          // DIAGNOSTIC: cattura i primi 3 missed per dump (visibile in DIAG log)
           if (missedSamples.length < 3) {
             missedSamples.push({
               keywordId: item.keywordId,
               targetId: item.targetId,
               keywordText: item.keywordText,
+              adGroupId: item.adGroupId,
               expressionType: item.expressionType,
               expression: item.expression,
               resolvedExpression: item.resolvedExpression,
-              extractedMatchTarget: item.keywordText || item.resolvedExpression?.value || item.expression?.[0]?.value || '<EMPTY>',
+              extractedMatchTarget: item.keywordText
+                || (Array.isArray(item.resolvedExpression) && item.resolvedExpression[0]?.value)
+                || (Array.isArray(item.expression) && item.expression[0]?.value)
+                || '<EMPTY>',
               state: item.state,
               bid: item.bid,
             });
           }
         }
 
-        // Se non ci sono dati nel report, la keyword ha 0 impressioni e 0 click
-        // (Amazon include nel report solo items con almeno qualche attivita')
+        // Se non ci sono dati nel report, considera 0 impressioni / 0 click
+        // (Amazon include nel report solo items con almeno 1 impression in 28gg)
         const impressions = metrics?.impressions || 0;
         const clicks = metrics?.clicks || 0;
 

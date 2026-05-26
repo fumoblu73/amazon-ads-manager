@@ -10,28 +10,67 @@
 // Match per ID quindi fallisce sempre → metrics undefined → defaults a 0.
 
 /**
- * Confronta il campo 'targeting' del report (testo keyword o espressione ASIN)
- * con il matchTarget dell'item (keywordText o resolvedExpression value).
+ * Confronta il campo 'targeting' del report con il matchTarget dell'item.
  *
- * API v3 usa formati come: 'asin="B0XXXX"', 'keyword text', ecc.
- * quindi serve un match flessibile (esatto, includes in entrambe le direzioni).
+ * Il report v3 spTargeting usa formati diversi a seconda del tipo:
+ *   - Keyword: 'amish survival guide' (testo nudo)
+ *   - ASIN target: 'asin="B0XXXX"'
+ *   - Categoria target: 'category="123456"' o simili
+ *   - Auto target: 'queryHighRelMatches', 'queryBroadRelMatches', etc
+ *
+ * L'item dall'API ha:
+ *   - keyword: item.keywordText = 'amish survival guide'
+ *   - ASIN target: item.expression = [{type:'ASIN_SAME_AS', value:'B0XXXX'}]
+ *   - Auto target: item.expression = [{type:'QUERY_HIGH_REL_MATCHES'}] (no value)
+ *
+ * Strategia di matching:
+ *   1. Se item.keywordText: match esatto (case-insensitive) con reportTargeting
+ *   2. Se report ha 'asin="X"' e item ha expression ASIN_SAME_AS con value Y: confronta esatto X===Y
+ *   3. Se report ha 'category="X"' e item ha expression CATEGORY con value Y: confronta esatto X===Y
+ *   4. Altrimenti: match esatto plain (per auto targets che hanno testo simile in entrambi)
+ *
+ * Questo evita falsi positivi quando keyword/target hanno testi che sono prefisso
+ * o suffisso di altri (es. 'amish' matchava 'amish survival guide' con il vecchio
+ * algoritmo bidirectional-includes).
  */
 export function matchTargeting(reportTargeting: string | undefined | null, itemMatchTarget: string | undefined | null): boolean {
   if (!reportTargeting || !itemMatchTarget) return false;
-  if (reportTargeting === itemMatchTarget) return true;
-  if (reportTargeting.includes(itemMatchTarget)) return true;
-  if (itemMatchTarget.includes(reportTargeting)) return true;
+
+  const r = String(reportTargeting).trim();
+  const t = String(itemMatchTarget).trim();
+
+  // Match esatto (incluso ASIN nudo o keyword nuda)
+  if (r.toLowerCase() === t.toLowerCase()) return true;
+
+  // Pattern Amazon: 'asin="B0XXXX"' o 'category="123"' - estrai il valore tra virgolette
+  const quotedMatch = r.match(/^[a-zA-Z]+="([^"]+)"$/);
+  if (quotedMatch) {
+    const innerValue = quotedMatch[1];
+    if (innerValue.toLowerCase() === t.toLowerCase()) return true;
+  }
+
   return false;
 }
 
 /**
- * Estrae il "match target" usabile per il matching da un item (keyword o target).
+ * Estrae il "match target" da un item. Per keyword usa keywordText;
+ * per target ASIN/categoria usa il primo expression.value.
+ *
+ * NB: expression è un ARRAY (non un oggetto) — il bug precedente in
+ * resolvedExpression?.value (oggetto vs array) restituiva sempre undefined.
  */
 export function extractMatchTarget(item: any): string {
-  return item.keywordText
-    || item.resolvedExpression?.value
-    || item.expression?.[0]?.value
-    || '';
+  if (item.keywordText) return String(item.keywordText);
+
+  // expression e resolvedExpression sono array
+  const exprArray = Array.isArray(item.resolvedExpression) ? item.resolvedExpression
+                  : Array.isArray(item.expression) ? item.expression
+                  : null;
+  if (exprArray && exprArray.length > 0 && exprArray[0]?.value) {
+    return String(exprArray[0].value);
+  }
+
+  return '';
 }
 
 /**
