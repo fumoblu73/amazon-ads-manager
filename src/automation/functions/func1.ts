@@ -136,7 +136,43 @@ export async function executeFunc1(
       console.log(`📊 Trovati ${items.length} targets`);
     }
 
+    // DIAGNOSTIC LOGS (temporanei, per investigare bug 9 residuo su Product Targeting)
+    console.log(`🔬 [DIAG] Report totale: ${reportData.length} righe | Items API: ${items.length}`);
+    if (items.length > 0) {
+      const sampleItem = items[0];
+      console.log(`🔬 [DIAG] Sample item structure:`, JSON.stringify({
+        keywordId: sampleItem.keywordId,
+        targetId: sampleItem.targetId,
+        keywordText: sampleItem.keywordText,
+        state: sampleItem.state,
+        bid: sampleItem.bid,
+        adGroupId: sampleItem.adGroupId,
+        expressionType: sampleItem.expressionType,
+        expression: sampleItem.expression,
+        resolvedExpression: sampleItem.resolvedExpression,
+      }, null, 2));
+    }
+    if (reportData.length > 0) {
+      const sampleRow = reportData[0];
+      console.log(`🔬 [DIAG] Sample report row:`, JSON.stringify({
+        targeting: sampleRow.targeting,
+        adGroupId: sampleRow.adGroupId,
+        impressions: sampleRow.impressions,
+        clicks: sampleRow.clicks,
+      }, null, 2));
+    }
+    // Conta gli state degli items (enabled vs paused vs archived)
+    const stateCounts: Record<string, number> = {};
+    for (const it of items) {
+      const s = it.state || 'unknown';
+      stateCounts[s] = (stateCounts[s] || 0) + 1;
+    }
+    console.log(`🔬 [DIAG] Items per state:`, JSON.stringify(stateCounts));
+
     // 5. Processa ogni item
+    // Diagnostico: raccogli fino a 3 "missed" per dump dettagliato
+    const missedSamples: any[] = [];
+
     for (const item of items) {
       result.itemsProcessed++;
 
@@ -151,6 +187,20 @@ export async function executeFunc1(
         const metrics = findMetricsForItem(reportData, item);
         if (!metrics) {
           result.itemsWithoutMetrics++;
+          // DIAGNOSTIC: cattura i primi 3 missed per dump dettagliato
+          if (missedSamples.length < 3) {
+            missedSamples.push({
+              keywordId: item.keywordId,
+              targetId: item.targetId,
+              keywordText: item.keywordText,
+              expressionType: item.expressionType,
+              expression: item.expression,
+              resolvedExpression: item.resolvedExpression,
+              extractedMatchTarget: item.keywordText || item.resolvedExpression?.value || item.expression?.[0]?.value || '<EMPTY>',
+              state: item.state,
+              bid: item.bid,
+            });
+          }
         }
 
         // Se non ci sono dati nel report, la keyword ha 0 impressioni e 0 click
@@ -199,6 +249,26 @@ export async function executeFunc1(
     console.log(`   Items senza match nel report: ${result.itemsWithoutMetrics}/${result.itemsProcessed}`);
     console.log(`   Bid ${cfg.dryRun ? 'da aumentare' : 'aumentati'}: ${result.itemsIncreased}`);
     console.log(`   Errori: ${result.errors.length}`);
+
+    // DIAGNOSTIC: dump dei missed samples per investigare bug 9 residuo
+    if (missedSamples.length > 0) {
+      console.log(`🔬 [DIAG] Sample missed items (max 3):`);
+      missedSamples.forEach((s, i) => {
+        console.log(`   [${i + 1}]`, JSON.stringify(s));
+      });
+      // Cerca per il PRIMO missed sample tutte le righe del report con stesso adGroupId
+      const firstMissed = missedSamples[0];
+      const sameAdGroupRows = reportData.filter((r: any) =>
+        firstMissed.adGroupId && String(r.adGroupId) === String(firstMissed.adGroupId)
+      );
+      console.log(`🔬 [DIAG] Righe report con stesso adGroupId del primo missed (${firstMissed.adGroupId}): ${sameAdGroupRows.length}`);
+      if (sameAdGroupRows.length > 0 && sameAdGroupRows.length <= 5) {
+        sameAdGroupRows.forEach((r: any, i: number) => {
+          console.log(`     [${i + 1}] targeting="${r.targeting}", imp=${r.impressions}, clicks=${r.clicks}`);
+        });
+      }
+    }
+
     console.log('════════════════════════════════════════\n');
 
   } catch (error) {
