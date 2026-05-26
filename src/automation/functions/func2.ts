@@ -138,16 +138,28 @@ export async function executeFunc2(
       console.log(`📊 Cerco campaignId: ${campaignId} (type: ${typeof campaignId})`);
     }
 
-    // 4. Trova metriche della campagna (usa toString per evitare mismatch string/number)
-    const campaignMetrics = reportData.find((r: any) => String(r.campaignId) === String(campaignId));
+    // 4. Aggrega metriche della campagna sommando TUTTE le righe per campaignId
+    // FIX bug 1 (definitivo): F2 chiamava reportData.find() prendendo SOLO la prima
+    // riga del report come fosse il totale campagna. Ma il cachedApiService passa
+    // il report spTargeting (per-keyword/target), quindi 'prima riga' = una singola
+    // keyword. Questo causava:
+    //   - cost reale di broad (somma di 442 keyword) → cost di 1 sola keyword
+    //   - sales reali (3 vendite distribuite tra keyword) → spesso 0 se la prima
+    //     riga non ha sales14d > 0
+    // Soluzione: aggregare con filter + reduce per ottenere il vero totale campagna.
+    const campaignRows = reportData.filter((r: any) => String(r.campaignId) === String(campaignId));
 
-    if (!campaignMetrics) {
-      throw new Error(`Metriche campagna non trovate nel report (${reportData.length} righe, ids: ${reportData.slice(0, 5).map((r: any) => r.campaignId).join(',')})`);
+    if (campaignRows.length === 0) {
+      throw new Error(`Nessuna riga per la campagna nel report (${reportData.length} righe totali, ids: ${reportData.slice(0, 5).map((r: any) => r.campaignId).join(',')})`);
     }
 
-    // Amazon API v3 usa 'sales14d' invece di 'sales'
-    const cost = campaignMetrics.cost || 0;
-    const sales = campaignMetrics.sales14d || campaignMetrics.sales || 0;
+    // Somma cost, sales14d, clicks, impressions sulle righe della campagna
+    const cost = campaignRows.reduce((sum: number, r: any) => sum + (r.cost || 0), 0);
+    const sales = campaignRows.reduce((sum: number, r: any) =>
+      sum + (r.sales14d || r.sales || 0), 0);
+    const totalClicks = campaignRows.reduce((sum: number, r: any) => sum + (r.clicks || 0), 0);
+    const totalImpressions = campaignRows.reduce((sum: number, r: any) => sum + (r.impressions || 0), 0);
+    console.log(`🔬 [F2 aggregati] Righe campagna: ${campaignRows.length}, cost=${cost.toFixed(2)}, sales=${sales.toFixed(2)}, clicks=${totalClicks}, impressions=${totalImpressions}`);
 
     // 5. Calcola ACoS della campagna (se nessuna vendita, usa 999 per evitare Infinity/null in JSON)
     const rawAcos = calculateAcos(cost, sales);
