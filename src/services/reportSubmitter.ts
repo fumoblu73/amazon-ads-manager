@@ -14,6 +14,7 @@ import { createUserAmazonApiService } from './UserAmazonApiFactory';
 import { isInWarmupPeriod, getCampaignCreatedAt, formatDateForAmazon } from '../utils/timeframe';
 import { automationScheduler } from '../automation/scheduler';
 import { sendSubmitConfirmation, SubmitSummaryItem } from './emailService';
+import { getUserAutomationSettings } from '../automation/rules';
 
 /**
  * Extracts reportId from a 425 duplicate error response.
@@ -272,9 +273,13 @@ export async function submitReportsForCampaign(
 
   console.log(`   📢 ${campaignName} (tipo ${campaignType}): funzioni ${functionsToRun.join(',')}`);
 
-  // === REPORT 1: spTargeting (needed by F1, F2, F3, F4) ===
-  const needsSpTargeting = functionsToRun.some(f => [1, 2, 3, 4].includes(f));
-  if (needsSpTargeting) {
+  // === REPORT 1: spTargeting 28gg (needed by F2, F3, F4) ===
+  // FIX bug 6/D3: F1 ora ha il PROPRIO report a func1_frequency giorni (default 3).
+  // Il 28gg resta per F2 (placement adjustment ACoS campagna), F3 (timeframe dinamico
+  // 15-30gg in base al traffico), F4 (Auto Ad analysis con timeframe dinamico).
+  // F1 lavora su finestra breve come da spec FAST ACOS originale.
+  const needsSpTargeting28d = functionsToRun.some(f => [2, 3, 4].includes(f));
+  if (needsSpTargeting28d) {
     try {
       // Use longest timeframe needed: F2 needs 28 days, F3 dynamic, F1 needs 3 days
       const startDate = new Date();
@@ -359,7 +364,7 @@ export async function submitReportsForCampaign(
           startDate: startDateStr,
           endDate: endDateStr,
           status: 'submitted',
-          functionNumbers: JSON.stringify(functionsToRun.filter(f => [1, 2, 3, 4].includes(f))),
+          functionNumbers: JSON.stringify(functionsToRun.filter(f => [2, 3, 4].includes(f))),
           attempts: 0,
           maxAttempts: 20,
           dryRun,
@@ -373,6 +378,78 @@ export async function submitReportsForCampaign(
       }
     } catch (error: any) {
       console.error(`     ❌ spTargeting submit failed: ${error.message}`);
+    }
+  }
+
+  // === REPORT 2: spTargeting SHORT window (needed by F1 only) ===
+  // FIX bug 6/D3: F1 ha la propria finestra temporale corta (default 3gg) dalla spec.
+  // Prima leggeva il report 28gg trattandolo come 3gg → soglia 'clicks≤0 AND imp≤20'
+  // sempre soddisfatta → F1 alzava bid quasi ovunque.
+  // Adesso F1 ha report dedicato sulla VERA finestra di func1_frequency.
+  // reportType nel DB = 'spTargeting' (stesso valore), distinguibile da functionNumbers=[1]
+  // e da endDate-startDate breve.
+  const needsSpTargetingShort = functionsToRun.includes(1);
+  if (needsSpTargetingShort) {
+    try {
+      // Recupera la frequency dell'utente per la finestra (default 3gg)
+      const userId_norm = userId === 'global' ? null : userId;
+      let func1Days = 3;
+      if (userId_norm) {
+        try {
+          const userConfig = await getUserAutomationSettings(userId_norm);
+          func1Days = userConfig.func1_frequency || 3;
+        } catch (_) { /* usa default 3 */ }
+      }
+
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - func1Days);
+      const startDateStr = startDate.toISOString().split('T')[0];
+      const endDateStr = now.toISOString().split('T')[0];
+
+      const columnsShort = ['impressions', 'clicks', 'cost', 'purchases14d', 'sales14d'];
+      let reportIdShort: string;
+      try {
+        reportIdShort = await apiService.requestReportV3(
+          startDateStr, endDateStr, 'spTargeting', columnsShort
+        );
+      } catch (submitError: any) {
+        const duplicateId = extractReportIdFrom425(submitError);
+        if (duplicateId) {
+          reportIdShort = duplicateId;
+          console.log(`     ♻️ spTargeting SHORT duplicate, reusing: ${reportIdShort}`);
+        } else {
+          throw submitError;
+        }
+      }
+
+      if (await pendingReportExists(reportRepo, reportIdShort, campaignId, 'spTargeting')) {
+        console.log(`     ⏭️ spTargeting SHORT already pending, skipping: ${reportIdShort}`);
+        if (!reportIds.includes(reportIdShort)) reportIds.push(reportIdShort);
+      } else {
+        const pendingReport = reportRepo.create({
+          userId,
+          marketplace,
+          campaignId,
+          campaignName,
+          campaignType,
+          reportId: reportIdShort,
+          reportType: 'spTargeting',
+          columns: JSON.stringify(columnsShort),
+          startDate: startDateStr,
+          endDate: endDateStr,
+          status: 'submitted',
+          functionNumbers: JSON.stringify([1]),
+          attempts: 0,
+          maxAttempts: 20,
+          dryRun
+        });
+        await reportRepo.save(pendingReport);
+        submitted++;
+        reportIds.push(reportIdShort);
+        console.log(`     ✅ spTargeting SHORT (${func1Days}gg) for F1: ${reportIdShort}`);
+      }
+    } catch (error: any) {
+      console.error(`     ❌ spTargeting SHORT submit failed: ${error.message}`);
     }
   }
 
