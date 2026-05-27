@@ -556,6 +556,91 @@ router.post('/test-email', authMiddleware, async (req: AuthRequest, res: Respons
 });
 
 // ================================================
+// ENDPOINT: PENDING REPORTS INSPECTION & CLEANUP
+// ================================================
+// GET /api/automation/pending-reports — lista i pending_reports dell'utente
+// Filtri opzionali: ?status=submitted (default: tutti tranne 'processed')
+//
+// DELETE /api/automation/pending-reports — cancella i pending_reports dell'utente
+// Filtri opzionali: ?status=submitted (default: tutti tranne 'processed')
+// Utile per pulire la coda quando si fanno test ripetuti e si accumulano
+// pending_reports non ancora processati.
+router.get('/pending-reports', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    const { PendingReport } = await import('../entities/PendingReport');
+    const { Not } = await import('typeorm');
+    const status = (req.query.status as string) || undefined;
+
+    const where: any = { userId };
+    if (status) {
+      where.status = status;
+    } else {
+      where.status = Not('processed');
+    }
+
+    const reports = await AppDataSource.getRepository(PendingReport).find({
+      where,
+      order: { createdAt: 'DESC' } as any,
+    });
+
+    const summary = reports.reduce((acc: Record<string, number>, r: any) => {
+      const key = `${r.status}_${r.reportType}`;
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+
+    res.json({
+      success: true,
+      total: reports.length,
+      summary,
+      reports: reports.map((r: any) => ({
+        id: r.id,
+        campaignName: r.campaignName,
+        campaignId: r.campaignId,
+        reportType: r.reportType,
+        reportId: r.reportId,
+        status: r.status,
+        functionNumbers: r.functionNumbers,
+        dryRun: r.dryRun,
+        attempts: r.attempts,
+        errorMessage: r.errorMessage,
+        createdAt: r.createdAt,
+      }))
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.delete('/pending-reports', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    const { PendingReport } = await import('../entities/PendingReport');
+    const { Not } = await import('typeorm');
+    const status = (req.query.status as string) || undefined;
+
+    const where: any = { userId };
+    if (status) {
+      where.status = status;
+    } else {
+      // Default: cancella tutto tranne i già 'processed' (per evitare di perdere log)
+      where.status = Not('processed');
+    }
+
+    const result = await AppDataSource.getRepository(PendingReport).delete(where);
+
+    res.json({
+      success: true,
+      deleted: result.affected || 0,
+      filter: where,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ================================================
 // ENDPOINT: TEST BID INCREASE (Real API verification)
 // ================================================
 // Test endpoint to verify real connection to Amazon Ads API
