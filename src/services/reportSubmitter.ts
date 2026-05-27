@@ -246,6 +246,17 @@ export async function submitReportsForCampaign(
   let submitted = 0;
   const reportIds: string[] = [];
 
+  // FIX safety check: skip campagne non attive (PAUSED/ARCHIVED).
+  // Se l'utente ha messo in pausa una campagna in Amazon, F1-F5 NON devono
+  // operare su di essa. Il report a 3gg di una campagna in stop è quasi vuoto:
+  // F1 trattava la maggior parte delle keyword come 'dormienti' e ne aumentava
+  // i bid, comportamento sicuramente NON desiderato dall'utente.
+  const stateRaw = (campaign.state || '').toString().toLowerCase();
+  if (stateRaw && stateRaw !== 'enabled') {
+    console.log(`   ⏭️ Campagna ${campaignName} non attiva (state=${campaign.state}) — submit saltato`);
+    return { count: 0, reportIds: [] };
+  }
+
   // Skip warmup
   if (isInWarmupPeriod(createdAt)) {
     return { count: 0, reportIds: [] };
