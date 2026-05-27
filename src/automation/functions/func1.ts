@@ -136,52 +136,7 @@ export async function executeFunc1(
       console.log(`📊 Trovati ${items.length} targets`);
     }
 
-    // DIAGNOSTIC LOGS (temporanei, per investigare bug 9 residuo su Product Targeting)
-    const reportScoped = reportData.filter((r: any) => String(r.campaignId) === String(campaignId));
-    console.log(`🔬 [DIAG] Report totale: ${reportData.length} righe | Report SCOPED a questa campagna: ${reportScoped.length} righe | Items API: ${items.length}`);
-    if (items.length > 0) {
-      const sampleItem = items[0];
-      console.log(`🔬 [DIAG] Sample item: ` + JSON.stringify({
-        keywordId: sampleItem.keywordId,
-        targetId: sampleItem.targetId,
-        keywordText: sampleItem.keywordText,
-        state: sampleItem.state,
-        bid: sampleItem.bid,
-        adGroupId: sampleItem.adGroupId,
-        expressionType: sampleItem.expressionType,
-        expression: sampleItem.expression,
-        resolvedExpression: sampleItem.resolvedExpression,
-      }));
-    }
-    if (reportScoped.length > 0) {
-      const sampleRow = reportScoped[0];
-      console.log(`🔬 [DIAG] Sample report row (scoped): ` + JSON.stringify({
-        campaignId: sampleRow.campaignId,
-        adGroupId: sampleRow.adGroupId,
-        targeting: sampleRow.targeting,
-        impressions: sampleRow.impressions,
-        clicks: sampleRow.clicks,
-      }));
-    } else if (reportData.length > 0) {
-      const sampleRow = reportData[0];
-      console.log(`🔬 [DIAG] No scoped rows. Sample row from unscoped report: ` + JSON.stringify({
-        campaignId: sampleRow.campaignId,
-        adGroupId: sampleRow.adGroupId,
-        targeting: sampleRow.targeting,
-      }));
-    }
-    // Conta gli state degli items (enabled vs paused vs archived)
-    const stateCounts: Record<string, number> = {};
-    for (const it of items) {
-      const s = it.state || 'unknown';
-      stateCounts[s] = (stateCounts[s] || 0) + 1;
-    }
-    console.log(`🔬 [DIAG] Items per state: ` + JSON.stringify(stateCounts));
-
     // 5. Processa ogni item
-    // Diagnostico: raccogli fino a 3 "missed" per dump dettagliato
-    const missedSamples: any[] = [];
-
     for (const item of items) {
       result.itemsProcessed++;
 
@@ -203,24 +158,6 @@ export async function executeFunc1(
           // Il fix A (match esatto) elimina i falsi positivi del vecchio includes
           // bidirezionale, quindi questo default è ora sicuro.
           result.itemsWithoutMetrics++;
-          // DIAGNOSTIC: cattura i primi 3 missed per dump (visibile in DIAG log)
-          if (missedSamples.length < 3) {
-            missedSamples.push({
-              keywordId: item.keywordId,
-              targetId: item.targetId,
-              keywordText: item.keywordText,
-              adGroupId: item.adGroupId,
-              expressionType: item.expressionType,
-              expression: item.expression,
-              resolvedExpression: item.resolvedExpression,
-              extractedMatchTarget: item.keywordText
-                || (Array.isArray(item.resolvedExpression) && item.resolvedExpression[0]?.value)
-                || (Array.isArray(item.expression) && item.expression[0]?.value)
-                || '<EMPTY>',
-              state: item.state,
-              bid: item.bid,
-            });
-          }
         }
 
         // Se non ci sono dati nel report, considera 0 impressioni / 0 click
@@ -269,26 +206,6 @@ export async function executeFunc1(
     console.log(`   Items senza match nel report: ${result.itemsWithoutMetrics}/${result.itemsProcessed}`);
     console.log(`   Bid ${cfg.dryRun ? 'da aumentare' : 'aumentati'}: ${result.itemsIncreased}`);
     console.log(`   Errori: ${result.errors.length}`);
-
-    // DIAGNOSTIC: dump dei missed samples per investigare bug 9 residuo
-    if (missedSamples.length > 0) {
-      console.log(`🔬 [DIAG] Sample missed items (max 3):`);
-      missedSamples.forEach((s, i) => {
-        console.log(`   [${i + 1}] ` + JSON.stringify(s));
-      });
-      // Cerca nel report SCOPED a campagna (non in tutto il report)
-      const firstMissed = missedSamples[0];
-      const sameAdGroupRowsScoped = reportScoped.filter((r: any) =>
-        firstMissed.adGroupId && String(r.adGroupId) === String(firstMissed.adGroupId)
-      );
-      console.log(`🔬 [DIAG] Righe report scoped con stesso adGroupId del primo missed (${firstMissed.adGroupId}): ${sameAdGroupRowsScoped.length}`);
-      if (sameAdGroupRowsScoped.length > 0 && sameAdGroupRowsScoped.length <= 5) {
-        sameAdGroupRowsScoped.forEach((r: any, i: number) => {
-          console.log(`     [${i + 1}] targeting="${r.targeting}", imp=${r.impressions}, clicks=${r.clicks}`);
-        });
-      }
-    }
-
     console.log('════════════════════════════════════════\n');
 
   } catch (error) {

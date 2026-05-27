@@ -692,7 +692,15 @@ async function executeAutomationFunctions(
     console.warn(`     ⚠️ No kdp_book linked to campaign ${report.campaignName}, using fallback`);
   }
 
-  const mockTotalImpressions = 50000;
+  // FIX bug 5: prima era hardcoded a 50000 (dummy), causando F3/F4 a usare sempre
+  // timeframe 30gg / 25gg indipendentemente dal traffico reale. Adesso aggrega le
+  // impression dalle righe del report scoped alla campagna corrente. Il report
+  // copre ~28gg ma la divisione interna in calculateTimeframeFuncX usa /30 — la
+  // differenza è marginale (28/30 ≈ 93%) e non sposta la fascia di timeframe.
+  const realTotalImpressions = reportData
+    .filter((r: any) => String(r.campaignId) === String(report.campaignId))
+    .reduce((sum: number, r: any) => sum + (r.impressions || 0), 0);
+  console.log(`     📊 totalImpressions reali campagna: ${realTotalImpressions}`);
 
   // Recupera placement reali per func2
   // FIX bug 10: se NON riusciamo a leggere i placement correnti, NON usiamo default {0,0,0}.
@@ -754,13 +762,21 @@ async function executeAutomationFunctions(
       });
 
       // Detect campaign type by name and build mapping
+      // FIX bug 4: l'ordine precedente era 'auto' / 'product' / 'super' / altro,
+      // quindi 'Product Super' matchava 'product' per primo → cType=2 invece di 4
+      // (sovrascrivendo eventuale Product Targeting già mappato e impedendo a F5
+      // di propagare ASIN verso la campagna Expanded). Ordine corretto: prima
+      // 'super product' combinati, poi i singoli.
       for (const c of siblingCampaigns) {
         const lower = c.name.toLowerCase();
+        const hasSuper = lower.includes('super');
+        const hasProduct = lower.includes('product');
         let cType: number;
         if (lower.includes('auto') || lower.includes('automatic')) cType = 5;
-        else if (lower.includes('product')) cType = 2;
-        else if (lower.includes('super')) cType = 3;
-        else cType = 1;
+        else if (hasSuper && hasProduct) cType = 4;  // Product Super (Expanded)
+        else if (hasSuper) cType = 3;                // Keyword Super
+        else if (hasProduct) cType = 2;              // Product Targeting
+        else cType = 1;                              // Keyword Broad
 
         // Recupera adGroupId per ogni campagna sibling
         let siblingAdGroupId: string | null = null;
@@ -865,7 +881,7 @@ async function executeAutomationFunctions(
             report.campaignName,
             marketplace,
             book,
-            mockTotalImpressions,
+            realTotalImpressions,
             cachedApiService,
             {
               frequency: config.func3_frequency,
@@ -891,7 +907,7 @@ async function executeAutomationFunctions(
             marketplace,
             realAdGroupId,
             book,
-            mockTotalImpressions,
+            realTotalImpressions,
             cachedApiService,
             {
               frequency: config.func4_frequency,
