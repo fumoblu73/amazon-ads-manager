@@ -249,6 +249,24 @@ export const automationApi = {
     const response = await apiClient.post<any>('/api/automation/test-email');
     return response.data;
   },
+
+  // Ispeziona pending_reports (default: non-processed) per debug/cleanup test
+  getPendingReports: async (status?: string) => {
+    const url = status
+      ? `/api/automation/pending-reports?status=${encodeURIComponent(status)}`
+      : '/api/automation/pending-reports';
+    const response = await apiClient.get<any>(url);
+    return response.data;
+  },
+
+  // Pulisce pending_reports (default: tutti i non-processed). Utile prima di test ripetuti.
+  clearPendingReports: async (status?: string) => {
+    const url = status
+      ? `/api/automation/pending-reports?status=${encodeURIComponent(status)}`
+      : '/api/automation/pending-reports';
+    const response = await apiClient.delete<any>(url);
+    return response.data;
+  },
 };
 
 // ================================================

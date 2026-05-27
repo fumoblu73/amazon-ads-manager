@@ -54,6 +54,10 @@ export default function TestFunctions() {
   // Persistent notifications (don't auto-dismiss)
   const [notifications, setNotifications] = useState<ReadyNotification[]>([]);
 
+  // Pending reports cleanup
+  const [clearingQueue, setClearingQueue] = useState(false);
+  const [queueMessage, setQueueMessage] = useState<string | null>(null);
+
   useEffect(() => {
     loadBooks();
     return () => {
@@ -133,6 +137,22 @@ export default function TestFunctions() {
       }
     } catch (err: any) {
       setError('Errore caricamento libri: ' + (err.message || 'Unknown'));
+    }
+  };
+
+  const clearQueue = async () => {
+    if (clearingQueue) return;
+    setQueueMessage(null);
+    setClearingQueue(true);
+    try {
+      const result = await automationApi.clearPendingReports();
+      setQueueMessage(`✅ Coda pulita: ${result.deleted} pending_report eliminati`);
+      // Auto-clear message after 5 seconds
+      setTimeout(() => setQueueMessage(null), 5000);
+    } catch (err: any) {
+      setQueueMessage(`❌ Errore pulizia coda: ${err.response?.data?.error || err.message}`);
+    } finally {
+      setClearingQueue(false);
     }
   };
 
@@ -331,8 +351,25 @@ export default function TestFunctions() {
             {!dryRun && (
               <span className="text-xs text-red-400 font-semibold">MODIFICHE REALI</span>
             )}
+            <button
+              onClick={clearQueue}
+              disabled={clearingQueue || loading}
+              title="Cancella i pending_reports in attesa di processing. Utile prima di test ripetuti per evitare di rieseguire funzioni su report vecchi."
+              className={`ml-auto px-3 py-1 rounded text-xs font-semibold border transition-all ${
+                clearingQueue || loading
+                  ? 'opacity-50 cursor-not-allowed border-gray-700 bg-gray-900 text-gray-400'
+                  : 'border-gray-600 bg-gray-900 hover:bg-gray-700 text-gray-300 cursor-pointer'
+              }`}
+            >
+              {clearingQueue ? 'Pulizia in corso…' : '🗑️ Reset coda pending'}
+            </button>
           </div>
         </div>
+        {queueMessage && (
+          <div className="mt-3 text-xs text-gray-300 px-3 py-2 rounded bg-gray-900 border border-gray-700">
+            {queueMessage}
+          </div>
+        )}
       </div>
 
       {/* Bottoni funzioni */}
