@@ -11,6 +11,7 @@
 import { UserAmazonApiService } from '../../services/UserAmazonApiService';
 import { calculateFastAcos, determineFastAcosBand, calculateNewBid, calculateAcos, getSpecialCaseBidAdjustment } from '../../utils/fastAcos';
 import { calculateTimeframeFunc3, formatDateForAmazon } from '../../utils/timeframe';
+import { findMetricsForItem } from './_reportMatching';
 
 export interface Func3Config {
   frequency: number;        // Default: 3 giorni (= Funzione 1)
@@ -144,27 +145,31 @@ export async function executeFunc3(
       console.log(`📅 Report 65gg: chunk A = ultimi 31gg, chunk B = giorni 31-65`);
 
       const reportId65a = await apiService.requestReport(formatDateForAmazon(startDate65a), [
-        'clicks', 'orders'
+        'targeting', 'campaignId', 'clicks', 'orders'
       ]);
       const reportData65a = await apiService.waitAndDownloadReport(reportId65a);
 
       const reportId65b = await apiService.requestReport(
-        formatDateForAmazon(startDate65b), ['clicks', 'orders'], formatDateForAmazon(endDate65b)
+        formatDateForAmazon(startDate65b), ['targeting', 'campaignId', 'clicks', 'orders'], formatDateForAmazon(endDate65b)
       );
       const reportData65b = await apiService.waitAndDownloadReport(reportId65b);
 
-      // Merge: somma clicks e orders dei 2 chunk per ogni targeting
-      const mergedMap: Record<string, { clicks: number; orders: number }> = {};
+      // Merge: somma clicks e orders dei 2 chunk per (campaignId, targeting)
+      // FIX bug F3: chiave composita per non collassare tutto sotto chiave vuota
+      const mergedMap: Record<string, { clicks: number; orders: number; campaignId: any; targeting: string }> = {};
       for (const row of [...reportData65a, ...reportData65b]) {
-        const key = row.targeting || row.keywordId || row.targetId || '';
-        if (!mergedMap[key]) mergedMap[key] = { clicks: 0, orders: 0 };
+        const tgt = row.targeting || '';
+        const cid = row.campaignId || '';
+        const key = `${cid}|||${tgt}`;
+        if (!mergedMap[key]) mergedMap[key] = { clicks: 0, orders: 0, campaignId: cid, targeting: tgt };
         mergedMap[key].clicks += (row.clicks || 0);
         mergedMap[key].orders += (row.purchases14d || row.orders || 0);
       }
-      reportData65 = Object.entries(mergedMap).map(([targeting, data]) => ({
-        targeting,
-        clicks: data.clicks,
-        purchases14d: data.orders
+      reportData65 = Object.values(mergedMap).map((d) => ({
+        targeting: d.targeting,
+        campaignId: d.campaignId,
+        clicks: d.clicks,
+        purchases14d: d.orders
       }));
     }
 
@@ -193,19 +198,6 @@ export async function executeFunc3(
       console.log(`📊 Items campione: ${JSON.stringify(sampleItems)}`);
     }
 
-    // Helper: confronta targeting report con matchTarget dell'item
-    // API v3 usa formati come: 'asin="B0XXXX"', 'keyword text', ecc.
-    const matchTargeting = (reportTargeting: string, itemMatchTarget: string): boolean => {
-      if (!reportTargeting || !itemMatchTarget) return false;
-      // Match esatto
-      if (reportTargeting === itemMatchTarget) return true;
-      // Match parziale: il report può contenere il valore tra virgolette (es. asin="B0XXXX")
-      if (reportTargeting.includes(itemMatchTarget)) return true;
-      // Match inverso: l'item potrebbe essere più lungo del targeting
-      if (itemMatchTarget.includes(reportTargeting)) return true;
-      return false;
-    };
-
     // 6. Processa ogni item
     for (const item of items) {
       result.itemsProcessed++;
@@ -215,18 +207,12 @@ export async function executeFunc3(
         const itemName = item.keywordText || item.expression?.[0]?.value || item.asin || itemId;
         const currentBid = item.bid;
 
-        // Trova metriche - API v3 usa 'targeting' (testo keyword/ASIN) per matching
-        const matchTarget = item.keywordText || item.resolvedExpression?.value || item.expression?.[0]?.value || '';
-        const metrics = reportData.find((r: any) =>
-          (r.keywordId && String(r.keywordId) === String(itemId)) ||
-          (r.targetId && String(r.targetId) === String(itemId)) ||
-          matchTargeting(r.targeting, matchTarget)
-        );
-        const metrics65 = reportData65.find((r: any) =>
-          (r.keywordId && String(r.keywordId) === String(itemId)) ||
-          (r.targetId && String(r.targetId) === String(itemId)) ||
-          matchTargeting(r.targeting, matchTarget)
-        );
+        // FIX bug F3: usa l'helper condiviso con match ESATTO + scoping campaignId
+        // (come F1). Prima il match inline usava substring bidirezionale: la keyword
+        // corta 'amish' (11 click) matchava tutte le keyword contenenti 'amish' e
+        // con .find() le 126 keyword 'amish-*' ereditavano i suoi click → pausa errata.
+        const metrics = findMetricsForItem(reportData, item, campaignId);
+        const metrics65 = findMetricsForItem(reportData65, item, campaignId);
 
         if (!metrics) {
           result.details!.push({ itemId, itemName, currentBid: currentBid || 0, clicks: 0, orders: 0, action: 'no_data' });

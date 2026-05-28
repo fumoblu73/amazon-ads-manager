@@ -283,15 +283,21 @@ export async function processCompletedReports(): Promise<{
               try {
                 const data65a = await apiService.downloadReport(report.reportId65a);
                 const data65b = await apiService.downloadReport(report.reportId65b);
-                const mergedMap: Record<string, { clicks: number; orders: number }> = {};
+                const mergedMap: Record<string, { clicks: number; orders: number; campaignId: any; targeting: string }> = {};
                 for (const row of [...data65a, ...data65b]) {
-                  const key = row.targeting || row.keywordId || row.targetId || '';
-                  if (!mergedMap[key]) mergedMap[key] = { clicks: 0, orders: 0 };
+                  // FIX bug F3: usa targeting+campaignId come chiave composita.
+                  // Prima la chiave era row.targeting||'' ma targeting non era richiesto
+                  // nelle colonne → tutte le righe finivano sotto '' → 1 solo record con
+                  // la somma globale. Ora cols65 include targeting e campaignId.
+                  const tgt = row.targeting || '';
+                  const cid = row.campaignId || '';
+                  const key = `${cid}|||${tgt}`;
+                  if (!mergedMap[key]) mergedMap[key] = { clicks: 0, orders: 0, campaignId: cid, targeting: tgt };
                   mergedMap[key].clicks += (row.clicks || 0);
                   mergedMap[key].orders += (row.purchases14d || row.orders || 0);
                 }
-                const reportData65 = Object.entries(mergedMap).map(([targeting, d]) => ({
-                  targeting, clicks: d.clicks, purchases14d: d.orders
+                const reportData65 = Object.values(mergedMap).map((d) => ({
+                  targeting: d.targeting, campaignId: d.campaignId, clicks: d.clicks, purchases14d: d.orders
                 }));
                 preloadedFunc3Reports = { reportData, reportData65 };
                 console.log(`     📊 [F3] 65gg pre-caricati: ${reportData65.length} righe`);
@@ -497,15 +503,18 @@ export async function processCompletedReportsForUser(userId: string): Promise<{
               try {
                 const data65a = await apiService.downloadReport(report.reportId65a);
                 const data65b = await apiService.downloadReport(report.reportId65b);
-                const mergedMap: Record<string, { clicks: number; orders: number }> = {};
+                const mergedMap: Record<string, { clicks: number; orders: number; campaignId: any; targeting: string }> = {};
                 for (const row of [...data65a, ...data65b]) {
-                  const key = row.targeting || row.keywordId || row.targetId || '';
-                  if (!mergedMap[key]) mergedMap[key] = { clicks: 0, orders: 0 };
+                  // FIX bug F3: chiave composita campaignId|||targeting (vedi commento punto 1)
+                  const tgt = row.targeting || '';
+                  const cid = row.campaignId || '';
+                  const key = `${cid}|||${tgt}`;
+                  if (!mergedMap[key]) mergedMap[key] = { clicks: 0, orders: 0, campaignId: cid, targeting: tgt };
                   mergedMap[key].clicks += (row.clicks || 0);
                   mergedMap[key].orders += (row.purchases14d || row.orders || 0);
                 }
-                const reportData65 = Object.entries(mergedMap).map(([targeting, d]) => ({
-                  targeting, clicks: d.clicks, purchases14d: d.orders
+                const reportData65 = Object.values(mergedMap).map((d) => ({
+                  targeting: d.targeting, campaignId: d.campaignId, clicks: d.clicks, purchases14d: d.orders
                 }));
                 preloadedFunc3Reports = { reportData, reportData65 };
               } catch (e: any) {

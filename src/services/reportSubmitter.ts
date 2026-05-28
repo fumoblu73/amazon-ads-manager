@@ -326,7 +326,7 @@ export async function submitReportsForCampaign(
 
         if (functionsToRun.includes(3)) {
           try {
-            const cols65 = ['clicks', 'purchases14d'];
+            const cols65 = ['targeting', 'campaignId', 'clicks', 'purchases14d'];
 
             // Chunk A: ultimi 30 giorni
             const start65a = new Date();
