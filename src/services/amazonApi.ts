@@ -809,9 +809,9 @@ class AmazonApiService {
         campaignId,
         adGroupId,
         keywordText: kw.keywordText,
-        matchType: kw.matchType,
+        matchType: kw.matchType.toUpperCase(),  // FIX: API v3 richiede BROAD/PHRASE/EXACT
         bid: kw.bid,
-        state: 'enabled'
+        state: 'ENABLED'  // FIX: API v3 richiede ENABLED/PAUSED/PROPOSED
       }));
 
       const response = await this.client.post('/sp/keywords', {
@@ -850,12 +850,12 @@ class AmazonApiService {
         campaignId,
         adGroupId,
         expression: [{
-          type: 'asinSameAs',
+          type: 'ASIN_SAME_AS',  // FIX: API v3 richiede UPPERCASE_SNAKE_CASE
           value: target.asin
         }],
-        expressionType: target.expressionType,
         bid: target.bid,
-        state: 'enabled'
+        state: 'ENABLED'  // FIX: API v3 richiede ENABLED/PAUSED/PROPOSED
+        // Note: expressionType rimosso, in v3 viene dedotto dall'expression
       }));
 
       const response = await this.client.post('/sp/targets', {
