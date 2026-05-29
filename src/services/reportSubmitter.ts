@@ -230,6 +230,9 @@ export async function submitReportsForUser(userId: string): Promise<{ reportsSub
  * @param restrictToFunctions - se passato, limita le funzioni considerate a questo subset.
  *   Usato da /test-function per testare una singola funzione isolata (es. [1] = solo F1).
  *   In modalità test, il frequency check viene anche saltato (perché c'è una sola funzione).
+ * @param searchTermDaysOverride - TEMPORANEO (deploy 1): se passato, sovrascrive i 7gg
+ *   hardcoded del report spSearchTerm (usato da F4 e F5). Permette test F5 su finestre
+ *   più ampie. Va rimosso nel deploy 2.
  */
 export async function submitReportsForCampaign(
   userId: string,
@@ -237,7 +240,8 @@ export async function submitReportsForCampaign(
   campaign: any,
   apiService: any,
   dryRun: boolean = false,
-  restrictToFunctions?: number[]
+  restrictToFunctions?: number[],
+  searchTermDaysOverride?: number
 ): Promise<{ count: number; reportIds: string[] }> {
   const campaignId = campaign.campaignId;
   const campaignName = campaign.name;
@@ -471,10 +475,21 @@ export async function submitReportsForCampaign(
   const needsSearchTerm = functionsToRun.some(f => [4, 5].includes(f));
   if (needsSearchTerm) {
     try {
+      // TEMPORANEO (deploy 1): se searchTermDaysOverride è passato, usa quello
+      // al posto dei 7gg hardcoded. Permette test F5 su finestre più ampie.
+      // Range valido 1-31 (limite Amazon per report). Se fuori range o non passato
+      // → fallback al default storico di 7 giorni.
+      const searchTermDays =
+        (searchTermDaysOverride && searchTermDaysOverride >= 1 && searchTermDaysOverride <= 31)
+          ? searchTermDaysOverride
+          : 7;
       const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 7);
+      startDate.setDate(startDate.getDate() - searchTermDays);
       const startDateStr = startDate.toISOString().split('T')[0];
       const endDateStr = now.toISOString().split('T')[0];
+      if (searchTermDays !== 7) {
+        console.log(`     🧪 spSearchTerm window override: ${searchTermDays}gg (default 7gg)`);
+      }
 
       let reportId: string;
       try {

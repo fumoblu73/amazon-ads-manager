@@ -729,7 +729,7 @@ router.post('/test-bid-increase', authMiddleware, requireAmazonAuth, async (req:
 router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
-    const { asin, functionNumber, marketplace, diagnosticsOnly, dryRun } = req.body;
+    const { asin, functionNumber, marketplace, diagnosticsOnly, dryRun, searchTermDaysOverride } = req.body;
 
     if (!asin || !functionNumber || !marketplace) {
       return res.status(400).json({ error: 'asin, functionNumber (1-5), and marketplace are required' });
@@ -1031,12 +1031,16 @@ router.post('/test-function', authMiddleware, requireAmazonAuth, async (req: Aut
     // dryRun=true: report reali sottomessi ad Amazon, ma le funzioni girano in modalità simulazione (nessuna modifica)
     // FIX ii: restrictToFunctions=[functionNumber] isola la funzione richiesta dall'utente
     // (così non si processano automaticamente F2,F3,F4,F5 anche se si è cliccato solo F1)
+    // TEMPORANEO: searchTermDaysOverride permette di testare F4/F5 con finestre diverse dai 7gg default
+    if (searchTermDaysOverride) {
+      console.log(`🧪 [TEST] searchTermDaysOverride attivo: ${searchTermDaysOverride}gg (default 7gg)`);
+    }
     let totalSubmitted = 0;
     const allReportIds: string[] = [];
     for (const campaign of campaigns) {
       try {
         const amazonCamp = { campaignId: campaign.amazonCampaignId, name: campaign.name, state: campaign.state, createdAt: campaign.createdAt };
-        const result = await submitReportsForCampaign(userId, marketplace, amazonCamp, apiService, dryRun ?? false, [functionNumber]);
+        const result = await submitReportsForCampaign(userId, marketplace, amazonCamp, apiService, dryRun ?? false, [functionNumber], searchTermDaysOverride);
         totalSubmitted += result.count;
         allReportIds.push(...result.reportIds);
       } catch (err: any) {
