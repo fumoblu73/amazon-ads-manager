@@ -328,9 +328,9 @@ export async function submitReportsForCampaign(
           try {
             const cols65 = ['targeting', 'campaignId', 'clicks', 'purchases14d'];
 
-            // Chunk A: ultimi 30 giorni
+            // Chunk A: ultimi 31 giorni (today-31 → today)
             const start65a = new Date();
-            start65a.setDate(start65a.getDate() - 30);
+            start65a.setDate(start65a.getDate() - 31);
             const start65aStr = start65a.toISOString().split('T')[0];
             try {
               reportId65a = await apiService.requestReportV3(start65aStr, endDateStr, 'spTargeting', cols65);
@@ -340,11 +340,14 @@ export async function submitReportsForCampaign(
               else throw e;
             }
 
-            // Chunk B: giorni 31-65
+            // Chunk B: giorni 32-62 (today-62 → today-32) = 30 giorni
+            // FIX: prima era today-65 → today-31 = 34 giorni → Amazon rifiutava
+            // (max 31 giorni per report). Ora 2 chunk da ≤31gg coprono ~62 giorni,
+            // sufficienti per la soglia clicks65days (default 30).
             const start65b = new Date();
-            start65b.setDate(start65b.getDate() - 65);
+            start65b.setDate(start65b.getDate() - 62);
             const end65b = new Date();
-            end65b.setDate(end65b.getDate() - 31);
+            end65b.setDate(end65b.getDate() - 32);
             const start65bStr = start65b.toISOString().split('T')[0];
             const end65bStr = end65b.toISOString().split('T')[0];
             try {

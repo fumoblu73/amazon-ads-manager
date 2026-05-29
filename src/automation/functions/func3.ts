@@ -134,15 +134,15 @@ export async function executeFunc3(
       ]);
       reportData = await apiService.waitAndDownloadReport(reportId);
 
-      // Report ultimi 65 giorni: Amazon limita a 31gg, dividiamo in 2 chunk
+      // Report ultimi ~62 giorni: Amazon limita a 31gg, dividiamo in 2 chunk da ≤31gg
       const startDate65a = new Date();
-      startDate65a.setDate(startDate65a.getDate() - 30);
+      startDate65a.setDate(startDate65a.getDate() - 31);
       const startDate65b = new Date();
-      startDate65b.setDate(startDate65b.getDate() - 65);
+      startDate65b.setDate(startDate65b.getDate() - 62);
       const endDate65b = new Date();
-      endDate65b.setDate(endDate65b.getDate() - 31);
+      endDate65b.setDate(endDate65b.getDate() - 32);
 
-      console.log(`📅 Report 65gg: chunk A = ultimi 31gg, chunk B = giorni 31-65`);
+      console.log(`📅 Report 65gg: chunk A = ultimi 31gg, chunk B = giorni 32-62`);
 
       const reportId65a = await apiService.requestReport(formatDateForAmazon(startDate65a), [
         'targeting', 'campaignId', 'clicks', 'orders'
