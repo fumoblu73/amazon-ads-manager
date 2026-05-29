@@ -114,27 +114,28 @@ export async function executeFunc3(
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - timeframeResult.timeframeDays);
 
-    // 4. Usa report pre-caricati se disponibili, altrimenti richiedi da Amazon
+    // 4. RICHIEDI REPORT PRINCIPALE con timeframe dinamico
+    // FIX: F3 deve usare il timeframe dinamico calcolato (15/20/25/30gg in base
+    // al traffico, soglie func3_timeframeA/B/C). Prima usava sempre il preloaded
+    // report a 28gg ignorando il timeframe → decisioni di pausa/bid su finestra
+    // sbagliata per campagne con traffico medio-alto.
+    // Pattern allineato a F4 che già lo fa.
     let reportData: any[];
     let reportData65: any[];
 
-    if (preloadedReports) {
-      console.log(`📊 Usando report pre-caricati (${preloadedReports.reportData.length} righe + ${preloadedReports.reportData65.length} righe 65gg)`);
-      reportData = preloadedReports.reportData;
+    console.log(`📊 Richiesta report principale F3 (${timeframeResult.timeframeDays}gg)...`);
+    const reportIdMain = await apiService.requestReport(formatDateForAmazon(startDate), [
+      'targeting', 'campaignId', 'impressions', 'clicks', 'cost', 'sales14d', 'purchases14d'
+    ]);
+    reportData = await apiService.waitAndDownloadReport(reportIdMain);
+    console.log(`📊 Report F3 scaricato: ${reportData.length} righe`);
+
+    // Per il 65gg riusiamo il preloaded se disponibile (è ok com'è, finestra fissa)
+    if (preloadedReports && preloadedReports.reportData65) {
+      console.log(`📊 Usando report 65gg pre-caricato (${preloadedReports.reportData65.length} righe)`);
       reportData65 = preloadedReports.reportData65;
-
-      // Se i report pre-caricati sono vuoti (timeout durante pre-loading), avvisa e continua
-      if (reportData.length === 0) {
-        console.log(`⚠️ Report pre-caricati vuoti (probabile timeout Amazon). Tutti gli items saranno 'no_data'.`);
-      }
     } else {
-      // Richiedi report principale (timeframe dinamico, max 31 giorni)
-      const reportId = await apiService.requestReport(formatDateForAmazon(startDate), [
-        'impressions', 'clicks', 'cost', 'sales', 'orders'
-      ]);
-      reportData = await apiService.waitAndDownloadReport(reportId);
-
-      // Report ultimi ~62 giorni: Amazon limita a 31gg, dividiamo in 2 chunk da ≤31gg
+      // Richiesta diretta dei chunk 65gg
       const startDate65a = new Date();
       startDate65a.setDate(startDate65a.getDate() - 31);
       const startDate65b = new Date();
