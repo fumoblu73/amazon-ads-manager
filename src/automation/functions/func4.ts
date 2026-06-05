@@ -67,7 +67,7 @@ export interface Func4Result {
  * Logica:
  * 1. OTTIMIZZAZIONE TARGETING GROUPS:
  *    - Per ogni targeting group (complements, loose, close, substitutes)
- *    - SE clicks > 10 E orders = 0: PAUSA
+ *    - SE clicks >= 10 E orders = 0: PAUSA
  *    - ALTRIMENTI: ottimizza bid in base a fascia FAST ACoS
  *
  * 2. NEGATIVE TARGETING (Search Terms):
@@ -250,7 +250,7 @@ export async function executeFunc4(
         const sales = metrics.sales;
 
         // a) CONTROLLO PAUSA
-        if (clicks > cfg.clicksNegative && orders === 0) {
+        if (clicks >= cfg.clicksNegative && orders === 0) {
           console.log(`   ⏸️  ${cfg.dryRun ? '[DRY RUN] ' : ''}PAUSA ${groupName}: clicks=${clicks}, orders=0`);
           if (!cfg.dryRun) {
             await apiService.updateTargetState(targetId, 'paused');
