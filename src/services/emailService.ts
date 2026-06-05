@@ -115,6 +115,7 @@ export interface ReportSummaryItem {
   status: 'processed' | 'failed' | 'pending';
   error?: string;
   details?: string;
+  params?: string;  // Parametri effettivi usati per ogni funzione (es. "F1: bidInc=0.02 | F3: pause≥10cl")
 }
 
 export interface SubmitSummaryItem {
@@ -151,15 +152,19 @@ export async function sendAutomationSummary(
       const statusText = item.status === 'processed' ? 'OK'
         : item.status === 'failed' ? 'ERRORE' : 'PENDING';
       const funcs = item.functions.map(f => `F${f}`).join(', ');
+      const detailsCell = item.details || item.error || '-';
+      const paramsRow = item.params
+        ? `<tr><td colspan="4" style="padding:2px 8px 8px 8px;color:#6b7280;font-size:11px;border-bottom:1px solid #333">⚙️ ${item.params}</td></tr>`
+        : '';
 
       return `<tr>
-        <td style="padding:8px;border-bottom:1px solid #333;color:#e5e7eb">${item.campaignName}</td>
-        <td style="padding:8px;border-bottom:1px solid #333;color:#e5e7eb">${funcs}</td>
-        <td style="padding:8px;border-bottom:1px solid #333">
+        <td style="padding:8px;border-bottom:${item.params ? 'none' : '1px solid #333'};color:#e5e7eb">${item.campaignName}</td>
+        <td style="padding:8px;border-bottom:${item.params ? 'none' : '1px solid #333'};color:#e5e7eb">${funcs}</td>
+        <td style="padding:8px;border-bottom:${item.params ? 'none' : '1px solid #333'}">
           <span style="background:${statusColor};color:#fff;padding:2px 8px;border-radius:4px;font-size:12px">${statusText}</span>
         </td>
-        <td style="padding:8px;border-bottom:1px solid #333;color:#9ca3af;font-size:12px">${item.details || item.error || '-'}</td>
-      </tr>`;
+        <td style="padding:8px;border-bottom:${item.params ? 'none' : '1px solid #333'};color:#9ca3af;font-size:12px">${detailsCell}</td>
+      </tr>${paramsRow}`;
     }).join('');
 
     const errorsSection = hasErrors ? `

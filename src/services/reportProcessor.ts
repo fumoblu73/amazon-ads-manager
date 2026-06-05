@@ -326,14 +326,14 @@ export async function processCompletedReports(): Promise<{
                 stats.processed++;
                 console.log(`   ✅ ${report.reportId}: kdp_books enriched successfully`);
               } else {
-                const opSummary = await executeAutomationFunctions(
+                const { summary: opSummary, params: opParams } = await executeAutomationFunctions(
                   report, reportData, apiService, marketplace, preloaded, preloadedFunc3Reports
                 );
                 report.status = 'processed';
                 await reportRepo.save(report);
                 stats.processed++;
                 await saveAutomationLog(report, 'success', undefined, preloaded, opSummary);
-                emailItems.push({ campaignName: report.campaignName, campaignId: report.campaignId, functions: JSON.parse(report.functionNumbers), status: 'processed', details: opSummary });
+                emailItems.push({ campaignName: report.campaignName, campaignId: report.campaignId, functions: JSON.parse(report.functionNumbers), status: 'processed', details: opSummary, params: opParams });
                 console.log(`   ✅ ${report.reportId}: functions executed successfully`);
               }
             } catch (error: any) {
@@ -530,7 +530,7 @@ export async function processCompletedReportsForUser(userId: string): Promise<{
                 await reportRepo.save(report);
                 stats.processed++;
               } else {
-                const opSummary = await executeAutomationFunctions(report, reportData, apiService, marketplace, preloaded, preloadedFunc3Reports);
+                const { summary: opSummary } = await executeAutomationFunctions(report, reportData, apiService, marketplace, preloaded, preloadedFunc3Reports);
                 report.status = 'processed';
                 await reportRepo.save(report);
                 stats.processed++;
@@ -654,7 +654,7 @@ async function executeAutomationFunctions(
   marketplace: string,
   preloaded?: PreloadedData,
   preloadedFunc3Reports?: { reportData: any[]; reportData65: any[] }
-): Promise<string> {
+): Promise<{ summary: string; params: string }> {
   const functionNumbers: number[] = JSON.parse(report.functionNumbers);
   const cachedApiService = createCachedApiService(apiService, reportData);
 
@@ -808,6 +808,7 @@ async function executeAutomationFunctions(
 
 
   const parts: string[] = [];
+  const paramParts: string[] = [];
   const bandNames: Record<number, string> = { 1: 'Ottima', 2: 'Buona', 3: 'Accettabile', 4: 'Scarsa', 5: 'Pessima' };
 
   // FIX D1: filtra F2/F4/F5 se sono state eseguite di recente (default 7gg).
@@ -843,6 +844,7 @@ async function executeAutomationFunctions(
           // se "missed" è molto alto (es. quasi quanto itemsProcessed), il fix non sta funzionando.
           const missedNote = r1.itemsWithoutMetrics > 0 ? ` | missed: ${r1.itemsWithoutMetrics}` : '';
           parts.push(`${report.dryRun ? '[DRY RUN] ' : ''}Bid modificati: ${r1.itemsIncreased}/${r1.itemsProcessed}${missedNote}`);
+          paramParts.push(`F1: bidInc=${config.func1_bidIncrease ?? 0.02} | maxImp=${config.func1_impressions ?? 20} | maxCl=${config.func1_clicks ?? 0}`);
           break;
         }
 
@@ -880,6 +882,7 @@ async function executeAutomationFunctions(
               `PP: ${r2.oldPlacements.productPages}%→${r2.newPlacements.productPages}%`
             );
           }
+          paramParts.push(`F2: tf=${config.func2_timeframeWeeks ?? 4}wk | fastACoS=${r2.fastAcos != null ? r2.fastAcos.toFixed(1) + '%' : 'n/a'}`);
           break;
         }
 
@@ -906,6 +909,7 @@ async function executeAutomationFunctions(
           // FIX bug 11: il summary mostrava solo pause, mancavano gli aumenti/diminuzioni bid
           // (le 3 modifiche bid "fantasma" su Amazon erano F3 invisibili nei log/email).
           parts.push(`${report.dryRun ? '[DRY RUN] ' : ''}ASIN/kw spenti: ${r3.itemsPaused}/${r3.itemsProcessed} | Bid +: ${r3.itemsBidIncreased} | Bid -: ${r3.itemsBidDecreased}`);
+          paramParts.push(`F3: pause≥${config.func3_clicksPause ?? 10}cl | 65gg≥${config.func3_clicks65days ?? 30}cl | tf=${r3.timeframeDays}gg`);
           break;
         }
 
@@ -929,6 +933,7 @@ async function executeAutomationFunctions(
             }
           );
           parts.push(`${report.dryRun ? '[DRY RUN] ' : ''}Neg. aggiunti: ${r4.negativeTargetsAdded} ASIN, ${r4.negativeKeywordsAdded} kw | Bid aggiornati: ${r4.targetingGroupsBidUpdated} | Spenti: ${r4.targetingGroupsPaused}`);
+          paramParts.push(`F4: neg≥${config.func4_clicksNegative ?? 10}cl o ≥${config.func4_spendNegative ?? 10}$`);
           break;
         }
 
@@ -950,6 +955,7 @@ async function executeAutomationFunctions(
             }
           );
           parts.push(`${report.dryRun ? '[DRY RUN] ' : ''}Promossi: ${r5.keywordsAdded} kw, ${r5.targetsAdded} ASIN`);
+          paramParts.push(`F5: minOrd=${config.func5_minOrders ?? 1} | B/E/P=${config.func5_bidBroad ?? 0.30}/${config.func5_bidExact ?? 0.50}/${config.func5_bidPhrase ?? 0.40}`);
           break;
         }
       }
@@ -960,7 +966,7 @@ async function executeAutomationFunctions(
     }
   }
 
-  return parts.join(' | ');
+  return { summary: parts.join(' | '), params: paramParts.join(' | ') };
 }
 
 /**
