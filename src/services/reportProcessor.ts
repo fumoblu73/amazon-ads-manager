@@ -929,7 +929,8 @@ async function executeAutomationFunctions(
               timeframeC: config.func4_timeframeC,
               clicksNegative: config.func4_clicksNegative,
               spendNegative: config.func4_spendNegative,
-              dryRun: report.dryRun
+              dryRun: report.dryRun,
+              skipPart1: report.reportType === 'spSearchTerm'  // Parte 1 (targeting groups) non ha senso su report spSearchTerm dove targeting='unknown'
             }
           );
           parts.push(`${report.dryRun ? '[DRY RUN] ' : ''}Neg. aggiunti: ${r4.negativeTargetsAdded} ASIN, ${r4.negativeKeywordsAdded} kw | Bid aggiornati: ${r4.targetingGroupsBidUpdated} | Spenti: ${r4.targetingGroupsPaused}`);
